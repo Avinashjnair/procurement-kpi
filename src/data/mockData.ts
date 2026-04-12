@@ -15,25 +15,58 @@ export interface Supplier {
 }
 
 export interface SupplierKPIs {
-  priceVariation: number;       // percentage, lower is better
-  deliveryPerformance: number;  // percentage on-time
-  paymentTerms: string;         // e.g., "Net 30"
-  onTimePayment: number;        // percentage
-  responseTime: number;         // hours
-  deliveryTerms: string;        // Incoterm
-  rejectionRate: number;        // percentage
+  priceVariation: number;
+  deliveryPerformance: number;
+  paymentTerms: string;
+  onTimePayment: number;
+  responseTime: number;
+  deliveryTerms: string;
+  rejectionRate: number;
+}
+
+// ── Item category type now includes Services ──
+export type ItemCategory =
+  | 'Piping'
+  | 'Valves'
+  | 'Fittings'
+  | 'Chemicals'
+  | 'Electrical'
+  | 'Instrumentation'
+  | 'Services';
+
+// ── Billing type for services ──
+export type ServiceBillingType = 'Fixed Price' | 'Hourly Rate' | 'Milestone Based' | 'Lump Sum';
+
+// ── Service milestone (used when billing = Milestone Based) ──
+export interface ServiceMilestone {
+  id: string;
+  description: string;
+  percentage: number;   // % of total value
+  dueDate: string;
+  completed: boolean;
+}
+
+// ── Service-specific fields (present only when category = 'Services') ──
+export interface ServiceDetails {
+  billingType: ServiceBillingType;
+  scopeOfWork: string;
+  duration: string;         // e.g. "3 months", "ongoing"
+  slaTerms: string;         // e.g. "Response within 4h, resolution within 24h"
+  milestones?: ServiceMilestone[];
 }
 
 export interface Item {
   id: string;
   name: string;
-  category: string;
+  category: ItemCategory;
   description: string;
-  unit: string;
+  unit: string;             // 'hour' | 'day' | 'month' | 'lump sum' | 'piece' | 'meter' etc.
   currentPrice: number;
   linkedSupplierIds: string[];
   priceHistory: PricePoint[];
   purchaseHistory: PurchaseRecord[];
+  // Only populated when category === 'Services'
+  serviceDetails?: ServiceDetails;
 }
 
 export interface PricePoint {
@@ -76,25 +109,26 @@ export interface PurchaseOrder {
   approvalAuthority?: string;
 }
 
-// ============================================================
-// Company Info (Buyer)
-// ============================================================
-
-export const companyInfo = {
-  name: 'ProcureIQ Industries LLC',
-  address: 'P.O. Box 28436, Office 1204, Al Shafar Tower 1, Dubai Internet City, Dubai, UAE',
-  email: 'procurement@procureiq.ae',
-  phone: '+971 4 555 8800',
-  taxRegNumber: 'TRN-100234567800003',
-};
-
 export interface POItem {
   itemId: string;
   itemName: string;
   quantity: number;
   unitPrice: number;
+  // Service-specific PO line fields
+  isService?: boolean;
+  serviceDetails?: ServicePOLineDetails;
 }
 
+// ── Service line details on a PO ──
+export interface ServicePOLineDetails {
+  billingType: ServiceBillingType;
+  scopeOfWork: string;
+  duration: string;
+  slaTerms: string;
+  milestones?: ServiceMilestone[];
+}
+
+// ── Document categories now include service doc types ──
 export type DocumentCategory =
   | 'MTC'
   | 'COO'
@@ -102,7 +136,11 @@ export type DocumentCategory =
   | 'Delivery Note'
   | 'Packing List'
   | 'Invoice'
-  | 'Internal Inspection Report';
+  | 'Internal Inspection Report'
+  | 'Work Completion Certificate'
+  | 'Service Report'
+  | 'Timesheet'
+  | 'SLA Report';
 
 export interface Document {
   id: string;
@@ -116,7 +154,19 @@ export interface Document {
 }
 
 // ============================================================
-// Mock Data
+// Company Info (Buyer)
+// ============================================================
+
+export const companyInfo = {
+  name: 'ProcureIQ Industries LLC',
+  address: 'P.O. Box 28436, Office 1204, Al Shafar Tower 1, Dubai Internet City, Dubai, UAE',
+  email: 'procurement@procureiq.ae',
+  phone: '+971 4 555 8800',
+  taxRegNumber: 'TRN-100234567800003',
+};
+
+// ============================================================
+// Mock Data — Suppliers
 // ============================================================
 
 export const suppliers: Supplier[] = [
@@ -234,7 +284,50 @@ export const suppliers: Supplier[] = [
       rejectionRate: 0.3,
     },
   },
+  // ── Service suppliers ──
+  {
+    id: 'SUP-007',
+    name: 'TechServ Engineering',
+    contactPerson: 'Omar Hassan',
+    email: 'omar@techserv.ae',
+    phone: '+971 4 888 2200',
+    location: 'Abu Dhabi, UAE',
+    address: 'Office 302, Khalifa Business Park, Abu Dhabi, UAE',
+    taxRegNumber: 'TRN-104567890100005',
+    kpis: {
+      priceVariation: 2.5,
+      deliveryPerformance: 96,
+      paymentTerms: 'Net 30',
+      onTimePayment: 98,
+      responseTime: 2,
+      deliveryTerms: 'N/A',
+      rejectionRate: 0.8,
+    },
+  },
+  {
+    id: 'SUP-008',
+    name: 'InspectoPro Services',
+    contactPerson: 'Linda Müller',
+    email: 'lmuller@inspectopro.de',
+    phone: '+49 211 333 4567',
+    location: 'Düsseldorf, Germany',
+    address: 'Kaistraße 18, 40221 Düsseldorf, Germany',
+    taxRegNumber: 'DE-204983110',
+    kpis: {
+      priceVariation: 1.2,
+      deliveryPerformance: 100,
+      paymentTerms: 'Net 30',
+      onTimePayment: 100,
+      responseTime: 1,
+      deliveryTerms: 'N/A',
+      rejectionRate: 0.0,
+    },
+  },
 ];
+
+// ============================================================
+// Mock Data — Items (including Services)
+// ============================================================
 
 export const items: Item[] = [
   {
@@ -381,7 +474,90 @@ export const items: Item[] = [
       { date: '2026-02-05', supplierId: 'SUP-001', supplierName: 'SteelMax Industries', quantity: 150, unitPrice: 44.00, totalAmount: 6600, poId: 'PO-011' },
     ],
   },
+
+  // ── SERVICE ITEMS ──
+  {
+    id: 'ITM-007',
+    name: 'Pipeline Inspection Service',
+    category: 'Services',
+    description: 'Third-party inspection of pipeline welds, fittings and flanges per ASME B31.3.',
+    unit: 'day',
+    currentPrice: 1200.00,
+    linkedSupplierIds: ['SUP-007', 'SUP-008'],
+    priceHistory: [
+      { date: '2025-09', price: 1100.00, supplierId: 'SUP-007' },
+      { date: '2025-12', price: 1150.00, supplierId: 'SUP-008' },
+      { date: '2026-03', price: 1200.00, supplierId: 'SUP-007' },
+    ],
+    purchaseHistory: [
+      { date: '2026-03-01', supplierId: 'SUP-007', supplierName: 'TechServ Engineering', quantity: 10, unitPrice: 1200.00, totalAmount: 12000, poId: 'PO-011' },
+    ],
+    serviceDetails: {
+      billingType: 'Hourly Rate',
+      scopeOfWork: 'Visual and dimensional inspection of all pipeline welds and connections per ASME B31.3. Issue daily inspection reports. Witness hydro-test.',
+      duration: '10 working days',
+      slaTerms: 'Inspector on-site within 24h of call-out. Reports issued within 4h of inspection completion.',
+    },
+  },
+  {
+    id: 'ITM-008',
+    name: 'Annual Maintenance Contract — Valves',
+    category: 'Services',
+    description: 'Preventive and corrective maintenance of all plant valves, including actuators.',
+    unit: 'month',
+    currentPrice: 8500.00,
+    linkedSupplierIds: ['SUP-007'],
+    priceHistory: [
+      { date: '2025-07', price: 8000.00, supplierId: 'SUP-007' },
+      { date: '2026-01', price: 8500.00, supplierId: 'SUP-007' },
+    ],
+    purchaseHistory: [
+      { date: '2026-01-01', supplierId: 'SUP-007', supplierName: 'TechServ Engineering', quantity: 12, unitPrice: 8500.00, totalAmount: 102000, poId: 'PO-012' },
+    ],
+    serviceDetails: {
+      billingType: 'Fixed Price',
+      scopeOfWork: 'Monthly preventive maintenance rounds on all gate, globe, and ball valves. Corrective maintenance on call-out basis. Actuator calibration twice per year.',
+      duration: '12 months',
+      slaTerms: 'Preventive visits: first Monday of each month. Corrective call-out response: 4h for critical, 24h for non-critical.',
+      milestones: [
+        { id: 'MS-001', description: 'Q1 Preventive Maintenance complete', percentage: 25, dueDate: '2026-03-31', completed: true },
+        { id: 'MS-002', description: 'Q2 Preventive Maintenance complete', percentage: 25, dueDate: '2026-06-30', completed: false },
+        { id: 'MS-003', description: 'Q3 Preventive Maintenance complete', percentage: 25, dueDate: '2026-09-30', completed: false },
+        { id: 'MS-004', description: 'Q4 Preventive Maintenance + final report', percentage: 25, dueDate: '2026-12-31', completed: false },
+      ],
+    },
+  },
+  {
+    id: 'ITM-009',
+    name: 'Corrosion Coating Service',
+    category: 'Services',
+    description: 'Surface preparation and application of anti-corrosion coating on piping systems per NACE standards.',
+    unit: 'lump sum',
+    currentPrice: 45000.00,
+    linkedSupplierIds: ['SUP-008'],
+    priceHistory: [
+      { date: '2025-10', price: 42000.00, supplierId: 'SUP-008' },
+      { date: '2026-03', price: 45000.00, supplierId: 'SUP-008' },
+    ],
+    purchaseHistory: [],
+    serviceDetails: {
+      billingType: 'Milestone Based',
+      scopeOfWork: 'Surface preparation (Sa 2.5 standard), application of epoxy primer + polyurethane topcoat on 2km of above-ground piping. DFT inspection included.',
+      duration: '6 weeks',
+      slaTerms: 'Work to proceed only after approval of surface prep. DFT readings within spec before topcoat application.',
+      milestones: [
+        { id: 'MS-010', description: 'Mobilisation & surface preparation approved', percentage: 20, dueDate: '2026-05-10', completed: false },
+        { id: 'MS-011', description: 'Primer coat applied & DFT approved', percentage: 30, dueDate: '2026-05-25', completed: false },
+        { id: 'MS-012', description: 'Topcoat applied & final inspection', percentage: 40, dueDate: '2026-06-10', completed: false },
+        { id: 'MS-013', description: 'Completion certificate issued', percentage: 10, dueDate: '2026-06-15', completed: false },
+      ],
+    },
+  },
 ];
+
+// ============================================================
+// Mock Data — Purchase Orders
+// ============================================================
 
 export const purchaseOrders: PurchaseOrder[] = [
   {
@@ -566,7 +742,82 @@ export const purchaseOrders: PurchaseOrder[] = [
     eta: '2026-04-05',
     incoterms: 'FOB',
   },
+  // ── Service POs ──
+  {
+    id: 'PO-011',
+    dateOfIssue: '2026-02-25',
+    supplierId: 'SUP-007',
+    supplierName: 'TechServ Engineering',
+    items: [
+      {
+        itemId: 'ITM-007',
+        itemName: 'Pipeline Inspection Service',
+        quantity: 10,
+        unitPrice: 1200.00,
+        isService: true,
+        serviceDetails: {
+          billingType: 'Hourly Rate',
+          scopeOfWork: 'Inspection of Phase-2 pipeline welding per ASME B31.3. Daily reports required.',
+          duration: '10 working days',
+          slaTerms: 'Reports issued within 4h of inspection.',
+        },
+      },
+    ],
+    totalAmount: 12000,
+    paymentTerms: 'Net 30',
+    amountPaid: 12000,
+    dateOfPayment: '2026-03-28',
+    dueDate: '2026-03-31',
+    deliveryStatus: 'Delivered',
+    paymentStatus: 'Paid',
+    eta: '2026-03-15',
+    incoterms: 'N/A',
+    projectReference: 'PRJ-2026-0012',
+    remarks: 'Final inspection report submitted and approved.',
+  },
+  {
+    id: 'PO-012',
+    dateOfIssue: '2026-01-01',
+    supplierId: 'SUP-007',
+    supplierName: 'TechServ Engineering',
+    items: [
+      {
+        itemId: 'ITM-008',
+        itemName: 'Annual Maintenance Contract — Valves',
+        quantity: 12,
+        unitPrice: 8500.00,
+        isService: true,
+        serviceDetails: {
+          billingType: 'Fixed Price',
+          scopeOfWork: 'Annual maintenance of all plant valves including actuators. Monthly visits + on-call corrective.',
+          duration: '12 months',
+          slaTerms: 'Corrective call-out: 4h critical, 24h non-critical.',
+          milestones: [
+            { id: 'MS-001', description: 'Q1 Preventive Maintenance complete', percentage: 25, dueDate: '2026-03-31', completed: true },
+            { id: 'MS-002', description: 'Q2 Preventive Maintenance complete', percentage: 25, dueDate: '2026-06-30', completed: false },
+            { id: 'MS-003', description: 'Q3 Preventive Maintenance complete', percentage: 25, dueDate: '2026-09-30', completed: false },
+            { id: 'MS-004', description: 'Q4 Preventive Maintenance + final report', percentage: 25, dueDate: '2026-12-31', completed: false },
+          ],
+        },
+      },
+    ],
+    totalAmount: 102000,
+    paymentTerms: 'Milestone Based',
+    amountPaid: 25500,
+    dateOfPayment: '2026-04-03',
+    dueDate: '2026-12-31',
+    deliveryStatus: 'Approved',
+    paymentStatus: 'Partial',
+    eta: '2026-12-31',
+    incoterms: 'N/A',
+    projectReference: 'PRJ-2026-AMC-001',
+    approvalAuthority: 'Mohammed Al-Farsi, Plant Manager',
+  },
 ];
+
+// ============================================================
+// Mock Data — Documents (including service doc types)
+// ============================================================
 
 export const documents: Document[] = [
   { id: 'DOC-001', name: 'MTC_CarbonSteel_PO001.pdf', category: 'MTC', poId: 'PO-001', itemId: 'ITM-001', uploadDate: '2026-03-30', fileSize: '1.2 MB', fileType: 'PDF' },
@@ -581,6 +832,12 @@ export const documents: Document[] = [
   { id: 'DOC-010', name: 'COO_AmeriSteel_PO005.pdf', category: 'COO', poId: 'PO-005', itemId: 'ITM-001', uploadDate: '2026-02-28', fileSize: '0.7 MB', fileType: 'PDF' },
   { id: 'DOC-011', name: 'INV_GlobalPipe_PO010.pdf', category: 'Invoice', poId: 'PO-010', itemId: 'ITM-005', uploadDate: '2026-04-06', fileSize: '0.5 MB', fileType: 'PDF' },
   { id: 'DOC-012', name: 'BL_GlobalPipe_PO010.pdf', category: 'BL/AWB', poId: 'PO-010', itemId: 'ITM-005', uploadDate: '2026-04-02', fileSize: '1.0 MB', fileType: 'PDF' },
+  // ── Service documents ──
+  { id: 'DOC-013', name: 'WCC_PipelineInspection_PO011.pdf', category: 'Work Completion Certificate', poId: 'PO-011', itemId: 'ITM-007', uploadDate: '2026-03-15', fileSize: '0.6 MB', fileType: 'PDF' },
+  { id: 'DOC-014', name: 'ServiceReport_Day1-10_PO011.pdf', category: 'Service Report', poId: 'PO-011', itemId: 'ITM-007', uploadDate: '2026-03-16', fileSize: '3.2 MB', fileType: 'PDF' },
+  { id: 'DOC-015', name: 'Timesheet_TechServ_Mar2026_PO011.pdf', category: 'Timesheet', poId: 'PO-011', itemId: 'ITM-007', uploadDate: '2026-03-17', fileSize: '0.4 MB', fileType: 'PDF' },
+  { id: 'DOC-016', name: 'SLAReport_Q1_AMC_PO012.pdf', category: 'SLA Report', poId: 'PO-012', itemId: 'ITM-008', uploadDate: '2026-04-02', fileSize: '1.1 MB', fileType: 'PDF' },
+  { id: 'DOC-017', name: 'INV_TechServ_Q1_PO012.pdf', category: 'Invoice', poId: 'PO-012', itemId: 'ITM-008', uploadDate: '2026-04-01', fileSize: '0.5 MB', fileType: 'PDF' },
 ];
 
 // ============================================================
@@ -596,6 +853,10 @@ export const dashboardMetrics = {
   totalSuppliers: suppliers.length,
   unpaidAmount: purchaseOrders.reduce((s, po) => s + (po.totalAmount - po.amountPaid), 0),
   avgDeliveryPerformance: Math.round(suppliers.reduce((s, sup) => s + sup.kpis.deliveryPerformance, 0) / suppliers.length),
+  totalServiceItems: items.filter(i => i.category === 'Services').length,
+  serviceSpend: purchaseOrders
+    .filter(po => po.items.some(i => i.isService))
+    .reduce((s, po) => s + po.totalAmount, 0),
 };
 
 export const spendByCategory = [
@@ -603,13 +864,14 @@ export const spendByCategory = [
   { category: 'Valves', amount: 37550 },
   { category: 'Chemicals', amount: 29050 },
   { category: 'Fittings', amount: 30900 },
+  { category: 'Services', amount: 114000 },
 ];
 
 export const monthlySpend = [
   { month: 'Oct 2025', amount: 28900 },
   { month: 'Nov 2025', amount: 42100 },
   { month: 'Dec 2025', amount: 55800 },
-  { month: 'Jan 2026', amount: 63200 },
+  { month: 'Jan 2026', amount: 165200 },
   { month: 'Feb 2026', amount: 56440 },
   { month: 'Mar 2026', amount: 149150 },
   { month: 'Apr 2026', amount: 125650 },

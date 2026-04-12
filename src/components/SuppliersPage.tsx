@@ -10,6 +10,8 @@ import {
   CheckCircle2,
   AlertTriangle,
   XCircle,
+  Wrench,
+  Building2,
 } from 'lucide-react';
 import {
   RadarChart,
@@ -39,6 +41,14 @@ function getKpiColor(val: number, thresholds: [number, number], inverted = false
   return 'kpi-bad';
 }
 
+function ServiceBadge() {
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '2px 8px', background: 'rgba(139,92,246,0.12)', color: '#a78bfa', borderRadius: 6, fontSize: 11, fontWeight: 700, letterSpacing: '0.3px' }}>
+      <Wrench size={10} /> Service Provider
+    </span>
+  );
+}
+
 function SupplierDetail({ supplierId }: { supplierId: string }) {
   const { suppliers, purchaseOrders, items, setSelectedSupplierId } = useApp();
   const supplier = suppliers.find(s => s.id === supplierId);
@@ -46,11 +56,12 @@ function SupplierDetail({ supplierId }: { supplierId: string }) {
   if (!supplier) return <p>Supplier not found.</p>;
 
   const kpis = supplier.kpis;
+  const isServiceProvider = kpis.deliveryTerms === 'N/A';
 
   const radarData = [
-    { metric: 'Delivery', value: kpis.deliveryPerformance, fullMark: 100 },
+    { metric: isServiceProvider ? 'Service Del.' : 'Delivery', value: kpis.deliveryPerformance, fullMark: 100 },
     { metric: 'On-Time Pay', value: kpis.onTimePayment, fullMark: 100 },
-    { metric: 'Low Rejection', value: 100 - kpis.rejectionRate * 10, fullMark: 100 },
+    { metric: isServiceProvider ? 'SLA Compliance' : 'Low Rejection', value: 100 - kpis.rejectionRate * 10, fullMark: 100 },
     { metric: 'Price Stability', value: 100 - kpis.priceVariation * 10, fullMark: 100 },
     { metric: 'Response', value: Math.max(0, 100 - kpis.responseTime * 5), fullMark: 100 },
   ];
@@ -59,8 +70,8 @@ function SupplierDetail({ supplierId }: { supplierId: string }) {
   const supplierItems = items.filter(i => i.linkedSupplierIds.includes(supplierId));
 
   const statusBars = [
-    { status: 'Delivered', count: supplierPOs.filter(p => p.deliveryStatus === 'Delivered').length, color: '#10b981' },
-    { status: 'Shipped', count: supplierPOs.filter(p => p.deliveryStatus === 'Shipped').length, color: '#06b6d4' },
+    { status: isServiceProvider ? 'Complete' : 'Delivered', count: supplierPOs.filter(p => p.deliveryStatus === 'Delivered').length, color: '#10b981' },
+    { status: isServiceProvider ? 'Ongoing' : 'Shipped', count: supplierPOs.filter(p => p.deliveryStatus === 'Shipped').length, color: '#06b6d4' },
     { status: 'Pending', count: supplierPOs.filter(p => p.deliveryStatus === 'Pending').length, color: '#f59e0b' },
     { status: 'Approved', count: supplierPOs.filter(p => p.deliveryStatus === 'Approved').length, color: '#6366f1' },
   ];
@@ -72,7 +83,10 @@ function SupplierDetail({ supplierId }: { supplierId: string }) {
       </button>
 
       <div className="page-header">
-        <h2>{supplier.name}</h2>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <h2>{supplier.name}</h2>
+          {isServiceProvider && <ServiceBadge />}
+        </div>
         <p style={{ display: 'flex', gap: '16px', alignItems: 'center', flexWrap: 'wrap', marginTop: '8px' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
             <MapPin size={14} /> {supplier.location}
@@ -98,7 +112,7 @@ function SupplierDetail({ supplierId }: { supplierId: string }) {
           <div className={`kpi-item-value ${getKpiColor(kpis.deliveryPerformance, [95, 88])}`}>
             {kpis.deliveryPerformance}%
           </div>
-          <div className="kpi-item-label">On-Time Delivery</div>
+          <div className="kpi-item-label">{isServiceProvider ? 'Service Performance' : 'On-Time Delivery'}</div>
         </div>
         <div className="kpi-item">
           <div className="kpi-item-value" style={{ color: 'var(--accent-indigo)' }}>
@@ -122,13 +136,13 @@ function SupplierDetail({ supplierId }: { supplierId: string }) {
           <div className="kpi-item-value" style={{ color: 'var(--accent-cyan)' }}>
             {kpis.deliveryTerms}
           </div>
-          <div className="kpi-item-label">Incoterms</div>
+          <div className="kpi-item-label">{isServiceProvider ? 'Incoterms (N/A)' : 'Incoterms'}</div>
         </div>
         <div className="kpi-item">
           <div className={`kpi-item-value ${getKpiColor(kpis.rejectionRate, [1, 3], true)}`}>
             {kpis.rejectionRate}%
           </div>
-          <div className="kpi-item-label">Rejection Rate</div>
+          <div className="kpi-item-label">{isServiceProvider ? 'SLA Failure Rate' : 'Rejection Rate'}</div>
         </div>
       </div>
 
@@ -150,8 +164,8 @@ function SupplierDetail({ supplierId }: { supplierId: string }) {
               <Radar
                 name={supplier.name}
                 dataKey="value"
-                stroke="#6366f1"
-                fill="#6366f1"
+                stroke={isServiceProvider ? '#a78bfa' : '#6366f1'}
+                fill={isServiceProvider ? '#a78bfa' : '#6366f1'}
                 fillOpacity={0.2}
                 strokeWidth={2}
               />
@@ -163,8 +177,8 @@ function SupplierDetail({ supplierId }: { supplierId: string }) {
         <div className="card">
           <div className="card-header">
             <div>
-              <div className="card-title">PO Status Breakdown</div>
-              <div className="card-subtitle">{supplierPOs.length} total POs</div>
+              <div className="card-title">{isServiceProvider ? 'Service Contract Breakdown' : 'PO Status Breakdown'}</div>
+              <div className="card-subtitle">{supplierPOs.length} total orders</div>
             </div>
           </div>
           <ResponsiveContainer width="100%" height={300}>
@@ -191,30 +205,40 @@ function SupplierDetail({ supplierId }: { supplierId: string }) {
         </div>
       </div>
 
-      {/* Linked Items */}
+      {/* Linked Items / Services */}
       <div className="card">
         <div className="card-header">
           <div>
-            <div className="card-title">Linked Items</div>
-            <div className="card-subtitle">{supplierItems.length} items supplied</div>
+            <div className="card-title">{isServiceProvider ? 'Linked Services' : 'Linked Items'}</div>
+            <div className="card-subtitle">{supplierItems.length} {isServiceProvider ? 'services provided' : 'items supplied'}</div>
           </div>
         </div>
         <div className="data-table-wrapper">
           <table className="data-table">
             <thead>
               <tr>
-                <th>Item ID</th>
+                <th>{isServiceProvider ? 'Svc ID' : 'Item ID'}</th>
                 <th>Name</th>
                 <th>Category</th>
-                <th>Current Price</th>
+                <th>{isServiceProvider ? 'Unit Rate' : 'Current Price'}</th>
               </tr>
             </thead>
             <tbody>
               {supplierItems.map(item => (
                 <tr key={item.id}>
                   <td style={{ fontWeight: 600, color: '#f1f5f9' }}>{item.id}</td>
-                  <td>{item.name}</td>
-                  <td><span className="badge approved">{item.category}</span></td>
+                  <td>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {item.category === 'Services' && <Wrench size={13} style={{ color: '#a78bfa' }} />}
+                      {item.name}
+                    </div>
+                  </td>
+                  <td>
+                    {item.category === 'Services'
+                      ? <span className="badge" style={{ background: 'rgba(139,92,246,0.12)', color: '#a78bfa' }}>Services</span>
+                      : <span className="badge approved">{item.category}</span>
+                    }
+                  </td>
                   <td className="font-mono">${item.currentPrice.toFixed(2)}</td>
                 </tr>
               ))}
@@ -229,22 +253,48 @@ function SupplierDetail({ supplierId }: { supplierId: string }) {
 export default function SuppliersPage() {
   const { suppliers, selectedSupplierId, setSelectedSupplierId } = useApp();
   const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState<'all' | 'goods' | 'services'>('all');
 
   const filtered = useMemo(() => {
-    return suppliers.filter(s =>
-      s.name.toLowerCase().includes(search.toLowerCase()) ||
-      s.id.toLowerCase().includes(search.toLowerCase()) ||
-      s.location.toLowerCase().includes(search.toLowerCase())
-    );
-  }, [suppliers, search]);
+    return suppliers.filter(s => {
+      const matchSearch =
+        s.name.toLowerCase().includes(search.toLowerCase()) ||
+        s.id.toLowerCase().includes(search.toLowerCase()) ||
+        s.location.toLowerCase().includes(search.toLowerCase());
+
+      const isSvc = s.kpis.deliveryTerms === 'N/A';
+      const matchType =
+        typeFilter === 'all' ||
+        (typeFilter === 'services' && isSvc) ||
+        (typeFilter === 'goods' && !isSvc);
+
+      return matchSearch && matchType;
+    });
+  }, [suppliers, search, typeFilter]);
+
+  const serviceCount = suppliers.filter(s => s.kpis.deliveryTerms === 'N/A').length;
+  const goodsCount = suppliers.length - serviceCount;
 
   if (selectedSupplierId) return <SupplierDetail supplierId={selectedSupplierId} />;
 
   return (
     <div>
       <div className="page-header">
-        <h2>Supplier Management</h2>
-        <p>Track and evaluate supplier performance</p>
+        <h2>Supplier &amp; Provider Management</h2>
+        <p>Track and evaluate performance of goods suppliers and service providers</p>
+      </div>
+
+      <div className="tabs" style={{ marginBottom: 16 }}>
+        <button className={`tab-btn ${typeFilter === 'all' ? 'active' : ''}`} onClick={() => setTypeFilter('all')}>
+          All ({suppliers.length})
+        </button>
+        <button className={`tab-btn ${typeFilter === 'goods' ? 'active' : ''}`} onClick={() => setTypeFilter('goods')}>
+          Goods Suppliers ({goodsCount})
+        </button>
+        <button className={`tab-btn ${typeFilter === 'services' ? 'active' : ''}`} onClick={() => setTypeFilter('services')}>
+          <Wrench size={13} style={{ display: 'inline', marginRight: 4 }} />
+          Service Providers ({serviceCount})
+        </button>
       </div>
 
       <div className="filters-bar">
@@ -253,7 +303,7 @@ export default function SuppliersPage() {
           <input
             type="text"
             className="search-input"
-            placeholder="Search suppliers..."
+            placeholder="Search by name, ID or location..."
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
@@ -263,18 +313,23 @@ export default function SuppliersPage() {
       <div className="supplier-cards">
         {filtered.map(supplier => {
           const k = supplier.kpis;
+          const isSvc = k.deliveryTerms === 'N/A';
           return (
             <div
               key={supplier.id}
               className="card supplier-card"
               onClick={() => setSelectedSupplierId(supplier.id)}
+              style={isSvc ? { borderLeft: '4px solid #a78bfa' } : {}}
             >
               <div className="supplier-card-header">
-                <div className="supplier-avatar">
-                  {supplier.name.charAt(0)}
+                <div className="supplier-avatar" style={isSvc ? { background: 'rgba(139,92,246,0.12)', color: '#a78bfa' } : {}}>
+                  {isSvc ? <Wrench size={20} /> : supplier.name.charAt(0)}
                 </div>
-                <div>
-                  <div className="supplier-card-name">{supplier.name}</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div className="supplier-card-name">{supplier.name}</div>
+                    {isSvc && <ServiceBadge />}
+                  </div>
                   <div className="supplier-card-location">
                     <MapPin size={12} style={{ display: 'inline', marginRight: 4 }} />
                     {supplier.location}
@@ -290,7 +345,7 @@ export default function SuppliersPage() {
                   ) : (
                     <XCircle size={12} style={{ color: '#f43f5e' }} />
                   )}
-                  {k.deliveryPerformance}% delivery
+                  {k.deliveryPerformance}% {isSvc ? 'perf.' : 'delivery'}
                 </div>
                 <div className="supplier-kpi-tag">
                   ↕ {k.priceVariation}% price var.
@@ -299,7 +354,7 @@ export default function SuppliersPage() {
                   🔃 {k.responseTime}h response
                 </div>
                 <div className="supplier-kpi-tag">
-                  📦 {k.deliveryTerms}
+                  {isSvc ? <><Wrench size={10} /> Service</> : <>📦 {k.deliveryTerms}</>}
                 </div>
               </div>
             </div>
