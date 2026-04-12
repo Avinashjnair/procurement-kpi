@@ -158,7 +158,7 @@ function ItemDetail({ itemId }: { itemId: string }) {
                 <Tooltip
                   contentStyle={{ background: '#111827', border: '1px solid rgba(99,102,241,0.15)', borderRadius: 10, fontSize: 12 }}
                   labelStyle={{ color: '#f1f5f9' }}
-                  formatter={(value: number) => [`$${Number(value).toFixed(2)}`, isService ? 'Rate' : 'Price']}
+                  formatter={(value: any) => [`$${Number(value).toFixed(2)}`, isService ? 'Rate' : 'Price']}
                 />
                 <Line
                   type="monotone"
