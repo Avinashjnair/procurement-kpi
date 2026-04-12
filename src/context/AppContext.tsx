@@ -7,6 +7,7 @@ import {
   documents as initialDocs,
   Item,
   Supplier,
+  SupplierKPIs,
   PurchaseOrder,
   Document,
   POStatus,
@@ -23,7 +24,7 @@ interface AppState {
   selectedSupplierId: string | null;
   selectedPOId: string | null;
   fabOpen: boolean;
-  modalOpen: string | null; // 'newPO' | 'newItem' | 'newSupplier' | 'uploadDoc' | null
+  modalOpen: string | null;
 }
 
 interface AppContextType extends AppState {
@@ -35,6 +36,10 @@ interface AppContextType extends AppState {
   setModalOpen: (modal: string | null) => void;
   addItem: (item: Item) => void;
   addSupplier: (supplier: Supplier) => void;
+  updateSupplier: (id: string, updates: Partial<Supplier>) => void;
+  updateSupplierKPIs: (id: string, kpis: SupplierKPIs) => void;
+  togglePreferredSupplier: (id: string) => void;
+  addSupplierNote: (supplierId: string, note: string) => void;
   addPurchaseOrder: (po: PurchaseOrder) => void;
   addDocument: (doc: Document) => void;
   updatePOStatus: (poId: string, status: POStatus) => void;
@@ -91,6 +96,50 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState(prev => ({ ...prev, suppliers: [...prev.suppliers, supplier] }));
   }, []);
 
+  // Update any fields on a supplier
+  const updateSupplier = useCallback((id: string, updates: Partial<Supplier>) => {
+    setState(prev => ({
+      ...prev,
+      suppliers: prev.suppliers.map(s => s.id === id ? { ...s, ...updates } : s),
+    }));
+  }, []);
+
+  // Update only the KPIs block
+  const updateSupplierKPIs = useCallback((id: string, kpis: SupplierKPIs) => {
+    setState(prev => ({
+      ...prev,
+      suppliers: prev.suppliers.map(s => s.id === id ? { ...s, kpis } : s),
+    }));
+  }, []);
+
+  // Toggle preferred status
+  const togglePreferredSupplier = useCallback((id: string) => {
+    setState(prev => ({
+      ...prev,
+      suppliers: prev.suppliers.map(s =>
+        s.id === id ? { ...s, preferred: !s.preferred } : s
+      ),
+    }));
+  }, []);
+
+  // Add a timestamped note
+  const addSupplierNote = useCallback((supplierId: string, note: string) => {
+    const newNote = {
+      id: `NOTE-${Date.now()}`,
+      text: note,
+      date: new Date().toISOString().split('T')[0],
+      author: 'Procurement Team',
+    };
+    setState(prev => ({
+      ...prev,
+      suppliers: prev.suppliers.map(s =>
+        s.id === supplierId
+          ? { ...s, notes: [...(s.notes || []), newNote] }
+          : s
+      ),
+    }));
+  }, []);
+
   const addPurchaseOrder = useCallback((po: PurchaseOrder) => {
     setState(prev => ({ ...prev, purchaseOrders: [po, ...prev.purchaseOrders] }));
   }, []);
@@ -126,25 +175,27 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [state.items]);
 
   return (
-    <AppContext.Provider
-      value={{
-        ...state,
-        setActivePage,
-        setSelectedItemId,
-        setSelectedSupplierId,
-        setSelectedPOId,
-        setFabOpen,
-        setModalOpen,
-        addItem,
-        addSupplier,
-        addPurchaseOrder,
-        addDocument,
-        updatePOStatus,
-        updatePOPayment,
-        getSupplierById,
-        getItemById,
-      }}
-    >
+    <AppContext.Provider value={{
+      ...state,
+      setActivePage,
+      setSelectedItemId,
+      setSelectedSupplierId,
+      setSelectedPOId,
+      setFabOpen,
+      setModalOpen,
+      addItem,
+      addSupplier,
+      updateSupplier,
+      updateSupplierKPIs,
+      togglePreferredSupplier,
+      addSupplierNote,
+      addPurchaseOrder,
+      addDocument,
+      updatePOStatus,
+      updatePOPayment,
+      getSupplierById,
+      getItemById,
+    }}>
       {children}
     </AppContext.Provider>
   );
