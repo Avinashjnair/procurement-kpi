@@ -4,14 +4,19 @@ import { AppProvider, useApp } from '@/context/AppContext';
 import Sidebar from '@/components/Sidebar';
 import FAB from '@/components/FAB';
 import Modals from '@/components/Modals';
+import LoginPage from '@/components/LoginPage';
 import DashboardPage from '@/components/DashboardPage';
 import ItemsPage from '@/components/ItemsPage';
 import SuppliersPage from '@/components/SuppliersPage';
+import RFQPage from '@/components/RFQPage';
+import QuotationsPage from '@/components/QuotationsPage';
 import PurchaseOrdersPage from '@/components/PurchaseOrdersPage';
+import GRNPage from '@/components/GRNPage';
+import InventoryPage from '@/components/InventoryPage';
 import DocumentsPage from '@/components/DocumentsPage';
 
 function AppContent() {
-  const { activePage, darkMode } = useApp();
+  const { activePage, darkMode, currentUser } = useApp();
 
   React.useEffect(() => {
     if (!darkMode) {
@@ -21,6 +26,10 @@ function AppContent() {
     }
   }, [darkMode]);
 
+  if (!currentUser) {
+    return <LoginPage />;
+  }
+
   const renderPage = () => {
     switch (activePage) {
       case 'dashboard':
@@ -29,8 +38,16 @@ function AppContent() {
         return <ItemsPage />;
       case 'suppliers':
         return <SuppliersPage />;
+      case 'rfq':
+        return <RFQPage />;
+      case 'quotations':
+        return <QuotationsPage />;
       case 'purchase-orders':
         return <PurchaseOrdersPage />;
+      case 'grn':
+        return <GRNPage />;
+      case 'inventory':
+        return <InventoryPage />;
       case 'documents':
         return <DocumentsPage />;
       default:
