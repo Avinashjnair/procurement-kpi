@@ -1,0 +1,102 @@
+/* =============================================== */
+/* Light Mode — add to bottom of globals.css       */
+/* =============================================== */
+
+html.light-mode {
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-card: rgba(255, 255, 255, 0.95);
+  --bg-glass: rgba(255, 255, 255, 0.8);
+  --border-color: rgba(99, 102, 241, 0.12);
+  --border-glow: rgba(99, 102, 241, 0.25);
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+  --shadow-glow: 0 0 20px rgba(99, 102, 241, 0.08);
+  --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+
+html.light-mode body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+html.light-mode .sidebar {
+  background: #ffffff;
+  border-right-color: rgba(99, 102, 241, 0.1);
+}
+
+html.light-mode .card {
+  background: #ffffff;
+}
+
+html.light-mode .metric-card {
+  background: #ffffff;
+}
+
+html.light-mode .data-table tbody tr:hover {
+  background: rgba(99, 102, 241, 0.03);
+}
+
+html.light-mode .data-table thead th {
+  background: rgba(99, 102, 241, 0.03);
+}
+
+html.light-mode .data-table tbody td {
+  color: #334155;
+  border-bottom-color: rgba(99, 102, 241, 0.05);
+}
+
+html.light-mode .nav-item {
+  color: #475569;
+}
+
+html.light-mode .nav-item:hover {
+  background: rgba(99, 102, 241, 0.06);
+  color: #1e293b;
+}
+
+html.light-mode .nav-item.active {
+  background: rgba(99, 102, 241, 0.08);
+  color: var(--accent-indigo);
+}
+
+html.light-mode .form-input,
+html.light-mode .form-select {
+  background: #f8fafc;
+  color: #0f172a;
+  border-color: rgba(99, 102, 241, 0.15);
+}
+
+html.light-mode .form-input:focus,
+html.light-mode .form-select:focus {
+  border-color: var(--accent-indigo);
+  background: #ffffff;
+}
+
+html.light-mode .modal {
+  background: #ffffff;
+}
+
+html.light-mode .modal-overlay {
+  background: rgba(15, 23, 42, 0.5);
+}
+
+html.light-mode .page-header h2 {
+  background: linear-gradient(135deg, #1e293b, #475569);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+html.light-mode .recharts-text {
+  fill: #64748b;
+}
+
+html.light-mode ::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+html.light-mode ::-webkit-scrollbar-thumb {
+  background: rgba(99, 102, 241, 0.2);
+}

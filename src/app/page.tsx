@@ -11,7 +11,15 @@ import PurchaseOrdersPage from '@/components/PurchaseOrdersPage';
 import DocumentsPage from '@/components/DocumentsPage';
 
 function AppContent() {
-  const { activePage } = useApp();
+  const { activePage, darkMode } = useApp();
+
+  React.useEffect(() => {
+    if (!darkMode) {
+      document.documentElement.classList.add('light-mode');
+    } else {
+      document.documentElement.classList.remove('light-mode');
+    }
+  }, [darkMode]);
 
   const renderPage = () => {
     switch (activePage) {

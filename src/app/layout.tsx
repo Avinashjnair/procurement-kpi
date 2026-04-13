@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import "./light-mode.css";
 
 export const metadata: Metadata = {
   title: "ProcureIQ — Procurement KPI Tracking & Management",
