@@ -1,7 +1,7 @@
 'use client';
 import React, { useState } from 'react';
 import { useApp } from '@/context/AppContext';
-import { X, Upload, Plus, Trash2, MessageSquare, FileText, Building2, MapPin, Mail, Phone, Hash, Wrench, CheckSquare, Square } from 'lucide-react';
+import { X, Upload, Plus, Trash2, MessageSquare, FileText, Building2, MapPin, Mail, Phone, Hash, Wrench, CheckSquare, Square, Landmark } from 'lucide-react';
 import type { POStatus, PaymentStatus, DocumentCategory, POItem, ServiceBillingType, ServiceMilestone } from '@/data/mockData';
 import { companyInfo } from '@/data/mockData';
 
@@ -146,7 +146,8 @@ function NewPOModal() {
     billingType: ServiceBillingType;
     milestones: ServiceMilestone[];
     showServiceFields: boolean;
-  }[]>([{ itemId: '', quantity: '', unitPrice: '', scopeOfWork: '', duration: '', slaTerms: '', billingType: 'Fixed Price', milestones: [], showServiceFields: false }]);
+    isAsset: boolean;
+  }[]>([{ itemId: '', quantity: '', unitPrice: '', scopeOfWork: '', duration: '', slaTerms: '', billingType: 'Fixed Price', milestones: [], showServiceFields: false, isAsset: false }]);
 
   const selectedSupplier = suppliers.find(s => s.id === supplierId);
   const availableItems = supplierId
@@ -158,7 +159,7 @@ function NewPOModal() {
     return item?.category === 'Services';
   };
 
-  const addRow = () => setPOItems(prev => [...prev, { itemId: '', quantity: '', unitPrice: '', scopeOfWork: '', duration: '', slaTerms: '', billingType: 'Fixed Price', milestones: [], showServiceFields: false }]);
+  const addRow = () => setPOItems(prev => [...prev, { itemId: '', quantity: '', unitPrice: '', scopeOfWork: '', duration: '', slaTerms: '', billingType: 'Fixed Price', milestones: [], showServiceFields: false, isAsset: false }]);
   const removeRow = (i: number) => setPOItems(prev => prev.filter((_, idx) => idx !== i));
 
   const updateRow = (i: number, field: string, value: unknown) => {
@@ -190,6 +191,7 @@ function NewPOModal() {
         itemName: item?.name || pi.itemId,
         quantity: parseFloat(pi.quantity),
         unitPrice: parseFloat(pi.unitPrice),
+        isAsset: pi.isAsset,
       };
       if (isSvc) {
         base.isService = true;
@@ -348,6 +350,17 @@ function NewPOModal() {
                 </select>
                 <input type="number" className="form-input" placeholder={isSvc ? 'Qty / Units' : 'Qty'} value={row.quantity} onChange={e => updateRow(i, 'quantity', e.target.value)} min="1" required />
                 <input type="number" className="form-input" placeholder="Unit Price" value={row.unitPrice} onChange={e => updateRow(i, 'unitPrice', e.target.value)} min="0" step="0.01" required />
+                
+                <button 
+                  type="button" 
+                  className={`btn-asset-toggle ${row.isAsset ? 'active' : ''}`} 
+                  onClick={() => updateRow(i, 'isAsset', !row.isAsset)}
+                  title={row.isAsset ? "Marked as Capital Asset" : "Mark as Capital Asset"}
+                >
+                  <Landmark size={14} />
+                  <span style={{ fontSize: 10 }}>Asset</span>
+                </button>
+
                 {poItems.length > 1 && <button type="button" className="btn btn-danger btn-sm" onClick={() => removeRow(i)}><Trash2 size={14} /></button>}
               </div>
 
@@ -851,6 +864,245 @@ function UploadDocModal() {
 }
 
 // ────────────────────────────────────────────────
+// New Asset Modal
+// ────────────────────────────────────────────────
+function NewAssetModal() {
+  const { suppliers, assets, assetCategories, addAsset, addAssetCategory, setModalOpen, purchaseOrders } = useApp();
+  const [name, setName] = useState('');
+  const [poId, setPOId] = useState('');
+  const [category, setCategory] = useState(assetCategories[0] || '');
+  const [newCategory, setNewCategory] = useState('');
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [supplierId, setSupplierId] = useState('');
+  const [purchaseDate, setPurchaseDate] = useState(new Date().toISOString().split('T')[0]);
+  const [purchaseValue, setPurchaseValue] = useState('');
+  const [salvageValue, setSalvageValue] = useState('0');
+  const [depreciationRate, setDepreciationRate] = useState('20'); // 20% default
+  const [usefulLife, setUsefulLife] = useState('5');
+  const [location, setLocation] = useState('');
+  const [serialNumber, setSerialNumber] = useState('');
+  const [warrantyExpiry, setWarrantyExpiry] = useState('');
+  const [maintenancePlan, setMaintenancePlan] = useState('Quarterly');
+  const [warrantyDetails, setWarrantyDetails] = useState('');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name || !supplierId || !purchaseValue) return;
+
+    let finalCategory = category;
+    if (isAddingCategory && newCategory) {
+      addAssetCategory(newCategory);
+      finalCategory = newCategory;
+    }
+
+    const newAsset: any = {
+      id: `AST-${String(assets.length + 1).padStart(3, '0')}`,
+      name,
+      category: finalCategory,
+      supplierId,
+      poId: poId || undefined,
+      purchaseDate,
+      purchaseValue: parseFloat(purchaseValue),
+      salvageValue: parseFloat(salvageValue),
+      depreciationRate: parseFloat(depreciationRate) / 100,
+      usefulLife: parseInt(usefulLife),
+      location,
+      serialNumber,
+      warrantyExpiry,
+      maintenancePlan,
+      warrantyDetails,
+      maintenanceHistory: [],
+      status: 'Active',
+    };
+
+    addAsset(newAsset);
+    setModalOpen(null);
+  };
+
+  const handlePOChange = (id: string) => {
+    setPOId(id);
+    const po = purchaseOrders.find(p => p.id === id);
+    if (po) {
+      setPurchaseValue(po.totalAmount.toString());
+      setPurchaseDate(po.dateOfIssue);
+      setSupplierId(po.supplierId);
+    }
+  };
+
+  const filteredPOs = supplierId 
+    ? purchaseOrders.filter(p => p.supplierId === supplierId && (p.deliveryStatus === 'Delivered' || p.deliveryStatus === 'Approved'))
+    : purchaseOrders.filter(p => p.deliveryStatus === 'Delivered' || p.deliveryStatus === 'Approved');
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <div className="form-group">
+        <label className="form-label">Asset Name</label>
+        <input type="text" className="form-input" value={name} onChange={e => setName(e.target.value)} required placeholder="e.g. Industrial Air Compressor" />
+      </div>
+
+      <div className="form-row">
+        <div className="form-group">
+          <label className="form-label">
+            Category
+            <button type="button" className="btn-toggle-custom" onClick={() => setIsAddingCategory(!isAddingCategory)}>
+              {isAddingCategory ? '← Select' : '+ New'}
+            </button>
+          </label>
+          {isAddingCategory ? (
+            <input type="text" className="form-input" placeholder="New Category Name" value={newCategory} onChange={e => setNewCategory(e.target.value)} required />
+          ) : (
+            <select className="form-select" value={category} onChange={e => setCategory(e.target.value)} required>
+              {assetCategories.map(cat => <option key={cat} value={cat}>{cat}</option>)}
+            </select>
+          )}
+        </div>
+        <div className="form-group">
+          <label className="form-label">Supplier</label>
+          <select className="form-select" value={supplierId} onChange={e => { setSupplierId(e.target.value); setPOId(''); }} required={!poId}>
+            <option value="">Select Supplier</option>
+            {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div className="form-group" style={{ marginBottom: 16 }}>
+        <label className="form-label">Linked Purchase Order (Optional)</label>
+        <select className="form-select" value={poId} onChange={e => handlePOChange(e.target.value)}>
+          <option value="">Select PO Reference</option>
+          {filteredPOs.map(po => (
+            <option key={po.id} value={po.id}>
+              {po.id} — {po.supplierName} (${po.totalAmount.toLocaleString()})
+            </option>
+          ))}
+        </select>
+        {poId && <p style={{ fontSize: 11, color: '#a78bfa', marginTop: 4 }}>Auto-filled from selected PO</p>}
+      </div>
+
+      <div className="form-row">
+        <div className="form-group">
+          <label className="form-label">Purchase Date</label>
+          <input type="date" className="form-input" value={purchaseDate} onChange={e => setPurchaseDate(e.target.value)} required />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Purchase Value ($)</label>
+          <input type="number" className="form-input" value={purchaseValue} onChange={e => setPurchaseValue(e.target.value)} required min="0" step="0.01" />
+        </div>
+      </div>
+
+      <div className="grid-3">
+        <div className="form-group">
+          <label className="form-label">Useful Life (Yrs)</label>
+          <input type="number" className="form-input" value={usefulLife} onChange={e => setUsefulLife(e.target.value)} required min="1" />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Deprec. Rate (%)</label>
+          <input type="number" className="form-input" value={depreciationRate} onChange={e => setDepreciationRate(e.target.value)} required min="0" max="100" />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Salvage Value</label>
+          <input type="number" className="form-input" value={salvageValue} onChange={e => setSalvageValue(e.target.value)} min="0" step="0.01" />
+        </div>
+      </div>
+
+      <div className="form-row">
+        <div className="form-group">
+          <label className="form-label">Location</label>
+          <input type="text" className="form-input" value={location} onChange={e => setLocation(e.target.value)} placeholder="e.g. Warehouse B, Bay 4" />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Maintenance Plan</label>
+          <select className="form-select" value={maintenancePlan} onChange={e => setMaintenancePlan(e.target.value)}>
+            <option>Monthly</option><option>Quarterly</option><option>Bi-Annual</option><option>Annual</option><option>On-Demand</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="form-row">
+        <div className="form-group">
+          <label className="form-label">Warranty Expiry</label>
+          <input type="date" className="form-input" value={warrantyExpiry} onChange={e => setWarrantyExpiry(e.target.value)} />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Serial Number</label>
+          <input type="text" className="form-input" value={serialNumber} onChange={e => setSerialNumber(e.target.value)} placeholder="SN-XXXXX" />
+        </div>
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">Warranty Details / Clauses</label>
+        <textarea className="form-input" rows={2} value={warrantyDetails} onChange={e => setWarrantyDetails(e.target.value)} placeholder="Standard warranty terms..." />
+      </div>
+
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+        <button type="button" className="btn btn-secondary" onClick={() => setModalOpen(null)}>Cancel</button>
+        <button type="submit" className="btn btn-primary">Register Asset</button>
+      </div>
+    </form>
+  );
+}
+
+// ────────────────────────────────────────────────
+// Log Maintenance Modal
+// ────────────────────────────────────────────────
+function LogMaintenanceModal() {
+  const { assets, selectedAssetId, logMaintenance, setModalOpen, currentUser } = useApp();
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [activity, setActivity] = useState('');
+  const [cost, setCost] = useState('');
+  const [notes, setNotes] = useState('');
+
+  const asset = assets.find(a => a.id === selectedAssetId);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedAssetId || !activity || !cost) return;
+
+    logMaintenance(selectedAssetId, {
+      date,
+      activity,
+      cost: parseFloat(cost),
+      performedBy: currentUser?.name || 'Authorized Personnel',
+      notes,
+    });
+    setModalOpen(null);
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
+        Logging maintenance for: <strong style={{ color: '#f1f5f9' }}>{asset?.name} ({asset?.id})</strong>
+      </p>
+      
+      <div className="form-group">
+        <label className="form-label">Maintenance Activity</label>
+        <input type="text" className="form-input" value={activity} onChange={e => setActivity(e.target.value)} required placeholder="e.g. Pump Seal Replacement" />
+      </div>
+
+      <div className="form-row">
+        <div className="form-group">
+          <label className="form-label">Service Date</label>
+          <input type="date" className="form-input" value={date} onChange={e => setDate(e.target.value)} required />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Total Cost ($)</label>
+          <input type="number" className="form-input" value={cost} onChange={e => setCost(e.target.value)} required min="0" step="0.01" />
+        </div>
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">Detailed Notes</label>
+        <textarea className="form-input" rows={3} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Technical findings, parts replaced..." />
+      </div>
+
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+        <button type="button" className="btn btn-secondary" onClick={() => setModalOpen(null)}>Cancel</button>
+        <button type="submit" className="btn btn-primary">Save Maintenance Record</button>
+      </div>
+    </form>
+  );
+}
+
+// ────────────────────────────────────────────────
 // Modal Container
 // ────────────────────────────────────────────────
 export default function Modals() {
@@ -861,6 +1113,8 @@ export default function Modals() {
     newPO: 'Create New Purchase Order',
     newItem: 'Add New Item or Service',
     uploadDoc: 'Upload Document',
+    newAsset: 'Register Capital Asset',
+    logMaintenance: 'Log Maintenance Activity',
   };
 
   return (
@@ -870,9 +1124,13 @@ export default function Modals() {
           <h3 className="modal-title">{titles[modalOpen] || 'Modal'}</h3>
           <button className="modal-close" onClick={() => setModalOpen(null)}><X size={18} /></button>
         </div>
-        {modalOpen === 'newPO' && <NewPOModal />}
-        {modalOpen === 'newItem' && <NewItemModal />}
-        {modalOpen === 'uploadDoc' && <UploadDocModal />}
+        <div className="modal-content" style={{ maxHeight: '80vh', overflowY: 'auto', padding: '0 20px 20px' }}>
+          {modalOpen === 'newPO' && <NewPOModal />}
+          {modalOpen === 'newItem' && <NewItemModal />}
+          {modalOpen === 'uploadDoc' && <UploadDocModal />}
+          {modalOpen === 'newAsset' && <NewAssetModal />}
+          {modalOpen === 'logMaintenance' && <LogMaintenanceModal />}
+        </div>
       </div>
     </div>
   );

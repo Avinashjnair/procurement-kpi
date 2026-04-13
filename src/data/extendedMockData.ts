@@ -3,7 +3,7 @@
 // Import alongside existing mockData.ts
 // ============================================================
 import type {
-  User, RFQ, Quotation, StockItem, StockMovement, GRN,
+  User, RFQ, Quotation, StockItem, StockMovement, GRN, Asset,
 } from '@/types';
 
 // ── Users ────────────────────────────────────────────────────
@@ -233,5 +233,91 @@ export const grns: GRN[] = [
     deliveryNoteNumber: 'DN-SM-20260412',
     lineItems: [{ poLineIndex: 0, itemId: 'ITM-004', itemName: 'Stainless Steel Flange (8")', orderedQty: 100, receivedQty: 100, acceptedQty: 98, rejectedQty: 2, unitPrice: 192.00, rejectionReason: 'Dimensional non-conformance on 2 units' }],
     totalAccepted: 98, totalRejected: 2, stockUpdated: false,
+  },
+];
+
+// ── Fixed Assets ─────────────────────────────────────────────
+
+export const assetCategories: string[] = ['IT Infrastructure', 'Machinery', 'Vehicles', 'Office Furniture', 'HVAC & Facility'];
+
+export const assets: Asset[] = [
+  {
+    id: 'AST-001',
+    name: 'Industrial HVAC Unit — Tower A',
+    category: 'HVAC & Facility',
+    supplierId: 'SUP-002', // GlobalPipe (Demo)
+    poId: 'PO-010',
+    purchaseDate: '2025-01-15',
+    purchaseValue: 45000,
+    salvageValue: 5000,
+    depreciationRate: 0.15,
+    usefulLife: 10,
+    location: 'Tower A Roof',
+    serialNumber: 'HVAC-2025-9981',
+    warrantyExpiry: '2027-01-15',
+    warrantyDetails: '2-year comprehensive parts and labor warranty.',
+    maintenancePlan: 'Quarterly',
+    status: 'Active',
+    description: 'High-capacity cooling unit for main server room and lobby.',
+    maintenanceHistory: [
+      { id: 'MNT-001', date: '2025-04-15', activity: 'Quarterly Filter Replacement', performedBy: 'Internal Maintenance', cost: 150, notes: 'Filters were heavily clogged. Cleaned intake area.' },
+      { id: 'MNT-002', date: '2025-07-20', activity: 'Coolant Level Check', performedBy: 'QuickService HVAC', cost: 450, notes: 'Minor leak detected and repaired.' },
+      { id: 'MNT-003', date: '2025-10-15', activity: 'Standard Quarterly PM', performedBy: 'Internal Maintenance', cost: 150 },
+      { id: 'MNT-004', date: '2026-01-20', activity: 'Annual System Audit', performedBy: 'External Audit Co', cost: 1200, notes: 'System efficiency at 92%.' },
+    ],
+  },
+  {
+    id: 'AST-002',
+    name: 'Logistics Delivery Van',
+    category: 'Vehicles',
+    supplierId: 'SUP-005', // AmeriSteel (Demo)
+    poId: 'PO-005',
+    purchaseDate: '2024-06-01',
+    purchaseValue: 32000,
+    salvageValue: 4000,
+    depreciationRate: 0.25,
+    usefulLife: 7,
+    location: 'Main Garage',
+    serialNumber: 'VAN-ABC-123',
+    warrantyExpiry: '2026-06-01',
+    maintenancePlan: 'Monthly',
+    status: 'Active',
+    maintenanceHistory: [
+      { id: 'MNT-005', date: '2026-03-05', activity: 'Brake Pad Replacement', performedBy: 'QuickStop Garage', cost: 850 },
+    ],
+  },
+  {
+    id: 'AST-003',
+    name: 'CNC Milling Machine',
+    category: 'Machinery',
+    supplierId: 'SUP-001', // SteelMax
+    purchaseDate: '2026-01-10',
+    purchaseValue: 85000,
+    salvageValue: 12000,
+    depreciationRate: 0.10,
+    usefulLife: 15,
+    location: 'Factory Floor — Section B',
+    serialNumber: 'CNC-XM-770',
+    warrantyExpiry: '2029-01-10',
+    maintenancePlan: 'Bi-Annual',
+    status: 'Under Maintenance',
+    maintenanceHistory: [],
+  },
+  {
+    id: 'AST-004',
+    name: 'Core Server Cluster',
+    category: 'IT Infrastructure',
+    supplierId: 'SUP-006', // NipponValve (Demo)
+    purchaseDate: '2025-11-20',
+    purchaseValue: 125000,
+    salvageValue: 10000,
+    depreciationRate: 0.33,
+    usefulLife: 4,
+    location: 'Data Center Tier 3',
+    serialNumber: 'SRV-DL380-01',
+    warrantyExpiry: '2028-11-20',
+    maintenancePlan: 'Annual',
+    status: 'Active',
+    maintenanceHistory: [],
   },
 ];

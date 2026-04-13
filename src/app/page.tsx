@@ -14,6 +14,7 @@ import PurchaseOrdersPage from '@/components/PurchaseOrdersPage';
 import GRNPage from '@/components/GRNPage';
 import InventoryPage from '@/components/InventoryPage';
 import DocumentsPage from '@/components/DocumentsPage';
+import AssetsPage from '@/components/AssetsPage';
 
 function AppContent() {
   const { activePage, darkMode, currentUser } = useApp();
@@ -50,6 +51,8 @@ function AppContent() {
         return <InventoryPage />;
       case 'documents':
         return <DocumentsPage />;
+      case 'assets':
+        return <AssetsPage />;
       default:
         return <DashboardPage />;
     }

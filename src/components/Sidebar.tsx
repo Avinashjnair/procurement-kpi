@@ -5,7 +5,7 @@ import { can } from '@/types';
 import {
   LayoutDashboard, Package, Users, FileText, FolderOpen,
   Menu, X, Sun, Moon, Bell, AlertCircle, Clock,
-  Send, BarChart2, PackageCheck, Boxes, LogOut, ShieldCheck,
+  Send, BarChart2, PackageCheck, Boxes, LogOut, ShieldCheck, Landmark, Wrench,
 } from 'lucide-react';
 
 const navItems = [
@@ -17,12 +17,13 @@ const navItems = [
   { id: 'purchase-orders', label: 'Purchase Orders',  icon: FileText,        permission: 'view_pos',       section: 'Procurement' },
   { id: 'grn',             label: 'Goods Receipt',    icon: PackageCheck,    permission: 'view_grn',       section: 'Procurement' },
   { id: 'inventory',       label: 'Inventory',        icon: Boxes,           permission: 'view_inventory', section: 'Procurement' },
+  { id: 'assets',          label: 'Fixed Assets',     icon: Landmark,        permission: 'view_assets',    section: 'Procurement' },
   { id: 'documents',       label: 'Documents',        icon: FolderOpen,      permission: 'view_documents', section: 'Records' },
 ];
 
 export default function Sidebar() {
   const { activePage, setActivePage, setModalOpen, darkMode, toggleDarkMode, currentUser, logout,
-          purchaseOrders, documents, grns } = useApp();
+          purchaseOrders, documents, grns, assets } = useApp();
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [notifOpen,  setNotifOpen]  = React.useState(false);
 
@@ -45,8 +46,16 @@ export default function Sidebar() {
   const pendingPOs    = currentUser?.role === 'manager' ? purchaseOrders.filter(po => po.deliveryStatus === 'Draft') : [];
   const expiringDocs  = documents.filter(doc => { if (!doc.expiryDate) return false; const days = Math.ceil((new Date(doc.expiryDate).getTime() - today.getTime()) / 86400000); return days >= 0 && days <= 30; });
   const expiredDocs   = documents.filter(doc => doc.expiryDate && new Date(doc.expiryDate) < today);
+  
+  // Asset alerts
+  const maintenanceAlerts = assets.filter(a => a.status === 'Under Maintenance');
+  const expiringWarranties = assets.filter(a => {
+    if (!a.warrantyExpiry) return false;
+    const days = Math.ceil((new Date(a.warrantyExpiry).getTime() - today.getTime()) / 86400000);
+    return days >= 0 && days <= 30;
+  });
 
-  const notifCount = overduePOs.length + expiringDocs.length + expiredDocs.length + pendingGRNs.length + pendingPOs.length;
+  const notifCount = overduePOs.length + expiringDocs.length + expiredDocs.length + pendingGRNs.length + pendingPOs.length + maintenanceAlerts.length + expiringWarranties.length;
 
   const visibleNavItems = navItems.filter(item => can(currentUser, item.permission));
   const grouped = visibleNavItems.reduce<Record<string, typeof navItems>>((acc, item) => {
@@ -151,12 +160,29 @@ export default function Sidebar() {
                   </div>
                 )}
                 {(expiredDocs.length + expiringDocs.length) > 0 && (
-                  <div>
+                  <div style={{ marginBottom: 8 }}>
                     <div style={{ fontSize: 10, fontWeight: 700, color: '#f59e0b', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 4 }}>Document Alerts ({expiredDocs.length + expiringDocs.length})</div>
                     {[...expiredDocs, ...expiringDocs].slice(0,3).map(doc => (
-                      <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 0', cursor: 'pointer' }} onClick={() => { setActivePage('documents'); setNotifOpen(false); }}>
+                      <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 0', cursor: 'pointer', borderBottom: '1px solid rgba(99,102,241,0.06)' }} onClick={() => { setActivePage('documents'); setNotifOpen(false); }}>
                         <Clock size={11} style={{ color: '#f59e0b', flexShrink: 0 }} />
                         <span style={{ fontSize: 12, color: '#f1f5f9' }}>{doc.name.substring(0,24)}{doc.name.length > 24 ? '…' : ''}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {(maintenanceAlerts.length + expiringWarranties.length) > 0 && (
+                  <div>
+                    <div style={{ fontSize: 10, fontWeight: 700, color: '#a78bfa', textTransform: 'uppercase', letterSpacing: '0.6px', marginBottom: 4 }}>Asset Alerts ({maintenanceAlerts.length + expiringWarranties.length})</div>
+                    {maintenanceAlerts.map(a => (
+                      <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 0', cursor: 'pointer', borderBottom: '1px solid rgba(99,102,241,0.06)' }} onClick={() => { setActivePage('assets'); setNotifOpen(false); }}>
+                        <Wrench size={11} style={{ color: '#a78bfa', flexShrink: 0 }} />
+                        <span style={{ fontSize: 12, color: '#f1f5f9' }}>{a.id} Down: {a.name.substring(0,18)}...</span>
+                      </div>
+                    ))}
+                    {expiringWarranties.map(a => (
+                      <div key={a.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '4px 0', cursor: 'pointer' }} onClick={() => { setActivePage('assets'); setNotifOpen(false); }}>
+                        <ShieldCheck size={11} style={{ color: '#a78bfa', flexShrink: 0 }} />
+                        <span style={{ fontSize: 12, color: '#f1f5f9' }}>Warranty End: {a.id}</span>
                       </div>
                     ))}
                   </div>

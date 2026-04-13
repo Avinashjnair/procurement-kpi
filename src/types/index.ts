@@ -34,6 +34,7 @@ export const PERMISSIONS: Record<UserRole, string[]> = {
     'view_documents', 'upload_document',
     'view_inventory', 'adjust_inventory',
     'view_grn', 'create_grn', 'approve_grn',
+    'view_assets', 'create_asset', 'edit_asset', 'log_maintenance',
   ],
   engineer: [
     'view_dashboard',
@@ -45,6 +46,7 @@ export const PERMISSIONS: Record<UserRole, string[]> = {
     'view_documents', 'upload_document',
     'view_inventory',
     'view_grn', 'create_grn',             // can raise GRN but not approve
+    'view_assets', 'log_maintenance',     // view assets and Log maintenance
   ],
 };
 
@@ -157,6 +159,7 @@ export interface POItem {
   quantity: number;
   unitPrice: number;
   isService?: boolean;
+  isAsset?: boolean; // ← NEW
   serviceDetails?: ServicePOLineDetails;
 }
 
@@ -374,4 +377,38 @@ export interface Document {
   expiryDate?: string;
   version?: number;
   supersededBy?: string;
+}
+
+// ── Fixed Assets ─────────────────────────────────────────────
+
+export interface MaintenanceRecord {
+  id: string;
+  date: string;
+  activity: string;
+  performedBy: string;
+  cost: number;
+  notes?: string;
+}
+
+export type AssetStatus = 'Active' | 'Under Maintenance' | 'Disposed' | 'Sold';
+
+export interface Asset {
+  id: string;
+  name: string;
+  category: string;
+  supplierId: string;
+  purchaseDate: string;
+  purchaseValue: number;
+  salvageValue: number;
+  depreciationRate: number; // percentage (e.g. 0.20 for 20%)
+  usefulLife: number;       // years
+  location: string;
+  serialNumber?: string;
+  warrantyExpiry?: string;
+  warrantyDetails?: string;
+  maintenancePlan: string;  // e.g. "Every 6 months"
+  maintenanceHistory: MaintenanceRecord[];
+  status: AssetStatus;
+  description?: string;
+  poId?: string; // ← NEW: Link to original PO
 }

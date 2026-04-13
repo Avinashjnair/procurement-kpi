@@ -128,6 +128,7 @@ export interface POItem {
   quantity: number;
   unitPrice: number;
   isService?: boolean;
+  isAsset?: boolean; // ← NEW: classification
   serviceDetails?: ServicePOLineDetails;
 }
 
@@ -204,7 +205,7 @@ export const items: Item[] = [
 // Mock POs
 // ============================================================
 export const purchaseOrders: PurchaseOrder[] = [
-  { id: 'PO-001', dateOfIssue: '2026-03-10', supplierId: 'SUP-001', supplierName: 'SteelMax Industries', items: [{ itemId: 'ITM-001', itemName: 'Carbon Steel Pipe (6")', quantity: 500, unitPrice: 85.50 }], totalAmount: 42750, paymentTerms: 'Net 30', amountPaid: 42750, dateOfPayment: '2026-04-05', dueDate: '2026-04-10', deliveryStatus: 'Delivered', paymentStatus: 'Paid', eta: '2026-04-01', incoterms: 'CIF' },
+  { id: 'PO-001', dateOfIssue: '2026-03-10', supplierId: 'SUP-001', supplierName: 'SteelMax Industries', items: [{ itemId: 'ITM-001', itemName: 'Carbon Steel Pipe (6")', quantity: 500, unitPrice: 85.50, isAsset: true }], totalAmount: 42750, paymentTerms: 'Net 30', amountPaid: 42750, dateOfPayment: '2026-04-05', dueDate: '2026-04-10', deliveryStatus: 'Delivered', paymentStatus: 'Paid', eta: '2026-04-01', incoterms: 'CIF' },
   { id: 'PO-002', dateOfIssue: '2026-03-15', supplierId: 'SUP-006', supplierName: 'NipponValve Ltd.', items: [{ itemId: 'ITM-002', itemName: 'Gate Valve (4")', quantity: 20, unitPrice: 320.00 }, { itemId: 'ITM-006', itemName: 'Ball Valve (2")', quantity: 200, unitPrice: 45.00 }], totalAmount: 15400, paymentTerms: 'Net 45', amountPaid: 7700, dateOfPayment: '2026-04-01', dueDate: '2026-04-30', deliveryStatus: 'Shipped', paymentStatus: 'Partial', eta: '2026-04-12', incoterms: 'DAP' },
   { id: 'PO-003', dateOfIssue: '2026-03-01', supplierId: 'SUP-003', supplierName: 'EuroChem Supply Co.', items: [{ itemId: 'ITM-003', itemName: 'Sodium Hydroxide (NaOH)', quantity: 25, unitPrice: 450.00 }], totalAmount: 11250, paymentTerms: 'Net 60', amountPaid: 0, dateOfPayment: null, dueDate: '2026-05-01', deliveryStatus: 'Delivered', paymentStatus: 'Unpaid', eta: '2026-03-28', incoterms: 'DDP' },
   { id: 'PO-004', dateOfIssue: '2026-02-20', supplierId: 'SUP-001', supplierName: 'SteelMax Industries', items: [{ itemId: 'ITM-004', itemName: 'Stainless Steel Flange (8")', quantity: 100, unitPrice: 192.00 }], totalAmount: 19200, paymentTerms: 'Net 30', amountPaid: 19200, dateOfPayment: '2026-03-18', dueDate: '2026-03-22', deliveryStatus: 'Delivered', paymentStatus: 'Paid', eta: '2026-03-10', incoterms: 'CIF' },

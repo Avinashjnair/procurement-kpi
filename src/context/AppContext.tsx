@@ -11,10 +11,12 @@ import {
 import {
   users as initialUsers, rfqs as initialRFQs, quotations as initialQuotations,
   stockItems as initialStock, stockMovements as initialMovements, grns as initialGRNs,
+  assets as initialAssets, assetCategories as initialCategories,
 } from '@/data/extendedMockData';
 // New types
 import type {
   User, RFQ, Quotation, QuotationEvaluation, StockItem, StockMovement, GRN, GRNLineItem,
+  Asset, MaintenanceRecord, AssetStatus,
 } from '@/types';
 import { calcEvalScore } from '@/types';
 
@@ -41,6 +43,9 @@ interface AppState {
   grns: GRN[];
   selectedRFQId: string | null;
   selectedGRNId: string | null;
+  assets: Asset[];
+  assetCategories: string[];
+  selectedAssetId: string | null;
 }
 
 interface AppContextType extends AppState {
@@ -51,6 +56,7 @@ interface AppContextType extends AppState {
   setSelectedPOId: (id: string | null) => void;
   setSelectedRFQId: (id: string | null) => void;
   setSelectedGRNId: (id: string | null) => void;
+  setSelectedAssetId: (id: string | null) => void;
   setFabOpen: (open: boolean) => void;
   setModalOpen: (modal: string | null) => void;
   toggleDarkMode: () => void;
@@ -97,6 +103,12 @@ interface AppContextType extends AppState {
   rejectGRN: (id: string, reason: string) => void;
   // Inventory
   adjustStock: (stockItemId: string, delta: number, reason: string) => void;
+  // Assets
+  addAsset: (asset: Asset) => void;
+  updateAssetStatus: (id: string, status: AssetStatus) => void;
+  addAssetCategory: (category: string) => void;
+  logMaintenance: (assetId: string, record: Omit<MaintenanceRecord, 'id'>) => void;
+  calculateCurrentAssetValue: (asset: Asset) => number;
   // lookups
   getSupplierById: (id: string) => Supplier | undefined;
   getItemById: (id: string) => Item | undefined;
@@ -129,6 +141,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
     grns: initialGRNs,
     selectedRFQId: null,
     selectedGRNId: null,
+    assets: initialAssets,
+    assetCategories: initialCategories,
+    selectedAssetId: null,
   });
 
   // ── Navigation ──
@@ -138,6 +153,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setSelectedPOId      = useCallback((id: string | null) => setState(p => ({ ...p, selectedPOId: id })), []);
   const setSelectedRFQId     = useCallback((id: string | null) => setState(p => ({ ...p, selectedRFQId: id })), []);
   const setSelectedGRNId     = useCallback((id: string | null) => setState(p => ({ ...p, selectedGRNId: id })), []);
+  const setSelectedAssetId   = useCallback((id: string | null) => setState(p => ({ ...p, selectedAssetId: id, activePage: id ? 'assetDetail' : p.activePage })), []);
   const setFabOpen           = useCallback((open: boolean) => setState(p => ({ ...p, fabOpen: open })), []);
   const setModalOpen         = useCallback((modal: string | null) => setState(p => ({ ...p, modalOpen: modal, fabOpen: false })), []);
   const toggleDarkMode       = useCallback(() => setState(p => ({ ...p, darkMode: !p.darkMode })), []);
@@ -324,7 +340,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const rejectGRN = useCallback((id: string, reason: string) =>
     setState(p => ({ ...p, grns: p.grns.map(g => g.id === id ? { ...g, status: 'Rejected', notes: (g.notes ? g.notes + ' | ' : '') + `Rejection: ${reason}` } : g) })), []);
 
-  // ── Inventory ──
   const adjustStock = useCallback((stockItemId: string, delta: number, reason: string) => {
     setState(p => {
       const today = new Date().toISOString().split('T')[0];
@@ -349,6 +364,34 @@ export function AppProvider({ children }: { children: ReactNode }) {
       return { ...p, stockItems: updatedStock, stockMovements: [...p.stockMovements, movement] };
     });
   }, []);
+  
+  // ── Assets ──
+  const addAsset = useCallback((asset: Asset) => setState(p => ({ ...p, assets: [asset, ...p.assets] })), []);
+  
+  const updateAssetStatus = useCallback((id: string, status: AssetStatus) => 
+    setState(p => ({ ...p, assets: p.assets.map(a => a.id === id ? { ...a, status } : a) })), []);
+    
+  const addAssetCategory = useCallback((cat: string) => 
+    setState(p => ({ ...p, assetCategories: Array.from(new Set([...p.assetCategories, cat])) })), []);
+    
+  const logMaintenance = useCallback((assetId: string, record: Omit<MaintenanceRecord, 'id'>) => {
+    const newRecord = { ...record, id: `MNT-${Date.now()}` };
+    setState(p => ({ ...p, assets: p.assets.map(a => a.id === assetId ? { ...a, maintenanceHistory: [newRecord, ...(a.maintenanceHistory || [])] } : a) }));
+  }, []);
+
+  const calculateCurrentAssetValue = useCallback((asset: Asset) => {
+    const purchaseDate = new Date(asset.purchaseDate);
+    const today = new Date();
+    const yearsElapsed = (today.getTime() - purchaseDate.getTime()) / (1000 * 60 * 60 * 24 * 365.25);
+    
+    if (yearsElapsed <= 0) return asset.purchaseValue;
+    
+    // Declining Balance: BV = PurchaseValue * (1 - rate)^t
+    let currentValue = asset.purchaseValue * Math.pow(1 - asset.depreciationRate, yearsElapsed);
+    
+    // Cap at salvage value
+    return Math.max(currentValue, asset.salvageValue);
+  }, []);
 
   // ── Lookups ──
   const getSupplierById  = useCallback((id: string) => state.suppliers.find(s => s.id === id), [state.suppliers]);
@@ -371,7 +414,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addQuotation, updateQuotation, submitEvaluation,
       addGRN, submitGRN, approveGRN, rejectGRN,
       adjustStock,
+      addAsset, updateAssetStatus, addAssetCategory, logMaintenance, calculateCurrentAssetValue,
       getSupplierById, getItemById, getPOById, getRFQById, getStockByItemId,
+      setSelectedAssetId,
     }}>
       {children}
     </AppContext.Provider>
