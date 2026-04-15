@@ -4,7 +4,7 @@ import { useApp } from '@/context/AppContext';
 import {
   Search, ChevronDown, ArrowLeft, Copy, XCircle,
   DollarSign, Download, Printer, Wrench,
-  FileText, FileSpreadsheet,
+  FileText, FileSpreadsheet, Check
 } from 'lucide-react';
 import type { POStatus } from '@/types';
 import { exportCsv } from '@/utils/exportCsv';
@@ -135,15 +135,21 @@ function PaymentModal({ poId, totalAmount, amountPaid, onClose }: {
 
 // ── PO Detail page ──
 function PODetail({ poId }: { poId: string }) {
-  const { purchaseOrders, items, suppliers, setSelectedPOId, updatePOStatus, duplicatePO } = useApp();
+  const { purchaseOrders, items, suppliers, setSelectedPOId, updatePOStatus, duplicatePO, processApprovalStep, currentUser } = useApp();
   const [cancelModal, setCancelModal] = useState(false);
   const [paymentModal, setPaymentModal] = useState(false);
   const [exportLoading, setExportLoading] = useState<string | null>(null);
+  const [approvalComment, setApprovalComment] = useState('');
 
   const po = purchaseOrders.find(p => p.id === poId);
   const supplier = suppliers.find(s => s.id === po?.supplierId);
 
   if (!po) return <p>PO not found.</p>;
+
+  // Check if current user can approve the current step
+  const currentStep = po.approvalSteps[po.currentApprovalStep];
+  const canApprove = currentUser && currentStep && currentStep.role === currentUser.role && currentStep.status === 'Pending';
+  const isDraft = po.deliveryStatus === 'Draft';
 
   const handlePrint = () => window.print();
 
@@ -169,6 +175,10 @@ function PODetail({ poId }: { poId: string }) {
     } finally {
       setExportLoading(null);
     }
+  };
+
+  const handleSubmitForApproval = () => {
+    updatePOStatus(po.id, 'Pending');
   };
 
   return (
@@ -199,7 +209,12 @@ function PODetail({ poId }: { poId: string }) {
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {po.deliveryStatus !== 'Cancelled' && po.paymentStatus !== 'Paid' && (
+          {isDraft && (
+            <button className="btn btn-primary btn-sm" onClick={handleSubmitForApproval}>
+              Submit for Approval
+            </button>
+          )}
+          {po.deliveryStatus !== 'Cancelled' && po.paymentStatus !== 'Paid' && po.deliveryStatus !== 'Draft' && (
             <button className="btn btn-secondary btn-sm" onClick={() => setPaymentModal(true)}>
               <DollarSign size={13} /> Record Payment
             </button>
@@ -237,27 +252,54 @@ function PODetail({ poId }: { poId: string }) {
         <div className="card">
           <div className="card-header">
             <div className="card-title">Approval Workflow</div>
+            {canApprove && (
+              <div style={{ display: 'flex', gap: 8, marginLeft: 'auto' }}>
+                <input 
+                  type="text" 
+                  className="form-input" 
+                  style={{ height: 32, fontSize: 12, minWidth: 150 }} 
+                  placeholder="Review comments..." 
+                  value={approvalComment} 
+                  onChange={e => setApprovalComment(e.target.value)} 
+                />
+                <button className="btn btn-sm" style={{ background: 'rgba(16,185,129,0.1)', color: '#10b981', border: '1px solid rgba(16,185,129,0.3)' }}
+                  onClick={() => { processApprovalStep(po.id, po.currentApprovalStep, 'Approved', approvalComment); setApprovalComment(''); }}>
+                  Approve
+                </button>
+                <button className="btn btn-sm btn-danger"
+                  onClick={() => { processApprovalStep(po.id, po.currentApprovalStep, 'Rejected', approvalComment); setApprovalComment(''); }}>
+                  Reject
+                </button>
+              </div>
+            )}
           </div>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 0, padding: '10px 0' }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 0, padding: '20px 0' }}>
             {(po.approvalSteps || []).map((step, idx) => {
               const isLast = idx === (po.approvalSteps?.length || 0) - 1;
-              const statusColor = step.status === 'Approved' ? '#10b981' : step.status === 'Rejected' ? '#f43f5e' : '#94a3b8';
+              const isCurrent = idx === po.currentApprovalStep;
+              const statusColor = step.status === 'Approved' ? '#10b981' : step.status === 'Rejected' ? '#f43f5e' : isCurrent ? 'var(--accent-indigo)' : '#94a3b8';
+              
               return (
                 <React.Fragment key={idx}>
                   <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', position: 'relative' }}>
                     <div style={{ 
-                      width: 28, height: 28, borderRadius: '50%', background: step.status === 'Approved' ? 'rgba(16,185,129,0.1)' : 'rgba(255,255,255,0.05)', 
-                      border: `2px solid ${statusColor}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: statusColor, fontSize: 10, fontWeight: 700, zIndex: 1
+                      width: 32, height: 32, borderRadius: '50%', 
+                      background: step.status === 'Approved' ? 'rgba(16,185,129,0.1)' : isCurrent ? 'rgba(99,102,241,0.1)' : 'rgba(255,255,255,0.05)', 
+                      border: `2px solid ${statusColor}`, 
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                      color: statusColor, fontSize: 11, fontWeight: 700, zIndex: 1,
+                      boxShadow: isCurrent ? '0 0 0 4px rgba(99,102,241,0.1)' : 'none'
                     }}>
-                      {idx + 1}
+                      {step.status === 'Approved' ? <Check size={16} /> : idx + 1}
                     </div>
-                    <div style={{ marginTop: 8 }}>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: '#f1f5f9' }}>{step.role.toUpperCase()}</div>
-                      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{step.status}</div>
+                    <div style={{ marginTop: 10 }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: '#f1f5f9' }}>{step.role.toUpperCase()}</div>
+                      <div style={{ fontSize: 10, color: statusColor, fontWeight: isCurrent ? 600 : 400 }}>{step.status}</div>
+                      {step.userName && <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2 }}>{step.userName}</div>}
                     </div>
                   </div>
                   {!isLast && (
-                    <div style={{ flex: 1, height: 2, background: step.status === 'Approved' ? '#10b981' : 'rgba(255,255,255,0.05)', marginTop: 14, margin: '14px -14px 0' }} />
+                    <div style={{ flex: 1, height: 2, background: step.status === 'Approved' ? '#10b981' : 'rgba(255,255,255,0.05)', marginTop: 16, margin: '16px -16px 0' }} />
                   )}
                 </React.Fragment>
               );

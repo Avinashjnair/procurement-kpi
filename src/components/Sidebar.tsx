@@ -17,6 +17,7 @@ const navItems: { id: string; label: string; icon: any; permission: string; sect
   { id: 'rfq',             label: 'RFQ / PR',            icon: Send,            permission: 'view_rfqs',             section: 'Sourcing' },
   { id: 'quotations',      label: 'Quotations',          icon: BarChart2,       permission: 'view_quotations',       section: 'Sourcing' },
   { id: 'purchase-orders', label: 'Purchase Orders',     icon: FileText,        permission: 'view_pos',              section: 'Procurement' },
+  { id: 'invoices',        label: 'Invoices',            icon: FolderOpen,      permission: 'view_pos',              section: 'Procurement' },
   { id: 'grn',             label: 'Goods Receipt',       icon: PackageCheck,    permission: 'view_grn',              section: 'Procurement' },
   { id: 'inventory',       label: 'Inventory',           icon: Boxes,           permission: 'view_inventory',        section: 'Procurement' },
   { id: 'blanket-pos',     label: 'Blanket POs',         icon: FileText,        permission: 'view_pos',              section: 'Procurement' },

@@ -12,48 +12,97 @@ const COLORS = ['#6366f1', '#06b6d4', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6'
 export default function AnalyticsPage() {
   const { purchaseOrders, items, budgets } = useApp();
   
-  // ── Data Preparation ──
-  const monthlyData = [
-    { month: 'Jan', current: 145000, previous: 120000 },
-    { month: 'Feb', current: 168000, previous: 135000 },
-    { month: 'Mar', current: 192000, previous: 155000 },
-    { month: 'Apr', current: 125000, previous: 140000 }, // Partial month
-  ];
+  // ── Dynamic Dynamic Calculations ──
+  
+  // 1. Calculate Real Savings
+  let totalSavings = 0;
+  let totalNegotiatedSpend = 0;
+  let marketSpend = 0;
 
-  const spendByCategory = [
-    { name: 'Piping', value: 245000 },
-    { name: 'Valves', value: 180000 },
-    { name: 'Electrical', value: 95000 },
-    { name: 'Chemicals', value: 65000 },
-    { name: 'Services', value: 110000 },
-  ];
+  purchaseOrders.forEach(po => {
+    if (po.deliveryStatus === 'Cancelled') return;
+    po.items.forEach(line => {
+      // Find item to get benchmarkPrice
+      const itemRef = items.find(i => i.id === line.itemId || i.name === line.itemName);
+      const benchmark = itemRef?.benchmarkPrice || line.unitPrice; // Fallback to unitPrice if no benchmark
+      
+      const lineSavings = (benchmark - line.unitPrice) * line.quantity;
+      totalSavings += lineSavings;
+      totalNegotiatedSpend += (line.unitPrice * line.quantity);
+      marketSpend += (benchmark * line.quantity);
+    });
+  });
 
-  const totalSavings = 42500; // Calculated based on benchmark pricing
-  const savingsTarget = 60000;
+  const savingsRate = marketSpend > 0 ? (totalSavings / marketSpend) * 100 : 0;
+  const savingsTarget = 75000;
+
+  // 2. Monthly Spend (Dynamic)
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const monthlyMap: Record<string, { month: string, current: number, previous: number }> = {};
+  
+  // Initialize last 6 months
+  const now = new Date();
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const m = monthNames[d.getMonth()];
+    monthlyMap[m] = { month: m, current: 0, previous: (120000 + Math.random() * 40000) }; // Random baseline for demo
+  }
+
+  purchaseOrders.forEach(po => {
+    if (po.deliveryStatus === 'Cancelled') return;
+    const date = new Date(po.dateOfIssue);
+    const m = monthNames[date.getMonth()];
+    if (monthlyMap[m]) {
+      monthlyMap[m].current += po.totalAmount;
+    }
+  });
+
+  const monthlyData = Object.values(monthlyMap);
+
+  // 3. Spend by Category
+  // Note: Item category isn't in PurchaseOrder Items, so we map from Item reference
+  const categoryMap: Record<string, number> = {};
+  purchaseOrders.forEach(po => {
+    if (po.deliveryStatus === 'Cancelled') return;
+    po.items.forEach(line => {
+      const itemRef = items.find(i => i.id === line.itemId || i.name === line.itemName);
+      const cat = itemRef?.category || 'General';
+      categoryMap[cat] = (categoryMap[cat] || 0) + (line.unitPrice * line.quantity);
+    });
+  });
+
+  const spendByCategory = Object.entries(categoryMap).map(([name, value]) => ({ name, value }));
 
   const handleExportPowerBI = () => {
-    // Generate flat table: PO ID | Date | Supplier | Category | Item | Quantity | Price | Total | Budget
+    // Generate flat table: PO ID | Date | Supplier | Category | Item | Quantity | Price | Total | Savings
     const rows = purchaseOrders.flatMap(po => 
-      po.items.map((item, idx) => ({
-        poId: po.id,
-        date: po.dateOfIssue,
-        supplier: po.supplierName,
-        item: item.itemName,
-        qty: item.quantity,
-        price: item.unitPrice,
-        total: item.quantity * item.unitPrice,
-        dept: po.projectReference || 'General',
-        status: po.deliveryStatus
-      }))
+      po.items.map((line, idx) => {
+        const itemRef = items.find(i => i.id === line.itemId || i.name === line.itemName);
+        const benchmark = itemRef?.benchmarkPrice || line.unitPrice;
+        return {
+          poId: po.id,
+          date: po.dateOfIssue,
+          supplier: po.supplierName,
+          category: itemRef?.category || 'General',
+          item: line.itemName,
+          qty: line.quantity,
+          price: line.unitPrice,
+          benchmark: benchmark,
+          total: line.quantity * line.unitPrice,
+          savings: (benchmark - line.unitPrice) * line.quantity,
+          status: po.deliveryStatus
+        };
+      })
     );
     
+    const headers = Object.keys(rows[0] || {}).join(",");
     const csvContent = "data:text/csv;charset=utf-8," 
-      + ["PO ID,Date,Supplier,Item,Qty,Price,Total,Dept,Status", ...rows.map(r => Object.values(r).join(","))].join("\n");
+      + [headers, ...rows.map(r => Object.values(r).join(","))].join("\n");
     
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `ProcureIQ_PowerBI_Export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute("download", `ProcureIQ_Analytics_Export_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
   };
@@ -89,7 +138,7 @@ export default function AnalyticsPage() {
             <span>{Math.round((totalSavings / savingsTarget) * 100)}%</span>
           </div>
           <div style={{ height: 6, background: 'rgba(255,255,255,0.05)', borderRadius: 3, overflow: 'hidden' }}>
-            <div style={{ height: '100%', width: '71%', background: '#10b981' }} />
+            <div style={{ height: '100%', width: `${Math.min((totalSavings / savingsTarget) * 100, 100)}%`, background: '#10b981' }} />
           </div>
         </div>
 
@@ -97,20 +146,20 @@ export default function AnalyticsPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 20 }}>
             <div>
               <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Avg. Savings Rate</div>
-              <div style={{ fontSize: 24, fontWeight: 700, color: '#06b6d4' }}>6.8%</div>
+              <div style={{ fontSize: 24, fontWeight: 700, color: '#06b6d4' }}>{savingsRate.toFixed(1)}%</div>
             </div>
             <div style={{ padding: 10, background: 'rgba(6, 182, 212, 0.1)', borderRadius: 12, color: '#06b6d4' }}>
               <Target size={24} />
             </div>
           </div>
-          <div style={{ fontSize: 12, color: '#34d399' }}>+1.2% versus last quarter</div>
+          <div style={{ fontSize: 12, color: '#34d399' }}>基于基准市场价格计算</div>
         </div>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 24, marginBottom: 24 }}>
         <div className="card">
           <div className="card-header">
-            <div className="card-title">Monthly Spend Comparison (YoY)</div>
+            <div className="card-title">Monthly Spend Comparison (Dynamic)</div>
           </div>
           <div style={{ height: 320 }}>
             <ResponsiveContainer width="100%" height="100%">

@@ -1,12 +1,79 @@
-'use client';
 import React, { useState } from 'react';
 import { useApp } from '@/context/AppContext';
-import { Landmark, Plus, AlertCircle, TrendingUp, DollarSign, Wallet } from 'lucide-react';
+import { Landmark, Plus, AlertCircle, TrendingUp, DollarSign, Wallet, X, Check } from 'lucide-react';
 import { BudgetEnvelope } from '@/types';
+
+function NewEnvelopeModal({ onClose }: { onClose: () => void }) {
+  const { addBudget } = useApp();
+  const [name, setName] = useState('');
+  const [dept, setDept] = useState('');
+  const [project, setProject] = useState('');
+  const [amount, setAmount] = useState('');
+  const [period, setPeriod] = useState('2026');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name || !dept || !amount) return;
+    
+    addBudget({
+      id: `BGT-${Date.now().toString().slice(-4)}`,
+      name,
+      department: dept,
+      project: project || undefined,
+      period,
+      totalAmount: parseFloat(amount),
+      committedAmount: 0,
+      spentAmount: 0,
+      currency: 'USD',
+      status: 'Active'
+    });
+    onClose();
+  };
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 480 }} onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3 className="modal-title">Create Budget Envelope</h3>
+          <button className="modal-close" onClick={onClose}><X size={18} /></button>
+        </div>
+        <form onSubmit={handleSubmit}>
+          <div className="form-group">
+            <label className="form-label">Envelope Name *</label>
+            <input type="text" className="form-input" value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Mechanical Spare Parts" required />
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Department *</label>
+              <input type="text" className="form-input" value={dept} onChange={e => setDept(e.target.value)} placeholder="e.g. Maintenance" required />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Fiscal Period</label>
+              <input type="text" className="form-input" value={period} onChange={e => setPeriod(e.target.value)} placeholder="2026" />
+            </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Associated Project (Optional)</label>
+            <input type="text" className="form-input" value={project} onChange={e => setProject(e.target.value)} placeholder="e.g. PRJ-2026-X" />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Total Allocated Amount ($) *</label>
+            <input type="number" className="form-input" value={amount} onChange={e => setAmount(e.target.value)} placeholder="0.00" required />
+          </div>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 24 }}>
+            <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+            <button type="submit" className="btn btn-primary"><Check size={16} /> Create Envelope</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
 
 export default function BudgetsPage() {
   const { budgets, addBudget, updateBudget, darkMode } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
+  const [showModal, setShowModal] = useState(false);
 
   const filteredBudgets = budgets.filter(b => 
     b.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -16,12 +83,14 @@ export default function BudgetsPage() {
 
   return (
     <div className="page-container">
+      {showModal && <NewEnvelopeModal onClose={() => setShowModal(false)} />}
+      
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h2>Budget Management</h2>
           <p>Global allocation tracking by Department and Project</p>
         </div>
-        <button className="btn btn-primary">
+        <button className="btn btn-primary" onClick={() => setShowModal(true)}>
           <Plus size={18} /> New Envelope
         </button>
       </div>
@@ -94,8 +163,8 @@ export default function BudgetsPage() {
             </thead>
             <tbody>
               {filteredBudgets.map(b => {
-                const totalUsed = b.spentAmount + b.committedAmount;
-                const utilPct = Math.round((totalUsed / b.totalAmount) * 100);
+                const totalUsed = (b.spentAmount || 0) + (b.committedAmount || 0);
+                const utilPct = b.totalAmount > 0 ? Math.round((totalUsed / b.totalAmount) * 100) : 0;
                 const remaining = b.totalAmount - totalUsed;
                 const statusColor = utilPct >= 100 ? '#f43f5e' : utilPct >= 80 ? '#f59e0b' : '#10b981';
 

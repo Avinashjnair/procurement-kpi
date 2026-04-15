@@ -376,6 +376,33 @@ export async function exportPOAsPDF(
 
   // ── Save ────────────────────────────────────────────────────
   const fileName = `PO_${po.id}_${po.supplierName.replace(/\s+/g, '_')}.pdf`;
-  doc.save(fileName);
-  onProgress?.('Done');
+  
+  try {
+    const blob = doc.output('blob');
+    if (blob.size < 100) throw new Error('Generated PDF is too small, likely corrupted.');
+    
+    // Explicit verification of PDF header
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = reader.result as string;
+      if (!text.startsWith('%PDF-')) {
+        console.error('Invalid PDF header detected');
+      }
+    };
+    reader.readAsText(blob.slice(0, 5));
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 100);
+    
+    onProgress?.('Done');
+  } catch (err) {
+    console.error('PDF Export Error:', err);
+    alert('Failed to generate a valid PDF. Please try again.');
+  }
 }

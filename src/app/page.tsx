@@ -21,6 +21,7 @@ import BudgetsPage from '@/components/BudgetsPage';
 import ContractsPage from '@/components/ContractsPage';
 import AnalyticsPage from '@/components/AnalyticsPage';
 import BlanketsPage from '@/components/BlanketsPage';
+import InvoicesPage from '@/components/InvoicesPage';
 import NotificationsPage from '@/components/NotificationsPage';
 import SupplierPortalPage from '@/components/SupplierPortalPage';
 import MobileGRNEntry from '@/components/MobileGRNEntry';
@@ -47,6 +48,7 @@ function AppContent() {
       case 'rfq':             return <RFQPage />;
       case 'quotations':      return <QuotationsPage />;
       case 'purchase-orders': return <PurchaseOrdersPage />;
+      case 'invoices':        return <InvoicesPage />;
       case 'quick-grn':       return <MobileGRNEntry />;
       case 'grn':             return <GRNPage />;
       case 'inventory':       return <InventoryPage />;

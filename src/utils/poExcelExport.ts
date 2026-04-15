@@ -185,6 +185,25 @@ export async function exportPOAsExcel(
 
   // ── Write file ───────────────────────────────────────────────
   const fileName = `PO_${po.id}_${po.supplierName.replace(/\s+/g, '_')}.xlsx`;
-  XLSX.writeFile(wb, fileName);
-  onProgress?.('Done');
+  
+  try {
+    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    const blob = new Blob([wbout], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    
+    if (blob.size < 100) throw new Error('Generated Excel file is too small, likely corrupted.');
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 100);
+    
+    onProgress?.('Done');
+  } catch (err) {
+    console.error('Excel Export Error:', err);
+    alert('Failed to generate a valid Excel file. Please try again.');
+  }
 }

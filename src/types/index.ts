@@ -151,6 +151,7 @@ export interface Item {
   description: string;
   unit: string;
   currentPrice: number;
+  benchmarkPrice?: number;    // Market or historical baseline for savings calculation
   linkedSupplierIds: string[];
   priceHistory: PricePoint[];
   purchaseHistory: PurchaseRecord[];
