@@ -327,6 +327,88 @@
 }
 
 /* =============================================== */
+/* Uniform Dashboard Enhancements                  */
+/* =============================================== */
+
+.uniform-card {
+  text-align: left;
+  width: 100%;
+  cursor: pointer;
+  border: 1px solid var(--border-color);
+  background: var(--bg-glass);
+  backdrop-filter: blur(12px);
+  padding: 24px;
+  border-radius: 20px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+}
+
+.uniform-card:hover {
+  transform: translateY(-5px);
+  border-color: var(--border-glow);
+  box-shadow: 0 12px 32px rgba(99, 102, 241, 0.1), var(--shadow-glow);
+  background: rgba(99, 102, 241, 0.05);
+}
+
+.uniform-card::before {
+  display: none !important; /* Remove the old top bar styling */
+}
+
+.card-click-hint {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: var(--accent-indigo);
+  background: rgba(99, 102, 241, 0.1);
+  padding: 4px 8px;
+  border-radius: 6px;
+  opacity: 0;
+  transform: translateX(10px);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.uniform-card:hover .card-click-hint {
+  opacity: 1;
+  transform: translateX(0);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  padding: 24px 20px;
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 20px;
+}
+
+.modal-close {
+  background: rgba(244, 63, 94, 0.1);
+  color: var(--accent-rose);
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.modal-close:hover {
+  background: var(--accent-rose);
+  color: white;
+  transform: rotate(90deg);
+}
+
+/* =============================================== */
 /* Charts Layout                                   */
 /* =============================================== */
 

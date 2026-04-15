@@ -1,6 +1,5 @@
 // ============================================================
 // ProcureIQ v2 — Extended Mock Data
-// Import alongside existing mockData.ts
 // ============================================================
 import type {
   User, RFQ, Quotation, StockItem, StockMovement, GRN, Asset,
@@ -33,6 +32,17 @@ export const users: User[] = [
     id: 'USR-005', name: 'Carlos Reyes', email: 'carlos@procureiq.ae',
     passwordHash: 'engineer123', role: 'engineer',
     department: 'Electrical Engineering', avatarInitials: 'CR', active: true,
+  },
+  // ── Finance & Accounts ──────────────────────────────────────
+  {
+    id: 'USR-006', name: 'Fatima Al-Zaabi', email: 'fatima@procureiq.ae',
+    passwordHash: 'finance123', role: 'finance',
+    department: 'Finance & Accounts', avatarInitials: 'FZ', active: true,
+  },
+  {
+    id: 'USR-007', name: 'Rohan Mehta', email: 'rohan@procureiq.ae',
+    passwordHash: 'finance123', role: 'finance',
+    department: 'Finance & Accounts', avatarInitials: 'RM', active: true,
   },
 ];
 
@@ -101,7 +111,6 @@ export const rfqs: RFQ[] = [
 // ── Quotations ───────────────────────────────────────────────
 
 export const quotations: Quotation[] = [
-  // RFQ-001 — 3 quotes, SUP-001 awarded
   {
     id: 'QUO-001', rfqId: 'RFQ-001', supplierId: 'SUP-001', supplierName: 'SteelMax Industries',
     status: 'Awarded', dateReceived: '2026-03-10', validUntil: '2026-04-10',
@@ -136,7 +145,6 @@ export const quotations: Quotation[] = [
     ],
     evaluation: { price: 6, paymentTerms: 8, leadTime: 9, pastHistory: 8, serviceQuality: 8, responsiveness: 8, compliance: 8, totalScore: 7.5, evaluatedBy: 'USR-001', evaluatedAt: '2026-03-16', recommendation: 'Good lead time and service quality. Pricing is higher than SteelMax.' },
   },
-  // RFQ-002 — 2 quotes, not yet evaluated
   {
     id: 'QUO-004', rfqId: 'RFQ-002', supplierId: 'SUP-001', supplierName: 'SteelMax Industries',
     status: 'Received', dateReceived: '2026-03-22', validUntil: '2026-04-22',
@@ -225,7 +233,6 @@ export const grns: GRN[] = [
     totalAccepted: 650, totalRejected: 0, stockUpdated: true,
     notes: 'Partial shipment. Remaining 350 meters due 2026-04-20.',
   },
-  // Pending GRN awaiting approval
   {
     id: 'GRN-005', poId: 'PO-004', supplierId: 'SUP-001', supplierName: 'SteelMax Industries',
     status: 'Submitted', dateCreated: '2026-04-12', dateApproved: null,
@@ -245,7 +252,7 @@ export const assets: Asset[] = [
     id: 'AST-001',
     name: 'Industrial HVAC Unit — Tower A',
     category: 'HVAC & Facility',
-    supplierId: 'SUP-002', // GlobalPipe (Demo)
+    supplierId: 'SUP-002',
     poId: 'PO-010',
     purchaseDate: '2025-01-15',
     purchaseValue: 45000,
@@ -270,7 +277,7 @@ export const assets: Asset[] = [
     id: 'AST-002',
     name: 'Logistics Delivery Van',
     category: 'Vehicles',
-    supplierId: 'SUP-005', // AmeriSteel (Demo)
+    supplierId: 'SUP-005',
     poId: 'PO-005',
     purchaseDate: '2024-06-01',
     purchaseValue: 32000,
@@ -290,7 +297,7 @@ export const assets: Asset[] = [
     id: 'AST-003',
     name: 'CNC Milling Machine',
     category: 'Machinery',
-    supplierId: 'SUP-001', // SteelMax
+    supplierId: 'SUP-001',
     purchaseDate: '2026-01-10',
     purchaseValue: 85000,
     salvageValue: 12000,
@@ -307,7 +314,7 @@ export const assets: Asset[] = [
     id: 'AST-004',
     name: 'Core Server Cluster',
     category: 'IT Infrastructure',
-    supplierId: 'SUP-006', // NipponValve (Demo)
+    supplierId: 'SUP-006',
     purchaseDate: '2025-11-20',
     purchaseValue: 125000,
     salvageValue: 10000,

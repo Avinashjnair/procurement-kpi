@@ -15,6 +15,15 @@ import GRNPage from '@/components/GRNPage';
 import InventoryPage from '@/components/InventoryPage';
 import DocumentsPage from '@/components/DocumentsPage';
 import AssetsPage from '@/components/AssetsPage';
+import FinancePage from '@/components/FinancePage';
+import ExecutiveReportsPage from '@/components/ExecutiveReportsPage';
+import BudgetsPage from '@/components/BudgetsPage';
+import ContractsPage from '@/components/ContractsPage';
+import AnalyticsPage from '@/components/AnalyticsPage';
+import BlanketsPage from '@/components/BlanketsPage';
+import NotificationsPage from '@/components/NotificationsPage';
+import SupplierPortalPage from '@/components/SupplierPortalPage';
+import MobileGRNEntry from '@/components/MobileGRNEntry';
 
 function AppContent() {
   const { activePage, darkMode, currentUser } = useApp();
@@ -27,43 +36,37 @@ function AppContent() {
     }
   }, [darkMode]);
 
-  if (!currentUser) {
-    return <LoginPage />;
-  }
+  if (!currentUser) return <LoginPage />;
 
   const renderPage = () => {
     switch (activePage) {
-      case 'dashboard':
-        return <DashboardPage />;
-      case 'items':
-        return <ItemsPage />;
-      case 'suppliers':
-        return <SuppliersPage />;
-      case 'rfq':
-        return <RFQPage />;
-      case 'quotations':
-        return <QuotationsPage />;
-      case 'purchase-orders':
-        return <PurchaseOrdersPage />;
-      case 'grn':
-        return <GRNPage />;
-      case 'inventory':
-        return <InventoryPage />;
-      case 'documents':
-        return <DocumentsPage />;
-      case 'assets':
-        return <AssetsPage />;
-      default:
-        return <DashboardPage />;
+      case 'dashboard':       return <DashboardPage />;
+      case 'portal':          return <SupplierPortalPage />;
+      case 'items':           return <ItemsPage />;
+      case 'suppliers':       return <SuppliersPage />;
+      case 'rfq':             return <RFQPage />;
+      case 'quotations':      return <QuotationsPage />;
+      case 'purchase-orders': return <PurchaseOrdersPage />;
+      case 'quick-grn':       return <MobileGRNEntry />;
+      case 'grn':             return <GRNPage />;
+      case 'inventory':       return <InventoryPage />;
+      case 'blanket-pos':     return <BlanketsPage />;
+      case 'notifications':   return <NotificationsPage />;
+      case 'documents':       return <DocumentsPage />;
+      case 'assets':          return <AssetsPage />;
+      case 'finance':         return <FinancePage />;
+      case 'reports':         return <ExecutiveReportsPage />;
+      case 'budgets':         return <BudgetsPage />;
+      case 'contracts':       return <ContractsPage />;
+      case 'analytics':       return <AnalyticsPage />;
+      default:                return <DashboardPage />;
     }
   };
 
   return (
     <div className="app-layout">
       <Sidebar />
-      <main className="main-content">
-        {renderPage()}
-      </main>
+      <main className="main-content">{renderPage()}</main>
       <FAB />
       <Modals />
     </div>

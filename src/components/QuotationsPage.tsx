@@ -105,16 +105,20 @@ function EvaluationModal({ quotation, onClose }: { quotation: Quotation; onClose
 
 export default function QuotationsPage() {
   const { quotations, rfqs, suppliers, currentUser, awardRFQ, setActivePage } = useApp();
-  const [selectedRFQ, setSelectedRFQ] = useState<string>(rfqs.filter(r => quotations.some(q => q.rfqId === r.id))[0]?.id || '');
+  const [viewMode, setViewMode] = useState<'rfqs' | 'quotes' | 'compare'>('rfqs');
+  const [selectedRFQId, setSelectedRFQId] = useState<string | null>(null);
   const [evaluating, setEvaluating] = useState<Quotation | null>(null);
   const [expandedQuo, setExpandedQuo] = useState<string | null>(null);
 
-  const rfqsWithQuotes = rfqs.filter(r => quotations.some(q => q.rfqId === r.id));
-  const activeRFQ = rfqs.find(r => r.id === selectedRFQ);
+  const rfqsWithQuotes = useMemo(() => 
+    rfqs.filter(r => quotations.some(q => q.rfqId === r.id))
+  , [rfqs, quotations]);
+
+  const activeRFQ = rfqs.find(r => r.id === selectedRFQId);
   const rfqQuotes = useMemo(() =>
-    quotations.filter(q => q.rfqId === selectedRFQ)
+    quotations.filter(q => q.rfqId === selectedRFQId)
       .sort((a, b) => (b.evaluation?.totalScore || 0) - (a.evaluation?.totalScore || 0))
-  , [quotations, selectedRFQ]);
+  , [quotations, selectedRFQId]);
 
   const bestScore = rfqQuotes.reduce((max, q) => Math.max(max, q.evaluation?.totalScore || 0), 0);
 
@@ -127,213 +131,283 @@ export default function QuotationsPage() {
 
   const RADAR_COLORS = ['#6366f1', '#06b6d4', '#10b981', '#f59e0b', '#f43f5e'];
 
+  // ─────────────────────────────────────────────────────────────
+  // 1. RFQ List View
+  // ─────────────────────────────────────────────────────────────
+  if (viewMode === 'rfqs') {
+    return (
+      <div>
+        <div className="page-header">
+          <h2>Quotation Management</h2>
+          <p>Select an RFQ to review received supplier quotations</p>
+        </div>
+
+        <div className="card">
+          <div className="data-table-wrapper">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>RFQ #</th>
+                  <th>Title</th>
+                  <th>Status</th>
+                  <th>Closing Date</th>
+                  <th>Quotes Received</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rfqsWithQuotes.map(r => {
+                  const count = quotations.filter(q => q.rfqId === r.id).length;
+                  return (
+                    <tr key={r.id}>
+                      <td style={{ fontWeight: 700, color: '#f1f5f9' }}>{r.id}</td>
+                      <td>{r.title}</td>
+                      <td><span className={`badge ${r.status.toLowerCase()}`}>{r.status}</span></td>
+                      <td>{r.deadlineDate}</td>
+                      <td>
+                        <span style={{ display:'flex', alignItems: 'center', gap: 6, fontWeight: 700, color: 'var(--accent-indigo)' }}>
+                          <BarChart2 size={14} /> {count}
+                        </span>
+                      </td>
+                      <td>
+                        <button className="btn btn-primary btn-sm" onClick={() => { setSelectedRFQId(r.id); setViewMode('quotes'); }}>
+                          Manage Quotes
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // 2. Quotation List / Manual Review
+  // ─────────────────────────────────────────────────────────────
+  if (viewMode === 'quotes') {
+    return (
+      <div>
+        <div className="page-header">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <button className="btn btn-ghost btn-sm" onClick={() => setViewMode('rfqs')} style={{ paddingLeft: 0 }}>
+               ← All RFQs
+            </button>
+            <h2 style={{ margin: 0 }}>Quotations for {activeRFQ?.id}</h2>
+          </div>
+          <p style={{ marginTop: 4 }}>{activeRFQ?.title} · Review each quotation manually before comparison</p>
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))', gap: 16, marginBottom: 24 }}>
+          {rfqQuotes.map(q => (
+            <div key={q.id} className="card" style={{ display: 'flex', flexDirection: 'column', transition: 'all 0.2s', border: expandedQuo === q.id ? '1px solid var(--accent-indigo)' : undefined }}>
+              <div style={{ padding: 16, borderBottom: '1px solid var(--border-color)', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{q.id}</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: '#f1f5f9', marginTop: 2 }}>{q.supplierName}</div>
+                </div>
+                {q.status === 'Awarded' && <Award size={20} style={{ color: '#10b981' }} />}
+              </div>
+              
+              <div style={{ padding: 16, flex: 1 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Total Amount</div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--accent-indigo)' }}>${q.totalAmount.toLocaleString()}</div>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Valid Until</div>
+                    <div style={{ fontSize: 14, fontWeight: 600, color: '#f1f5f9' }}>{q.validUntil}</div>
+                  </div>
+                </div>
+                
+                <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                  <strong>Payment:</strong> {q.paymentTerms}<br/>
+                  <strong>Delivery:</strong> {q.deliveryTerms}
+                </div>
+              </div>
+
+              <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border-color)', background: 'rgba(99,102,241,0.02)', display: 'flex', gap: 8 }}>
+                <button className="btn btn-secondary btn-sm" style={{ flex: 1 }} onClick={() => setExpandedQuo(expandedQuo === q.id ? null : q.id)}>
+                   {expandedQuo === q.id ? 'Close' : 'View Items'}
+                </button>
+                {can(currentUser, 'evaluate_quotation') && (
+                  <button className="btn btn-secondary btn-sm" style={{ flex: 1 }} onClick={() => setEvaluating(q)}>
+                    <Star size={12} /> {q.evaluation ? 'Re-evaluate' : 'Evaluate'}
+                  </button>
+                )}
+              </div>
+
+              {expandedQuo === q.id && (
+                <div style={{ padding: 16, background: 'var(--bg-primary)', borderTop: '1px solid var(--border-color)' }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8 }}>Line Items</div>
+                  {q.lineItems.map((item, idx) => (
+                    <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, padding: '4px 0', borderBottom: idx < q.lineItems.length - 1 ? '1px dashed var(--border-color)' : undefined }}>
+                      <span>{item.itemName} (x{item.quantity})</span>
+                      <span className="font-mono" style={{ fontWeight: 600 }}>${item.totalPrice.toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display: 'flex', justifyContent: 'center', marginTop: 30, padding: 20, background: 'rgba(99,102,241,0.05)', borderRadius: 16, border: '1px dashed rgba(99,102,241,0.3)' }}>
+          <div style={{ textAlign: 'center' }}>
+            <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginBottom: 12 }}>All quotations received? Analyze them side-by-side using the Performance Radar.</p>
+            <button className="btn btn-primary" onClick={() => setViewMode('compare')}>
+               <BarChart2 size={16} /> Show Competitive Comparison
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // 3. Competitive Comparison View (Existing Logic)
+  // ─────────────────────────────────────────────────────────────
   return (
     <div>
       {evaluating && <EvaluationModal quotation={evaluating} onClose={() => setEvaluating(null)} />}
 
       <div className="page-header">
-        <h2>Quotation Comparison & Evaluation</h2>
-        <p>Compare supplier quotes across cost, lead time, quality, and more</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <button className="btn btn-ghost btn-sm" onClick={() => setViewMode('quotes')} style={{ paddingLeft: 0 }}>
+             ← RFQ Detail
+          </button>
+          <h2 style={{ margin: 0 }}>Competitive Analysis: {activeRFQ?.id}</h2>
+        </div>
+        <p style={{ marginTop: 4 }}>Compare supplier quotes across cost, lead time, quality, and more</p>
       </div>
 
-      {/* RFQ selector */}
-      <div className="filters-bar" style={{ marginBottom: 20 }}>
-        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>Select RFQ:</div>
-        <select className="filter-select" value={selectedRFQ} onChange={e => setSelectedRFQ(e.target.value)} style={{ flex: 1, maxWidth: 400 }}>
-          {rfqsWithQuotes.map(r => (
-            <option key={r.id} value={r.id}>{r.id} — {r.title}</option>
-          ))}
-        </select>
-        {activeRFQ && (
-          <span style={{ padding: '5px 12px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: 'rgba(99,102,241,0.08)', color: 'var(--accent-indigo)' }}>
-            {rfqQuotes.length} quote{rfqQuotes.length !== 1 ? 's' : ''} received
-          </span>
-        )}
-      </div>
-
-      {rfqQuotes.length === 0 ? (
-        <div className="empty-state"><BarChart2 size={40} /><h3>No quotations for this RFQ</h3><p>Select an RFQ that has received quotes</p></div>
-      ) : (
-        <>
-          {/* Comparison table */}
-          <div className="card" style={{ marginBottom: 20 }}>
-            <div className="card-header">
-              <div>
-                <div className="card-title">Side-by-Side Comparison</div>
-                <div className="card-subtitle">{activeRFQ?.title}</div>
-              </div>
-            </div>
-            <div className="data-table-wrapper">
-              <table className="data-table" style={{ minWidth: 700 }}>
-                <thead>
-                  <tr>
-                    <th style={{ minWidth: 140 }}>Criterion</th>
-                    {rfqQuotes.map((q, i) => (
-                      <th key={q.id} style={{ minWidth: 160 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          {q.evaluation?.totalScore === bestScore && q.evaluation && <Star size={12} fill="#f59e0b" style={{ color: '#f59e0b' }} />}
-                          {q.supplierName}
-                        </div>
-                        {q.status === 'Awarded' && <div style={{ fontSize: 10, color: '#10b981', fontWeight: 600 }}>★ AWARDED</div>}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td style={{ fontWeight: 600, color: 'var(--text-muted)', fontSize: 12 }}>Total Amount</td>
-                    {rfqQuotes.map(q => {
-                      const lowest = Math.min(...rfqQuotes.map(x => x.totalAmount));
-                      return <td key={q.id} className="font-mono" style={{ fontWeight: 700, color: q.totalAmount === lowest ? '#10b981' : '#f1f5f9' }}>${q.totalAmount.toLocaleString()}</td>;
-                    })}
-                  </tr>
-                  <tr>
-                    <td style={{ fontWeight: 600, color: 'var(--text-muted)', fontSize: 12 }}>Max Lead Time</td>
-                    {rfqQuotes.map(q => {
-                      const days = q.lineItems.length > 0 ? Math.max(...q.lineItems.map(l => l.leadTimeDays)) : 0;
-                      const fastest = Math.min(...rfqQuotes.map(x => x.lineItems.length > 0 ? Math.max(...x.lineItems.map(l => l.leadTimeDays)) : 999));
-                      return <td key={q.id} style={{ color: days === fastest ? '#10b981' : '#f1f5f9' }}>{days}d</td>;
-                    })}
-                  </tr>
-                  <tr>
-                    <td style={{ fontWeight: 600, color: 'var(--text-muted)', fontSize: 12 }}>Payment Terms</td>
-                    {rfqQuotes.map(q => <td key={q.id}>{q.paymentTerms}</td>)}
-                  </tr>
-                  <tr>
-                    <td style={{ fontWeight: 600, color: 'var(--text-muted)', fontSize: 12 }}>Delivery Terms</td>
-                    {rfqQuotes.map(q => <td key={q.id}><span className="badge approved">{q.deliveryTerms}</span></td>)}
-                  </tr>
-                  <tr>
-                    <td style={{ fontWeight: 600, color: 'var(--text-muted)', fontSize: 12 }}>Valid Until</td>
-                    {rfqQuotes.map(q => <td key={q.id}>{q.validUntil}</td>)}
-                  </tr>
-                  {/* Evaluation scores */}
-                  <tr style={{ background: 'rgba(99,102,241,0.04)' }}>
-                    <td colSpan={rfqQuotes.length + 1} style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-indigo)', textTransform: 'uppercase', letterSpacing: '0.8px', paddingBottom: 8 }}>
-                      Evaluation Scores
-                    </td>
-                  </tr>
-                  {CRITERIA.map(c => (
-                    <tr key={c.key}>
-                      <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                        {c.label} <span style={{ color: 'var(--text-muted)', fontSize: 10 }}>({Math.round(c.weight * 100)}%)</span>
-                      </td>
-                      {rfqQuotes.map(q => {
-                        const s = q.evaluation?.[c.key] ?? null;
-                        const best = Math.max(...rfqQuotes.map(x => x.evaluation?.[c.key] || 0));
-                        return (
-                          <td key={q.id}>
-                            {s !== null ? (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                                <div style={{ width: 50, height: 4, borderRadius: 2, background: 'rgba(99,102,241,0.08)', overflow: 'hidden' }}>
-                                  <div style={{ width: `${s * 10}%`, height: '100%', background: s === best ? '#10b981' : '#6366f1', transition: 'width 0.3s' }} />
-                                </div>
-                                <span style={{ fontSize: 13, fontWeight: 700, color: s === best ? '#10b981' : '#f1f5f9' }}>{s}</span>
-                              </div>
-                            ) : <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>}
-                          </td>
-                        );
-                      })}
-                    </tr>
-                  ))}
-                  {/* Total score */}
-                  <tr style={{ borderTop: '2px solid rgba(99,102,241,0.2)' }}>
-                    <td style={{ fontWeight: 800, color: '#f1f5f9' }}>TOTAL SCORE</td>
-                    {rfqQuotes.map(q => (
-                      <td key={q.id}>
-                        {q.evaluation ? (
-                          <span style={{ fontSize: 18, fontWeight: 800, color: q.evaluation.totalScore === bestScore ? '#10b981' : '#f1f5f9' }}>
-                            {q.evaluation.totalScore}/10
-                            {q.evaluation.totalScore === bestScore && <Star size={14} fill="#f59e0b" style={{ color: '#f59e0b', marginLeft: 5 }} />}
-                          </span>
-                        ) : <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>Not evaluated</span>}
-                      </td>
-                    ))}
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            {/* Action row */}
-            <div style={{ display: 'flex', gap: 10, padding: '14px 0 0', flexWrap: 'wrap' }}>
-              {rfqQuotes.map(q => (
-                <div key={q.id} style={{ display: 'flex', gap: 6 }}>
-                  {can(currentUser, 'evaluate_quotation') && (
-                    <button className="btn btn-secondary btn-sm" onClick={() => setEvaluating(q)}>
-                      {q.evaluation ? 'Re-evaluate' : 'Evaluate'} {q.supplierName.split(' ')[0]}
-                    </button>
-                  )}
-                  {can(currentUser, 'award_quotation') && activeRFQ?.status !== 'Awarded' && q.evaluation && (
-                    <button className="btn btn-sm"
-                      style={{ background: 'rgba(16,185,129,0.1)', color: '#10b981', border: '1px solid rgba(16,185,129,0.3)' }}
-                      onClick={() => awardRFQ(selectedRFQ, q.id)}>
-                      <Award size={13} /> Award
-                    </button>
-                  )}
-                  {!can(currentUser, 'award_quotation') && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--text-muted)', padding: '4px 8px' }}>
-                      <Lock size={11} /> Manager approval required
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
+      <div className="card" style={{ marginBottom: 20 }}>
+        <div className="card-header">
+          <div>
+            <div className="card-title">Side-by-Side Comparison</div>
+            <div className="card-subtitle">{activeRFQ?.title}</div>
           </div>
-
-          {/* Radar chart */}
-          {rfqQuotes.some(q => q.evaluation) && (
-            <div className="card" style={{ marginBottom: 20 }}>
-              <div className="card-header">
-                <div className="card-title">Performance Radar</div>
-                <div className="card-subtitle">Visual evaluation comparison</div>
-              </div>
-              <div style={{ height: 300, width: '100%' }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <RadarChart data={radarData}>
-                    <PolarGrid stroke="rgba(99,102,241,0.12)" />
-                    <PolarAngleAxis dataKey="criterion" tick={{ fill: '#94a3b8', fontSize: 11 }} />
-                    <PolarRadiusAxis angle={90} domain={[0, 10]} tick={{ fill: '#64748b', fontSize: 10 }} />
-                    {rfqQuotes.filter(q => q.evaluation).map((q, i) => (
-                      <Radar key={q.id} name={q.supplierName.split(' ')[0]} dataKey={q.supplierId}
-                        stroke={RADAR_COLORS[i % RADAR_COLORS.length]} fill={RADAR_COLORS[i % RADAR_COLORS.length]} fillOpacity={0.12} strokeWidth={2} />
-                    ))}
-                  </RadarChart>
-                </ResponsiveContainer>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'center', gap: 16, flexWrap: 'wrap', marginTop: 4 }}>
-                {rfqQuotes.filter(q => q.evaluation).map((q, i) => (
-                  <div key={q.id} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#94a3b8' }}>
-                    <div style={{ width: 10, height: 10, borderRadius: 2, background: RADAR_COLORS[i % RADAR_COLORS.length] }} />
-                    {q.supplierName.split(' ')[0]}
-                  </div>
+        </div>
+        <div className="data-table-wrapper">
+          <table className="data-table" style={{ minWidth: 700 }}>
+            <thead>
+              <tr>
+                <th style={{ minWidth: 140 }}>Criterion</th>
+                {rfqQuotes.map((q, i) => (
+                  <th key={q.id} style={{ minWidth: 160 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {q.evaluation?.totalScore === bestScore && q.evaluation && <Star size={12} fill="#f59e0b" style={{ color: '#f59e0b' }} />}
+                      {q.supplierName}
+                    </div>
+                    {q.status === 'Awarded' && <div style={{ fontSize: 10, color: '#10b981', fontWeight: 600 }}>★ AWARDED</div>}
+                  </th>
                 ))}
-              </div>
-            </div>
-          )}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style={{ fontWeight: 600, color: 'var(--text-muted)', fontSize: 12 }}>Total Amount</td>
+                {rfqQuotes.map(q => {
+                  const lowest = Math.min(...rfqQuotes.map(x => x.totalAmount));
+                  return <td key={q.id} className="font-mono" style={{ fontWeight: 700, color: q.totalAmount === lowest ? '#10b981' : '#f1f5f9' }}>${q.totalAmount.toLocaleString()}</td>;
+                })}
+              </tr>
+              <tr>
+                <td style={{ fontWeight: 600, color: 'var(--text-muted)', fontSize: 12 }}>Max Lead Time</td>
+                {rfqQuotes.map(q => {
+                  const days = q.lineItems.length > 0 ? Math.max(...q.lineItems.map(l => l.leadTimeDays)) : 0;
+                  const fastest = Math.min(...rfqQuotes.map(x => x.lineItems.length > 0 ? Math.max(...x.lineItems.map(l => l.leadTimeDays)) : 999));
+                  return <td key={q.id} style={{ color: days === fastest ? '#10b981' : '#f1f5f9' }}>{days}d</td>;
+                })}
+              </tr>
+              <tr><td style={{ fontWeight: 600, color: 'var(--text-muted)', fontSize: 12 }}>Payment Terms</td>{rfqQuotes.map(q => <td key={q.id}>{q.paymentTerms}</td>)}</tr>
+              <tr><td style={{ fontWeight: 600, color: 'var(--text-muted)', fontSize: 12 }}>Delivery Terms</td>{rfqQuotes.map(q => <td key={q.id}><span className="badge approved">{q.deliveryTerms}</span></td>)}</tr>
+              <tr><td style={{ fontWeight: 600, color: 'var(--text-muted)', fontSize: 12 }}>Valid Until</td>{rfqQuotes.map(q => <td key={q.id}>{q.validUntil}</td>)}</tr>
+              
+              <tr style={{ background: 'rgba(99,102,241,0.04)' }}>
+                <td colSpan={rfqQuotes.length + 1} style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-indigo)', textTransform: 'uppercase', letterSpacing: '0.8px', paddingBottom: 8 }}>Evaluation Scores</td>
+              </tr>
+              {CRITERIA.map(c => (
+                <tr key={c.key}>
+                  <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{c.label} <span style={{ color: 'var(--text-muted)', fontSize: 10 }}>({Math.round(c.weight * 100)}%)</span></td>
+                  {rfqQuotes.map(q => {
+                    const s = q.evaluation?.[c.key] ?? null;
+                    const best = Math.max(...rfqQuotes.map(x => x.evaluation?.[c.key] || 0));
+                    return (
+                      <td key={q.id}>
+                        {s !== null ? (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <div style={{ width: 50, height: 4, borderRadius: 2, background: 'rgba(99,102,241,0.08)', overflow: 'hidden' }}>
+                              <div style={{ width: `${s * 10}%`, height: '100%', background: s === best ? '#10b981' : '#6366f1', transition: 'width 0.3s' }} />
+                            </div>
+                            <span style={{ fontSize: 13, fontWeight: 700, color: s === best ? '#10b981' : '#f1f5f9' }}>{s}</span>
+                          </div>
+                        ) : <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>—</span>}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+              <tr style={{ borderTop: '2px solid rgba(99,102,241,0.2)' }}>
+                <td style={{ fontWeight: 800, color: '#f1f5f9' }}>TOTAL SCORE</td>
+                {rfqQuotes.map(q => (
+                  <td key={q.id}>
+                    {q.evaluation ? (
+                      <span style={{ fontSize: 18, fontWeight: 800, color: q.evaluation.totalScore === bestScore ? '#10b981' : '#f1f5f9' }}>
+                        {q.evaluation.totalScore}/10
+                        {q.evaluation.totalScore === bestScore && <Star size={14} fill="#f59e0b" style={{ color: '#f59e0b', marginLeft: 5 }} />}
+                      </span>
+                    ) : <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>Not evaluated</span>}
+                  </td>
+                ))}
+              </tr>
+            </tbody>
+          </table>
+        </div>
 
-          {/* Detailed quote cards with recommendations */}
-          {rfqQuotes.filter(q => q.evaluation?.recommendation).map(q => (
-            <div key={q.id} className="card" style={{ marginBottom: 12, borderColor: q.status === 'Awarded' ? 'rgba(16,185,129,0.25)' : undefined }}>
-              <div className="card-header" style={{ cursor: 'pointer' }} onClick={() => setExpandedQuo(s => s === q.id ? null : q.id)}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  {q.status === 'Awarded' && <Award size={15} style={{ color: '#10b981' }} />}
-                  <div className="card-title">{q.supplierName}</div>
-                  {q.evaluation && (
-                    <span style={{ fontSize: 16, fontWeight: 800, color: q.evaluation.totalScore === bestScore ? '#10b981' : '#6366f1' }}>
-                      {q.evaluation.totalScore}/10
-                    </span>
-                  )}
-                </div>
-                {expandedQuo === q.id ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-              </div>
-              {expandedQuo === q.id && q.evaluation?.recommendation && (
-                <div style={{ padding: '10px 14px', background: 'rgba(99,102,241,0.04)', borderRadius: 8, borderLeft: '3px solid var(--accent-indigo)', fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                  {q.evaluation.recommendation}
-                </div>
+        {/* Action row */}
+        <div style={{ display: 'flex', gap: 10, padding: '16px 0 0', flexWrap: 'wrap' }}>
+          {rfqQuotes.map(q => (
+            <div key={q.id} style={{ display: 'flex', gap: 6 }}>
+              {can(currentUser, 'evaluate_quotation') && (
+                <button className="btn btn-secondary btn-sm" onClick={() => setEvaluating(q)}>
+                  {q.evaluation ? 'Re-evaluate' : 'Evaluate'} {q.supplierName.split(' ')[0]}
+                </button>
+              )}
+              {can(currentUser, 'award_quotation') && activeRFQ?.status !== 'Awarded' && q.evaluation && (
+                <button className="btn btn-sm" style={{ background: 'rgba(16,185,129,0.1)', color: '#10b981', border: '1px solid rgba(16,185,129,0.3)' }} onClick={() => activeRFQ && awardRFQ(activeRFQ.id, q.id)}>
+                  <Award size={13} /> Award
+                </button>
               )}
             </div>
           ))}
-        </>
+        </div>
+      </div>
+
+      {/* Radar chart */}
+      {rfqQuotes.some(q => q.evaluation) && (
+        <div className="card">
+          <div className="card-header">
+            <div className="card-title">Performance Radar</div>
+            <div className="card-subtitle">Visual evaluation comparison</div>
+          </div>
+          <div style={{ height: 300, width: '100%' }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <RadarChart data={radarData}>
+                <PolarGrid stroke="rgba(99,102,241,0.12)" />
+                <PolarAngleAxis dataKey="criterion" tick={{ fill: '#94a3b8', fontSize: 11 }} />
+                <PolarRadiusAxis angle={90} domain={[0, 10]} tick={{ fill: '#64748b', fontSize: 10 }} />
+                {rfqQuotes.filter(q => q.evaluation).map((q, i) => (
+                  <Radar key={q.id} name={q.supplierName.split(' ')[0]} dataKey={q.supplierId} stroke={RADAR_COLORS[i % RADAR_COLORS.length]} fill={RADAR_COLORS[i % RADAR_COLORS.length]} fillOpacity={0.12} strokeWidth={2} />
+                ))}
+              </RadarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
       )}
     </div>
   );

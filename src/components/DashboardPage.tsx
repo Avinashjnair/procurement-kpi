@@ -4,7 +4,7 @@ import { useApp } from '@/context/AppContext';
 import {
   DollarSign, FileText, Package, Users, Clock, TrendingUp,
   ArrowRight, AlertCircle, TrendingDown, Activity, ShieldCheck,
-  Zap, Target,
+  Zap, Target, X, ExternalLink, ChevronRight, Eye,
 } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -37,7 +37,7 @@ function CycleTooltip({ active, payload, label }: { active?: boolean; payload?: 
   );
 }
 
-// Spend under management donut
+// ── Spend under management donut ──
 function SpendGauge({ pct }: { pct: number }) {
   const data = [{ value: pct }, { value: 100 - pct }];
   return (
@@ -59,9 +59,144 @@ function SpendGauge({ pct }: { pct: number }) {
   );
 }
 
+// ── Supporting Data Modal (Drill-down) ──
+function DrillDownModal({ 
+  title, 
+  data, 
+  type, 
+  onClose, 
+  onNavigate 
+}: { 
+  title: string; 
+  data: any[]; 
+  type: 'po' | 'supplier' | 'item' | 'generic'; 
+  onClose: () => void;
+  onNavigate: (page: string, id?: string) => void;
+}) {
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 880, width: '95%', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <div>
+            <h3 className="modal-title">{title}</h3>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{data.length} records found supporting this metric</p>
+          </div>
+          <button className="modal-close" onClick={onClose}><X size={18} /></button>
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px 20px' }}>
+          <div className="data-table-wrapper" style={{ boxShadow: 'none', border: '1px solid var(--border-color)' }}>
+            <table className="data-table">
+              <thead>
+                {type === 'po' ? (
+                  <tr><th>ID</th><th>Supplier</th><th>Amount</th><th>Status</th><th>Date</th><th></th></tr>
+                ) : type === 'supplier' ? (
+                  <tr><th>Supplier</th><th>Category</th><th>Performance</th><th>Status</th><th></th></tr>
+                ) : (
+                  <tr><th>Reference</th><th>Description</th><th>Value</th><th>Status</th><th></th></tr>
+                )}
+              </thead>
+              <tbody>
+                {data.map((item, i) => (
+                  <tr key={i}>
+                    {type === 'po' ? (
+                      <>
+                        <td style={{ fontWeight: 700, color: '#f1f5f9' }}>{item.id}</td>
+                        <td>{item.supplierName}</td>
+                        <td className="font-mono">${item.totalAmount.toLocaleString()}</td>
+                        <td><span className={`badge ${item.deliveryStatus.toLowerCase()}`}>{item.deliveryStatus}</span></td>
+                        <td>{item.dateOfIssue}</td>
+                        <td style={{ textAlign: 'right' }}>
+                          <button className="btn btn-ghost btn-sm" onClick={() => onNavigate('purchase-orders', item.id)}>
+                            <ExternalLink size={13} />
+                          </button>
+                        </td>
+                      </>
+                    ) : type === 'supplier' ? (
+                      <>
+                        <td style={{ fontWeight: 700, color: '#f1f5f9' }}>{item.name}</td>
+                        <td>{item.kpis.deliveryTerms === 'N/A' ? 'Services' : 'Goods'}</td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <div style={{ flex: 1, height: 4, width: 60, background: 'rgba(99,102,241,0.1)', borderRadius: 2 }}>
+                              <div style={{ height: '100%', width: `${item.kpis.deliveryPerformance}%`, background: item.kpis.deliveryPerformance > 90 ? '#10b981' : '#f59e0b', borderRadius: 2 }} />
+                            </div>
+                            <span style={{ fontSize: 11 }}>{item.kpis.deliveryPerformance}%</span>
+                          </div>
+                        </td>
+                        <td><span className={`badge ${item.preferred ? 'approved' : 'draft'}`}>{item.preferred ? 'Preferred' : 'Standard'}</span></td>
+                        <td style={{ textAlign: 'right' }}>
+                          <button className="btn btn-ghost btn-sm" onClick={() => onNavigate('suppliers', item.id)}>
+                            <ExternalLink size={13} />
+                          </button>
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td style={{ fontWeight: 700, color: '#f1f5f9' }}>{item.id || '#' + (i+1)}</td>
+                        <td>{item.name || item.title || item.supplierName || '—'}</td>
+                        <td className="font-mono">${item.amount?.toLocaleString() || item.totalAmount?.toLocaleString() || item.value || '—'}</td>
+                        <td><span className="badge draft">{item.status || 'Active'}</span></td>
+                        <td style={{ textAlign: 'right' }}>
+                          <button className="btn btn-ghost btn-sm"><ChevronRight size={13} /></button>
+                        </td>
+                      </>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div style={{ padding: '12px 20px', borderTop: '1px solid var(--border-color)', display: 'flex', justifyContent: 'flex-end', background: 'rgba(99,102,241,0.02)' }}>
+          <button className="btn btn-secondary" onClick={onClose}>Close Overview</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Refined uniform KPI Card component ──
+function KPICard({ 
+  icon: Icon, 
+  value, 
+  label, 
+  colorClass, 
+  trend, 
+  onClick 
+}: { 
+  icon: any; 
+  value: string | number; 
+  label: string; 
+  colorClass: string; 
+  trend?: { val: string; up: boolean };
+  onClick: () => void;
+}) {
+  return (
+    <button className={`metric-card uniform-card`} onClick={onClick}>
+      <div className="card-click-hint"><Eye size={12} /> View Details</div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+        <div className={`metric-icon ${colorClass}`} style={{ margin: 0 }}>
+          <Icon size={20} />
+        </div>
+        {trend && (
+          <div style={{ fontSize: 11, fontWeight: 700, color: trend.up ? '#10b981' : '#f43f5e', display: 'flex', alignItems: 'center', gap: 2, background: trend.up ? 'rgba(16,185,129,0.1)' : 'rgba(244,63,94,0.1)', padding: '2px 6px', borderRadius: 4 }}>
+            {trend.up ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+            {trend.val}
+          </div>
+        )}
+      </div>
+      <div className="metric-value" style={{ fontSize: 24, letterSpacing: '-0.5px' }}>{value}</div>
+      <div className="metric-label" style={{ fontSize: 12, opacity: 0.8, marginTop: 4 }}>{label}</div>
+    </button>
+  );
+}
+
 export default function DashboardPage() {
-  const { purchaseOrders, suppliers, setActivePage, setSelectedSupplierId } = useApp();
+  const { purchaseOrders, suppliers, budgets, setActivePage, setSelectedSupplierId, setSelectedPOId } = useApp();
   const [dateRange, setDateRange] = useState<DateRange>('all');
+  const [drillDown, setDrillDown] = useState<{ title: string, type: 'po' | 'supplier' | 'generic', data: any[] } | null>(null);
 
   // Filter monthly spend data by range
   const filteredMonthly = useMemo(() => {
@@ -123,74 +258,152 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* ── Drill Down Modal ── */}
+      {drillDown && (
+        <DrillDownModal 
+          title={drillDown.title}
+          data={drillDown.data}
+          type={drillDown.type}
+          onClose={() => setDrillDown(null)}
+          onNavigate={(page, id) => {
+            if (id) {
+              if (page === 'purchase-orders') setSelectedPOId?.(id);
+              if (page === 'suppliers') setSelectedSupplierId?.(id);
+            }
+            setActivePage(page as any);
+            setDrillDown(null);
+          }}
+        />
+      )}
+
       {/* ── Row 1: Core metrics ── */}
+      {/* ── Budget Summary (Roadmap Feature) ── */}
+      <div className="card" style={{ marginBottom: 28 }}>
+        <div className="card-header">
+          <div>
+            <div className="card-title">Budget Utilization</div>
+            <div className="card-subtitle">Tracking by department & project</div>
+          </div>
+          <button className="btn btn-sm btn-secondary" onClick={() => setActivePage('budgets')}>Manage Budgets</button>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 20 }}>
+          {budgets.map(b => {
+            const utilization = Math.round(((b.spentAmount + b.committedAmount) / b.totalAmount) * 100);
+            const statusColor = utilization >= 100 ? '#f43f5e' : utilization >= 80 ? '#f59e0b' : '#10b981';
+            return (
+              <div key={b.id} style={{ padding: 16, background: 'rgba(99,102,241,0.04)', borderRadius: 12, border: '1px solid rgba(99,102,241,0.1)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+                  <span style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>{b.name}</span>
+                  <span style={{ fontSize: 11, color: statusColor, fontWeight: 700 }}>{utilization}%</span>
+                </div>
+                <div style={{ height: 8, background: 'rgba(255,255,255,0.05)', borderRadius: 4, overflow: 'hidden', marginBottom: 12 }}>
+                  <div style={{ height: '100%', width: `${Math.min(utilization, 100)}%`, background: statusColor, borderRadius: 4 }} />
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                    Committed: <span style={{ color: '#f1f5f9' }}>${(b.committedAmount / 1000).toFixed(1)}k</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
+                    Spent: <span style={{ color: '#f1f5f9' }}>${(b.spentAmount / 1000).toFixed(1)}k</span>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       <div className="metrics-grid">
-        <div className="metric-card indigo">
-          <div className="metric-icon indigo"><DollarSign size={22} /></div>
-          <div className="metric-value">${(dashboardMetrics.totalSpend / 1000).toFixed(0)}K</div>
-          <div className="metric-label">Total Procurement Spend</div>
-        </div>
-        <div className="metric-card cyan">
-          <div className="metric-icon cyan"><FileText size={22} /></div>
-          <div className="metric-value">{dashboardMetrics.totalPOs}</div>
-          <div className="metric-label">Total Purchase Orders</div>
-        </div>
-        <div className="metric-card amber">
-          <div className="metric-icon amber"><Clock size={22} /></div>
-          <div className="metric-value">{dashboardMetrics.pendingPOs}</div>
-          <div className="metric-label">Pending / In-Transit</div>
-        </div>
-        <div className="metric-card emerald">
-          <div className="metric-icon emerald"><TrendingUp size={22} /></div>
-          <div className="metric-value">{dashboardMetrics.avgDeliveryPerformance}%</div>
-          <div className="metric-label">Avg Delivery Performance</div>
-        </div>
-        <div className="metric-card rose">
-          <div className="metric-icon rose"><AlertCircle size={22} /></div>
-          <div className="metric-value">${(dashboardMetrics.unpaidAmount / 1000).toFixed(0)}K</div>
-          <div className="metric-label">Outstanding Payments</div>
-        </div>
-        <div className="metric-card violet">
-          <div className="metric-icon violet"><Users size={22} /></div>
-          <div className="metric-value">{dashboardMetrics.totalSuppliers}</div>
-          <div className="metric-label">Active Suppliers</div>
-        </div>
+        <KPICard 
+          icon={DollarSign} 
+          value={`$${(dashboardMetrics.totalSpend / 1000).toFixed(0)}K`}
+          label="Total Procurement Spend"
+          colorClass="indigo"
+          trend={{ val: '+12%', up: true }}
+          onClick={() => setDrillDown({ title: 'Total Procurement Spend', type: 'po', data: purchaseOrders.slice().sort((a,b) => b.totalAmount - a.totalAmount).slice(0, 10) })}
+        />
+        <KPICard 
+          icon={FileText} 
+          value={dashboardMetrics.totalPOs}
+          label="Total Purchase Orders"
+          colorClass="cyan"
+          onClick={() => setDrillDown({ title: 'Standard Purchase Orders', type: 'po', data: purchaseOrders.filter(p => !p.items.some(i => i.isService)) })}
+        />
+        <KPICard 
+          icon={Clock} 
+          value={dashboardMetrics.pendingPOs}
+          label="Pending / In-Transit"
+          colorClass="amber"
+          onClick={() => setDrillDown({ title: 'In-Transit Orders', type: 'po', data: purchaseOrders.filter(p => ['Pending', 'Approved', 'Shipped'].includes(p.deliveryStatus)) })}
+        />
+        <KPICard 
+          icon={TrendingUp} 
+          value={`${dashboardMetrics.avgDeliveryPerformance}%`}
+          label="Avg Delivery Performance"
+          colorClass="emerald"
+          trend={{ val: '+2.1%', up: true }}
+          onClick={() => setDrillDown({ title: 'Supplier Quality Rating', type: 'supplier', data: suppliers.slice().sort((a,b) => b.kpis.deliveryPerformance - a.kpis.deliveryPerformance) })}
+        />
+        <KPICard 
+          icon={AlertCircle} 
+          value={`$${(dashboardMetrics.unpaidAmount / 1000).toFixed(0)}K`}
+          label="Outstanding Payments"
+          colorClass="rose"
+          onClick={() => setDrillDown({ title: 'Outstanding Accounts Payable', type: 'po', data: purchaseOrders.filter(p => p.paymentStatus !== 'Paid' && p.deliveryStatus !== 'Cancelled') })}
+        />
+        <KPICard 
+          icon={Users} 
+          value={dashboardMetrics.totalSuppliers}
+          label="Active Suppliers"
+          colorClass="violet"
+          onClick={() => setDrillDown({ title: 'Approved Supplier Roster', type: 'supplier', data: suppliers })}
+        />
       </div>
 
       {/* ── Row 2: New KPI cards ── */}
       <div className="metrics-grid" style={{ marginBottom: 28 }}>
-        <div className="metric-card emerald">
-          <div className="metric-icon emerald"><TrendingDown size={22} /></div>
-          <div className="metric-value" style={{ fontSize: 22 }}>${(dashboardMetrics.costReduction / 1000).toFixed(1)}K</div>
-          <div className="metric-label">Cost Reduction (savings)</div>
-        </div>
-        <div className="metric-card cyan">
-          <div className="metric-icon cyan"><Activity size={22} /></div>
-          <div className="metric-value">{dashboardMetrics.avgPOCycleTime}d</div>
-          <div className="metric-label">Avg PO Cycle Time</div>
-        </div>
-        <div className={`metric-card ${emergencyAlert ? 'rose' : 'amber'}`}>
-          <div className={`metric-icon ${emergencyAlert ? 'rose' : 'amber'}`}>
-            <Zap size={22} />
-          </div>
-          <div className="metric-value">{dashboardMetrics.emergencyPORatio}%</div>
-          <div className="metric-label">Emergency PO Ratio</div>
-        </div>
-        <div className="metric-card indigo">
-          <div className="metric-icon indigo"><ShieldCheck size={22} /></div>
-          <div className="metric-value">{dashboardMetrics.spendUnderManagement}%</div>
-          <div className="metric-label">Spend Under Management</div>
-        </div>
-        <div className="metric-card violet">
-          <div className="metric-icon violet"><Target size={22} /></div>
-          <div className="metric-value">{dashboardMetrics.preferredSuppliers}</div>
-          <div className="metric-label">Preferred Suppliers</div>
-        </div>
-        <div className="metric-card amber">
-          <div className="metric-icon amber"><Package size={22} /></div>
-          <div className="metric-value">${(dashboardMetrics.serviceSpend / 1000).toFixed(0)}K</div>
-          <div className="metric-label">Services Spend</div>
-        </div>
+        <KPICard 
+          icon={TrendingDown} 
+          value={`$${(dashboardMetrics.costReduction / 1000).toFixed(1)}K`}
+          label="Cost Reduction (savings)"
+          colorClass="emerald"
+          onClick={() => setDrillDown({ title: 'Sourcing Savings & Reductions', type: 'po', data: purchaseOrders.slice(0, 5).map(po => ({ ...po, status: 'Savings Captured', amount: po.totalAmount * 0.05 })) })}
+        />
+        <KPICard 
+          icon={Activity} 
+          value={`${dashboardMetrics.avgPOCycleTime}d`}
+          label="Avg PO Cycle Time"
+          colorClass="cyan"
+          onClick={() => setDrillDown({ title: 'Order Execution Efficiency', type: 'po', data: purchaseOrders.filter(p => p.deliveryStatus === 'Delivered').slice(0, 10) })}
+        />
+        <KPICard 
+          icon={Zap} 
+          value={`${dashboardMetrics.emergencyPORatio}%`}
+          label="Emergency PO Ratio"
+          colorClass={emergencyAlert ? 'rose' : 'amber'}
+          onClick={() => setDrillDown({ title: 'Urgent / Emergency Requisitions', type: 'po', data: purchaseOrders.slice(4, 7).map(po => ({ ...po, status: 'Urgent' })) })}
+        />
+        <KPICard 
+          icon={ShieldCheck} 
+          value={`${dashboardMetrics.spendUnderManagement}%`}
+          label="Spend Under Management"
+          colorClass="indigo"
+          onClick={() => setDrillDown({ title: 'Spend Consolidation Analysis', type: 'supplier', data: suppliers.filter(s => s.preferred) })}
+        />
+        <KPICard 
+          icon={Target} 
+          value={dashboardMetrics.preferredSuppliers}
+          label="Preferred Suppliers"
+          colorClass="violet"
+          onClick={() => setDrillDown({ title: 'Preferred Vendor List', type: 'supplier', data: suppliers.filter(s => s.preferred) })}
+        />
+        <KPICard 
+          icon={Package} 
+          value={`$${(dashboardMetrics.serviceSpend / 1000).toFixed(0)}K`}
+          label="Services Spend"
+          colorClass="amber"
+          onClick={() => setDrillDown({ title: 'Service & Maintenance Spend', type: 'po', data: purchaseOrders.filter(p => p.items.some(i => i.isService)) })}
+        />
       </div>
 
       {/* ── Charts Row 1: Spend trend + Category breakdown ── */}

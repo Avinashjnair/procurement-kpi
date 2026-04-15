@@ -2,162 +2,17 @@
 // Data Models & Types
 // ============================================================
 
-export interface SupplierNote {
-  id: string;
-  text: string;
-  date: string;
-  author: string;
-}
+import type {
+  Supplier, SupplierNote, SupplierKPIs, Item, PricePoint, PurchaseRecord,
+  PurchaseOrder, POItem, POStatus, PaymentStatus, AppDocument, DocumentCategory,
+  PaymentRecord, ItemCategory, ServiceMilestone
+} from '@/types';
 
-export interface Supplier {
-  id: string;
-  name: string;
-  contactPerson: string;
-  email: string;
-  phone: string;
-  location: string;
-  address: string;
-  taxRegNumber: string;
-  kpis: SupplierKPIs;
-  preferred?: boolean;
-  notes?: SupplierNote[];
-}
-
-export interface SupplierKPIs {
-  priceVariation: number;
-  deliveryPerformance: number;
-  paymentTerms: string;
-  onTimePayment: number;
-  responseTime: number;
-  deliveryTerms: string;
-  rejectionRate: number;
-}
-
-export function computeRiskScore(kpis: SupplierKPIs): { score: number; label: 'Low' | 'Medium' | 'High'; color: string } {
-  const deliveryRisk  = Math.max(0, 100 - kpis.deliveryPerformance);
-  const priceRisk     = Math.min(100, kpis.priceVariation * 8);
-  const rejectionRisk = Math.min(100, kpis.rejectionRate * 12);
-  const responseRisk  = Math.min(100, kpis.responseTime * 5);
-  const score = Math.round(deliveryRisk * 0.4 + priceRisk * 0.25 + rejectionRisk * 0.25 + responseRisk * 0.1);
-  if (score <= 20) return { score, label: 'Low',    color: '#10b981' };
-  if (score <= 45) return { score, label: 'Medium', color: '#f59e0b' };
-  return               { score, label: 'High',   color: '#f43f5e' };
-}
-
-export type ItemCategory =
-  | 'Piping' | 'Valves' | 'Fittings' | 'Chemicals'
-  | 'Electrical' | 'Instrumentation' | 'Services';
-
-export type ServiceBillingType = 'Fixed Price' | 'Hourly Rate' | 'Milestone Based' | 'Lump Sum';
-
-export interface ServiceMilestone {
-  id: string;
-  description: string;
-  percentage: number;
-  dueDate: string;
-  completed: boolean;
-}
-
-export interface ServiceDetails {
-  billingType: ServiceBillingType;
-  scopeOfWork: string;
-  duration: string;
-  slaTerms: string;
-  milestones?: ServiceMilestone[];
-}
-
-export interface Item {
-  id: string;
-  name: string;
-  category: ItemCategory;
-  description: string;
-  unit: string;
-  currentPrice: number;
-  linkedSupplierIds: string[];
-  priceHistory: PricePoint[];
-  purchaseHistory: PurchaseRecord[];
-  serviceDetails?: ServiceDetails;
-  archived?: boolean;   // ← NEW: soft-delete / deactivate
-}
-
-export interface PricePoint {
-  date: string;
-  price: number;
-  supplierId: string;
-}
-
-export interface PurchaseRecord {
-  date: string;
-  supplierId: string;
-  supplierName: string;
-  quantity: number;
-  unitPrice: number;
-  totalAmount: number;
-  poId: string;
-}
-
-export type POStatus = 'Draft' | 'Pending' | 'Approved' | 'Shipped' | 'Delivered' | 'Cancelled';
-export type PaymentStatus = 'Unpaid' | 'Partial' | 'Paid';
-
-export interface PurchaseOrder {
-  id: string;
-  dateOfIssue: string;
-  supplierId: string;
-  supplierName: string;
-  items: POItem[];
-  totalAmount: number;
-  paymentTerms: string;
-  amountPaid: number;
-  dateOfPayment: string | null;
-  dueDate: string;
-  deliveryStatus: POStatus;
-  paymentStatus: PaymentStatus;
-  eta: string;
-  incoterms: string;
-  remarks?: string;
-  projectReference?: string;
-  requestNumber?: string;
-  approvalAuthority?: string;
-  cancellationReason?: string;   // ← NEW
-  revisionNumber?: number;       // ← NEW: amendment tracking
-}
-
-export interface POItem {
-  itemId: string;
-  itemName: string;
-  quantity: number;
-  unitPrice: number;
-  isService?: boolean;
-  isAsset?: boolean; // ← NEW: classification
-  serviceDetails?: ServicePOLineDetails;
-}
-
-export interface ServicePOLineDetails {
-  billingType: ServiceBillingType;
-  scopeOfWork: string;
-  duration: string;
-  slaTerms: string;
-  milestones?: ServiceMilestone[];
-}
-
-export type DocumentCategory =
-  | 'MTC' | 'COO' | 'BL/AWB' | 'Delivery Note' | 'Packing List'
-  | 'Invoice' | 'Internal Inspection Report'
-  | 'Work Completion Certificate' | 'Service Report' | 'Timesheet' | 'SLA Report';
-
-export interface Document {
-  id: string;
-  name: string;
-  category: DocumentCategory;
-  poId: string;
-  itemId: string;
-  uploadDate: string;
-  fileSize: string;
-  fileType: string;
-  expiryDate?: string;       // ← NEW: expiry / renewal alerts
-  version?: number;          // ← NEW: version control
-  supersededBy?: string;     // ← NEW: id of newer version
-}
+export type {
+  Supplier, SupplierNote, SupplierKPIs, Item, PricePoint, PurchaseRecord,
+  PurchaseOrder, POItem, POStatus, PaymentStatus, AppDocument, DocumentCategory,
+  PaymentRecord, ItemCategory, ServiceMilestone
+};
 
 // ============================================================
 // Company Info
@@ -205,26 +60,26 @@ export const items: Item[] = [
 // Mock POs
 // ============================================================
 export const purchaseOrders: PurchaseOrder[] = [
-  { id: 'PO-001', dateOfIssue: '2026-03-10', supplierId: 'SUP-001', supplierName: 'SteelMax Industries', items: [{ itemId: 'ITM-001', itemName: 'Carbon Steel Pipe (6")', quantity: 500, unitPrice: 85.50, isAsset: true }], totalAmount: 42750, paymentTerms: 'Net 30', amountPaid: 42750, dateOfPayment: '2026-04-05', dueDate: '2026-04-10', deliveryStatus: 'Delivered', paymentStatus: 'Paid', eta: '2026-04-01', incoterms: 'CIF' },
-  { id: 'PO-002', dateOfIssue: '2026-03-15', supplierId: 'SUP-006', supplierName: 'NipponValve Ltd.', items: [{ itemId: 'ITM-002', itemName: 'Gate Valve (4")', quantity: 20, unitPrice: 320.00 }, { itemId: 'ITM-006', itemName: 'Ball Valve (2")', quantity: 200, unitPrice: 45.00 }], totalAmount: 15400, paymentTerms: 'Net 45', amountPaid: 7700, dateOfPayment: '2026-04-01', dueDate: '2026-04-30', deliveryStatus: 'Shipped', paymentStatus: 'Partial', eta: '2026-04-12', incoterms: 'DAP' },
-  { id: 'PO-003', dateOfIssue: '2026-03-01', supplierId: 'SUP-003', supplierName: 'EuroChem Supply Co.', items: [{ itemId: 'ITM-003', itemName: 'Sodium Hydroxide (NaOH)', quantity: 25, unitPrice: 450.00 }], totalAmount: 11250, paymentTerms: 'Net 60', amountPaid: 0, dateOfPayment: null, dueDate: '2026-05-01', deliveryStatus: 'Delivered', paymentStatus: 'Unpaid', eta: '2026-03-28', incoterms: 'DDP' },
-  { id: 'PO-004', dateOfIssue: '2026-02-20', supplierId: 'SUP-001', supplierName: 'SteelMax Industries', items: [{ itemId: 'ITM-004', itemName: 'Stainless Steel Flange (8")', quantity: 100, unitPrice: 192.00 }], totalAmount: 19200, paymentTerms: 'Net 30', amountPaid: 19200, dateOfPayment: '2026-03-18', dueDate: '2026-03-22', deliveryStatus: 'Delivered', paymentStatus: 'Paid', eta: '2026-03-10', incoterms: 'CIF' },
-  { id: 'PO-005', dateOfIssue: '2026-02-01', supplierId: 'SUP-005', supplierName: 'AmeriSteel Corp', items: [{ itemId: 'ITM-001', itemName: 'Carbon Steel Pipe (6")', quantity: 300, unitPrice: 85.00 }], totalAmount: 25500, paymentTerms: 'Net 30', amountPaid: 25500, dateOfPayment: '2026-02-28', dueDate: '2026-03-03', deliveryStatus: 'Delivered', paymentStatus: 'Paid', eta: '2026-02-25', incoterms: 'FCA' },
-  { id: 'PO-006', dateOfIssue: '2026-04-01', supplierId: 'SUP-001', supplierName: 'SteelMax Industries', items: [{ itemId: 'ITM-002', itemName: 'Gate Valve (4")', quantity: 50, unitPrice: 315.00 }], totalAmount: 15750, paymentTerms: 'Net 30', amountPaid: 0, dateOfPayment: null, dueDate: '2026-05-01', deliveryStatus: 'Pending', paymentStatus: 'Unpaid', eta: '2026-04-20', incoterms: 'CIF' },
-  { id: 'PO-007', dateOfIssue: '2026-04-05', supplierId: 'SUP-005', supplierName: 'AmeriSteel Corp', items: [{ itemId: 'ITM-004', itemName: 'Stainless Steel Flange (8")', quantity: 60, unitPrice: 195.00 }], totalAmount: 11700, paymentTerms: 'Net 30', amountPaid: 0, dateOfPayment: null, dueDate: '2026-05-05', deliveryStatus: 'Approved', paymentStatus: 'Unpaid', eta: '2026-04-25', incoterms: 'FCA' },
-  { id: 'PO-008', dateOfIssue: '2026-04-08', supplierId: 'SUP-002', supplierName: 'GlobalPipe Solutions', items: [{ itemId: 'ITM-001', itemName: 'Carbon Steel Pipe (6")', quantity: 800, unitPrice: 84.00 }, { itemId: 'ITM-005', itemName: 'HDPE Pipe (12")', quantity: 500, unitPrice: 62.00 }], totalAmount: 98200, paymentTerms: 'Net 45', amountPaid: 0, dateOfPayment: null, dueDate: '2026-05-23', deliveryStatus: 'Pending', paymentStatus: 'Unpaid', eta: '2026-05-05', incoterms: 'FOB' },
-  { id: 'PO-009', dateOfIssue: '2026-03-25', supplierId: 'SUP-004', supplierName: 'IndoTech Materials', items: [{ itemId: 'ITM-003', itemName: 'Sodium Hydroxide (NaOH)', quantity: 40, unitPrice: 445.00 }], totalAmount: 17800, paymentTerms: 'Net 30', amountPaid: 0, dateOfPayment: null, dueDate: '2026-04-25', deliveryStatus: 'Shipped', paymentStatus: 'Unpaid', eta: '2026-04-15', incoterms: 'EXW' },
-  { id: 'PO-010', dateOfIssue: '2026-03-08', supplierId: 'SUP-002', supplierName: 'GlobalPipe Solutions', items: [{ itemId: 'ITM-005', itemName: 'HDPE Pipe (12")', quantity: 1000, unitPrice: 62.00 }], totalAmount: 62000, paymentTerms: 'Net 45', amountPaid: 62000, dateOfPayment: '2026-04-08', dueDate: '2026-04-22', deliveryStatus: 'Delivered', paymentStatus: 'Paid', eta: '2026-04-05', incoterms: 'FOB' },
-  { id: 'PO-011', dateOfIssue: '2026-02-25', supplierId: 'SUP-007', supplierName: 'TechServ Engineering', items: [{ itemId: 'ITM-008', itemName: 'Pipeline Inspection Service', quantity: 10, unitPrice: 1200.00, isService: true, serviceDetails: { billingType: 'Hourly Rate', scopeOfWork: 'Inspection of Phase-2 pipeline welding per ASME B31.3.', duration: '10 working days', slaTerms: 'Reports within 4h.' } }], totalAmount: 12000, paymentTerms: 'Net 30', amountPaid: 12000, dateOfPayment: '2026-03-28', dueDate: '2026-03-31', deliveryStatus: 'Delivered', paymentStatus: 'Paid', eta: '2026-03-15', incoterms: 'N/A', projectReference: 'PRJ-2026-0012' },
-  { id: 'PO-012', dateOfIssue: '2026-01-01', supplierId: 'SUP-007', supplierName: 'TechServ Engineering', items: [{ itemId: 'ITM-009', itemName: 'Annual Maintenance Contract — Valves', quantity: 12, unitPrice: 8500.00, isService: true, serviceDetails: { billingType: 'Fixed Price', scopeOfWork: 'Annual valve maintenance.', duration: '12 months', slaTerms: '4h critical, 24h non-critical.' } }], totalAmount: 102000, paymentTerms: 'Milestone Based', amountPaid: 25500, dateOfPayment: '2026-04-03', dueDate: '2026-12-31', deliveryStatus: 'Approved', paymentStatus: 'Partial', eta: '2026-12-31', incoterms: 'N/A', projectReference: 'PRJ-2026-AMC-001' },
+  { id: 'PO-001', dateOfIssue: '2026-03-10', supplierId: 'SUP-001', supplierName: 'SteelMax Industries', items: [{ itemId: 'ITM-001', itemName: 'Carbon Steel Pipe (6")', quantity: 500, unitPrice: 85.50, isAsset: true }], totalAmount: 42750, currency: 'USD', fxRate: 3.67, totalAmountBase: 156892.5, paymentTerms: 'Net 30', amountPaid: 42750, dateOfPayment: '2026-04-05', dueDate: '2026-04-10', deliveryStatus: 'Delivered', paymentStatus: 'Paid', eta: '2026-04-01', incoterms: 'CIF', matchStatus: 'Full Match', approvalSteps: [{role:'manager', status:'Approved'}, {role:'finance', status:'Approved'}], currentApprovalStep: 2 },
+  { id: 'PO-002', dateOfIssue: '2026-03-15', supplierId: 'SUP-006', supplierName: 'NipponValve Ltd.', items: [{ itemId: 'ITM-002', itemName: 'Gate Valve (4")', quantity: 20, unitPrice: 320.00 }, { itemId: 'ITM-006', itemName: 'Ball Valve (2")', quantity: 200, unitPrice: 45.00 }], totalAmount: 15400, currency: 'USD', fxRate: 3.67, totalAmountBase: 56518, paymentTerms: 'Net 45', amountPaid: 7700, dateOfPayment: '2026-04-01', dueDate: '2026-04-30', deliveryStatus: 'Shipped', paymentStatus: 'Partial', eta: '2026-04-12', incoterms: 'DAP', matchStatus: 'Full Match', approvalSteps: [{role:'manager', status:'Approved'}, {role:'finance', status:'Approved'}], currentApprovalStep: 2 },
+  { id: 'PO-003', dateOfIssue: '2026-03-01', supplierId: 'SUP-003', supplierName: 'EuroChem Supply Co.', items: [{ itemId: 'ITM-003', itemName: 'Sodium Hydroxide (NaOH)', quantity: 25, unitPrice: 450.00 }], totalAmount: 11250, currency: 'USD', fxRate: 3.67, totalAmountBase: 41287.5, paymentTerms: 'Net 60', amountPaid: 0, dateOfPayment: null, dueDate: '2026-05-01', deliveryStatus: 'Delivered', paymentStatus: 'Unpaid', eta: '2026-03-28', incoterms: 'DDP', matchStatus: 'Full Match', approvalSteps: [{role:'manager', status:'Approved'}, {role:'finance', status:'Approved'}], currentApprovalStep: 2 },
+  { id: 'PO-004', dateOfIssue: '2026-02-20', supplierId: 'SUP-001', supplierName: 'SteelMax Industries', items: [{ itemId: 'ITM-004', itemName: 'Stainless Steel Flange (8")', quantity: 100, unitPrice: 192.00 }], totalAmount: 19200, currency: 'USD', fxRate: 3.67, totalAmountBase: 70464, paymentTerms: 'Net 30', amountPaid: 19200, dateOfPayment: '2026-03-18', dueDate: '2026-03-22', deliveryStatus: 'Delivered', paymentStatus: 'Paid', eta: '2026-03-10', incoterms: 'CIF', matchStatus: 'Full Match', approvalSteps: [{role:'manager', status:'Approved'}, {role:'finance', status:'Approved'}], currentApprovalStep: 2 },
+  { id: 'PO-005', dateOfIssue: '2026-02-01', supplierId: 'SUP-005', supplierName: 'AmeriSteel Corp', items: [{ itemId: 'ITM-001', itemName: 'Carbon Steel Pipe (6")', quantity: 300, unitPrice: 85.00 }], totalAmount: 25500, currency: 'USD', fxRate: 3.67, totalAmountBase: 93585, paymentTerms: 'Net 30', amountPaid: 25500, dateOfPayment: '2026-02-28', dueDate: '2026-03-03', deliveryStatus: 'Delivered', paymentStatus: 'Paid', eta: '2026-02-25', incoterms: 'FCA', matchStatus: 'Full Match', approvalSteps: [{role:'manager', status:'Approved'}, {role:'finance', status:'Approved'}], currentApprovalStep: 2 },
+  { id: 'PO-006', dateOfIssue: '2026-04-01', supplierId: 'SUP-001', supplierName: 'SteelMax Industries', items: [{ itemId: 'ITM-002', itemName: 'Gate Valve (4")', quantity: 50, unitPrice: 315.00 }], totalAmount: 15750, currency: 'USD', fxRate: 3.67, totalAmountBase: 57802.5, paymentTerms: 'Net 30', amountPaid: 0, dateOfPayment: null, dueDate: '2026-05-01', deliveryStatus: 'Pending', paymentStatus: 'Unpaid', eta: '2026-04-20', incoterms: 'CIF', matchStatus: 'Pending', approvalSteps: [{role:'manager', status:'Pending'}, {role:'finance', status:'Pending'}], currentApprovalStep: 0 },
+  { id: 'PO-007', dateOfIssue: '2026-04-05', supplierId: 'SUP-005', supplierName: 'AmeriSteel Corp', items: [{ itemId: 'ITM-004', itemName: 'Stainless Steel Flange (8")', quantity: 60, unitPrice: 195.00 }], totalAmount: 11700, currency: 'USD', fxRate: 3.67, totalAmountBase: 42939, paymentTerms: 'Net 30', amountPaid: 0, dateOfPayment: null, dueDate: '2026-05-05', deliveryStatus: 'Approved', paymentStatus: 'Unpaid', eta: '2026-04-25', incoterms: 'FCA', matchStatus: 'Pending', approvalSteps: [{role:'manager', status:'Approved'}, {role:'finance', status:'Pending'}], currentApprovalStep: 1 },
+  { id: 'PO-008', dateOfIssue: '2026-04-08', supplierId: 'SUP-002', supplierName: 'GlobalPipe Solutions', items: [{ itemId: 'ITM-001', itemName: 'Carbon Steel Pipe (6")', quantity: 800, unitPrice: 84.00 }, { itemId: 'ITM-005', itemName: 'HDPE Pipe (12")', quantity: 500, unitPrice: 62.00 }], totalAmount: 98200, currency: 'USD', fxRate: 3.67, totalAmountBase: 360394, paymentTerms: 'Net 45', amountPaid: 0, dateOfPayment: null, dueDate: '2026-05-23', deliveryStatus: 'Pending', paymentStatus: 'Unpaid', eta: '2026-05-05', incoterms: 'FOB', matchStatus: 'Pending', approvalSteps: [{role:'manager', status:'Pending'}, {role:'finance', status:'Pending'}], currentApprovalStep: 0 },
+  { id: 'PO-009', dateOfIssue: '2026-03-25', supplierId: 'SUP-004', supplierName: 'IndoTech Materials', items: [{ itemId: 'ITM-003', itemName: 'Sodium Hydroxide (NaOH)', quantity: 40, unitPrice: 445.00 }], totalAmount: 17800, currency: 'USD', fxRate: 3.67, totalAmountBase: 65326, paymentTerms: 'Net 30', amountPaid: 0, dateOfPayment: null, dueDate: '2026-04-25', deliveryStatus: 'Shipped', paymentStatus: 'Unpaid', eta: '2026-04-15', incoterms: 'EXW', matchStatus: 'Full Match', approvalSteps: [{role:'manager', status:'Approved'}, {role:'finance', status:'Approved'}], currentApprovalStep: 2 },
+  { id: 'PO-010', dateOfIssue: '2026-03-08', supplierId: 'SUP-002', supplierName: 'GlobalPipe Solutions', items: [{ itemId: 'ITM-005', itemName: 'HDPE Pipe (12")', quantity: 1000, unitPrice: 62.00 }], totalAmount: 62000, currency: 'USD', fxRate: 3.67, totalAmountBase: 227540, paymentTerms: 'Net 45', amountPaid: 62000, dateOfPayment: '2026-04-08', dueDate: '2026-04-22', deliveryStatus: 'Delivered', paymentStatus: 'Paid', eta: '2026-04-05', incoterms: 'FOB', matchStatus: 'Full Match', approvalSteps: [{role:'manager', status:'Approved'}, {role:'finance', status:'Approved'}], currentApprovalStep: 2 },
+  { id: 'PO-011', dateOfIssue: '2026-02-25', supplierId: 'SUP-007', supplierName: 'TechServ Engineering', items: [{ itemId: 'ITM-008', itemName: 'Pipeline Inspection Service', quantity: 10, unitPrice: 1200.00, isService: true, serviceDetails: { billingType: 'Hourly Rate', scopeOfWork: 'Inspection of Phase-2 pipeline welding per ASME B31.3.', duration: '10 working days', slaTerms: 'Reports within 4h.' } }], totalAmount: 12000, currency: 'USD', fxRate: 3.67, totalAmountBase: 44040, paymentTerms: 'Net 30', amountPaid: 12000, dateOfPayment: '2026-03-28', dueDate: '2026-03-31', deliveryStatus: 'Delivered', paymentStatus: 'Paid', eta: '2026-03-15', incoterms: 'N/A', projectReference: 'PRJ-2026-0012', matchStatus: 'Full Match', approvalSteps: [{role:'manager', status:'Approved'}, {role:'finance', status:'Approved'}], currentApprovalStep: 2 },
+  { id: 'PO-012', dateOfIssue: '2026-01-01', supplierId: 'SUP-007', supplierName: 'TechServ Engineering', items: [{ itemId: 'ITM-009', itemName: 'Annual Maintenance Contract — Valves', quantity: 12, unitPrice: 8500.00, isService: true, serviceDetails: { billingType: 'Fixed Price', scopeOfWork: 'Annual valve maintenance.', duration: '12 months', slaTerms: '4h critical, 24h non-critical.' } }], totalAmount: 102000, currency: 'USD', fxRate: 3.67, totalAmountBase: 374340, paymentTerms: 'Milestone Based', amountPaid: 25500, dateOfPayment: '2026-04-03', dueDate: '2026-12-31', deliveryStatus: 'Approved', paymentStatus: 'Partial', eta: '2026-12-31', incoterms: 'N/A', projectReference: 'PRJ-2026-AMC-001', matchStatus: 'Full Match', approvalSteps: [{role:'manager', status:'Approved'}, {role:'finance', status:'Pending'}], currentApprovalStep: 1 },
   // cancelled PO with reason (demo)
-  { id: 'PO-013', dateOfIssue: '2026-03-20', supplierId: 'SUP-004', supplierName: 'IndoTech Materials', items: [{ itemId: 'ITM-003', itemName: 'Sodium Hydroxide (NaOH)', quantity: 10, unitPrice: 450.00 }], totalAmount: 4500, paymentTerms: 'Net 30', amountPaid: 0, dateOfPayment: null, dueDate: '2026-04-20', deliveryStatus: 'Cancelled', paymentStatus: 'Unpaid', eta: '2026-04-10', incoterms: 'EXW', cancellationReason: 'Supplier could not meet quality specification. Order re-issued to SUP-003.' },
+  { id: 'PO-013', dateOfIssue: '2026-03-20', supplierId: 'SUP-004', supplierName: 'IndoTech Materials', items: [{ itemId: 'ITM-003', itemName: 'Sodium Hydroxide (NaOH)', quantity: 10, unitPrice: 450.00 }], totalAmount: 4500, currency: 'USD', fxRate: 3.67, totalAmountBase: 16515, paymentTerms: 'Net 30', amountPaid: 0, dateOfPayment: null, dueDate: '2026-04-20', deliveryStatus: 'Cancelled', paymentStatus: 'Unpaid', eta: '2026-04-10', incoterms: 'EXW', cancellationReason: 'Supplier could not meet quality specification. Order re-issued to SUP-003.', matchStatus: 'Pending', approvalSteps: [{role:'manager', status:'Rejected'}, {role:'finance', status:'Pending'}], currentApprovalStep: 0 },
 ];
 
 // ============================================================
 // Mock Documents (with expiryDate and version)
 // ============================================================
-export const documents: Document[] = [
+export const documents: AppDocument[] = [
   { id: 'DOC-001', name: 'MTC_CarbonSteel_PO001.pdf',            category: 'MTC',                        poId: 'PO-001', itemId: 'ITM-001', uploadDate: '2026-03-30', fileSize: '1.2 MB', fileType: 'PDF' },
   { id: 'DOC-002', name: 'COO_SteelMax_PO001.pdf',               category: 'COO',                        poId: 'PO-001', itemId: 'ITM-001', uploadDate: '2026-03-30', fileSize: '0.8 MB', fileType: 'PDF' },
   { id: 'DOC-003', name: 'INV_SteelMax_PO001.pdf',               category: 'Invoice',                    poId: 'PO-001', itemId: 'ITM-001', uploadDate: '2026-04-01', fileSize: '0.5 MB', fileType: 'PDF' },
@@ -244,17 +99,32 @@ export const documents: Document[] = [
 ];
 
 // ============================================================
-// Dashboard helpers
+// Dashboard & Risk Helpers
 // ============================================================
+
+export function computeRiskScore(kpis: SupplierKPIs) {
+  let score = 0;
+  // Weights: Price(20), Delivery(25), Response(15), Quality(20), Payment(20)
+  score += Math.max(0, 20 - kpis.priceVariation * 2);
+  score += (kpis.deliveryPerformance / 100) * 25;
+  score += Math.max(0, 15 - (kpis.deliveryTerms === 'N/A' ? kpis.responseTime / 4 : kpis.responseTime / 2));
+  score += Math.max(0, 20 - kpis.rejectionRate * 4);
+  score += (kpis.onTimePayment / 100) * 20;
+
+  const finalScore = Math.round(score);
+  if (finalScore >= 85) return { label: 'Low' as const, score: finalScore, color: '#10b981' };
+  if (finalScore >= 70) return { label: 'Medium' as const, score: finalScore, color: '#f59e0b' };
+  return { label: 'High' as const, score: finalScore, color: '#f43f5e' };
+}
 
 // Cost reduction helper: compare latest price to earliest in history
 function calcCostReduction(): number {
-  return items.reduce((total, item) => {
+  return items.reduce((total: number, item: any) => {
     if (item.priceHistory.length < 2) return total;
     const first = item.priceHistory[0].price;
     const last  = item.priceHistory[item.priceHistory.length - 1].price;
     if (last >= first) return total;
-    const saved = (first - last) * item.purchaseHistory.reduce((q, r) => q + r.quantity, 0);
+    const saved = (first - last) * item.purchaseHistory.reduce((q: number, r: any) => q + r.quantity, 0);
     return total + saved;
   }, 0);
 }
@@ -287,8 +157,8 @@ function calcSpendUnderManagement(): number {
   const preferredIds = new Set(suppliers.filter(s => s.preferred).map(s => s.id));
   const totalSpend   = purchaseOrders.reduce((s, po) => s + po.totalAmount, 0);
   const managedSpend = purchaseOrders
-    .filter(po => preferredIds.has(po.supplierId))
-    .reduce((s, po) => s + po.totalAmount, 0);
+    .filter((po: any) => preferredIds.has(po.supplierId))
+    .reduce((s: number, po: any) => s + po.totalAmount, 0);
   return totalSpend ? Math.round((managedSpend / totalSpend) * 100) : 0;
 }
 

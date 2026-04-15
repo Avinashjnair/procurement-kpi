@@ -4,9 +4,22 @@ import { useApp } from '@/context/AppContext';
 import { Lock, Mail, Eye, EyeOff, ChevronRight, ShieldCheck } from 'lucide-react';
 
 const DEMO_ACCOUNTS = [
-  { email: 'aisha@procureiq.ae', password: 'manager123', label: 'Manager — Full Access', role: 'manager', initials: 'AA', color: '#6366f1' },
-  { email: 'james@procureiq.ae', password: 'engineer123', label: 'Engineer — Limited Access', role: 'engineer', initials: 'JO', color: '#06b6d4' },
+  { email: 'aisha@procureiq.ae', password: 'manager123',  label: 'Manager — Full Access',            role: 'manager',  initials: 'AA', color: '#6366f1' },
+  { email: 'james@procureiq.ae', password: 'engineer123', label: 'Engineer — Limited Access',        role: 'engineer', initials: 'JO', color: '#06b6d4' },
+  { email: 'fatima@procureiq.ae',password: 'finance123',  label: 'Finance & Accounts — Payments',   role: 'finance',  initials: 'FZ', color: '#10b981' },
 ];
+
+const ROLE_LABELS: Record<string, string> = {
+  manager:  'Manager',
+  engineer: 'Engineer',
+  finance:  'Finance',
+};
+
+const ROLE_DESCRIPTIONS: Record<string, string> = {
+  manager:  'Full procurement access, approvals & payments',
+  engineer: 'Create POs, RFQs, items and GRNs',
+  finance:  'Record payments, upload receipts & AP aging',
+};
 
 export default function LoginPage() {
   const { login } = useApp();
@@ -19,7 +32,7 @@ export default function LoginPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(''); setLoading(true);
-    await new Promise(r => setTimeout(r, 600)); // simulate network
+    await new Promise(r => setTimeout(r, 600));
     const ok = login(email, password);
     setLoading(false);
     if (!ok) setError('Invalid email or password. Try a demo account below.');
@@ -38,7 +51,7 @@ export default function LoginPage() {
       backgroundImage: 'radial-gradient(ellipse at 20% 20%, rgba(99,102,241,0.08) 0%, transparent 60%), radial-gradient(ellipse at 80% 80%, rgba(6,182,212,0.06) 0%, transparent 60%)',
       padding: 20,
     }}>
-      <div style={{ width: '100%', maxWidth: 420 }}>
+      <div style={{ width: '100%', maxWidth: 440 }}>
         {/* Logo */}
         <div style={{ textAlign: 'center', marginBottom: 36 }}>
           <div style={{ width: 56, height: 56, borderRadius: 16, background: 'var(--gradient-primary)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, marginBottom: 14, boxShadow: '0 8px 24px rgba(99,102,241,0.3)' }}>
@@ -112,16 +125,16 @@ export default function LoginPage() {
             {DEMO_ACCOUNTS.map(acc => (
               <button key={acc.email} onClick={() => fillDemo(acc)}
                 style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)', cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s', width: '100%', fontFamily: 'inherit' }}>
-                <div style={{ width: 36, height: 36, borderRadius: 10, background: `${acc.color}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: acc.color, flexShrink: 0 }}>
+                <div style={{ width: 38, height: 38, borderRadius: 10, background: `${acc.color}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: acc.color, flexShrink: 0 }}>
                   {acc.initials}
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>{acc.label}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{acc.email}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{ROLE_DESCRIPTIONS[acc.role]}</div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 6, background: `${acc.color}14`, color: acc.color, fontSize: 11, fontWeight: 600, flexShrink: 0 }}>
                   <ShieldCheck size={10} />
-                  {acc.role === 'manager' ? 'Manager' : 'Engineer'}
+                  {ROLE_LABELS[acc.role]}
                 </div>
                 <ChevronRight size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
               </button>

@@ -4,9 +4,13 @@ import { useApp } from '@/context/AppContext';
 import {
   Search, ChevronDown, ArrowLeft, Copy, XCircle,
   DollarSign, Download, Printer, Wrench,
+  FileText, FileSpreadsheet,
 } from 'lucide-react';
-import type { POStatus } from '@/data/mockData';
+import type { POStatus } from '@/types';
 import { exportCsv } from '@/utils/exportCsv';
+import { exportPOAsPDF } from '@/utils/poPdfExport';
+import { exportPOAsExcel } from '@/utils/poExcelExport';
+import { companyInfo } from '@/data/mockData';
 
 const ALL_STATUSES: POStatus[] = ['Draft', 'Pending', 'Approved', 'Shipped', 'Delivered', 'Cancelled'];
 
@@ -131,13 +135,41 @@ function PaymentModal({ poId, totalAmount, amountPaid, onClose }: {
 
 // ── PO Detail page ──
 function PODetail({ poId }: { poId: string }) {
-  const { purchaseOrders, items, setSelectedPOId, updatePOStatus, duplicatePO } = useApp();
+  const { purchaseOrders, items, suppliers, setSelectedPOId, updatePOStatus, duplicatePO } = useApp();
   const [cancelModal, setCancelModal] = useState(false);
   const [paymentModal, setPaymentModal] = useState(false);
+  const [exportLoading, setExportLoading] = useState<string | null>(null);
+
   const po = purchaseOrders.find(p => p.id === poId);
+  const supplier = suppliers.find(s => s.id === po?.supplierId);
+
   if (!po) return <p>PO not found.</p>;
 
   const handlePrint = () => window.print();
+
+  const handleExportPDF = async () => {
+    try {
+      setExportLoading('Generating PDF...');
+      await exportPOAsPDF(po, supplier);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to generate PDF');
+    } finally {
+      setExportLoading(null);
+    }
+  };
+
+  const handleExportExcel = async () => {
+    try {
+      setExportLoading('Generating Excel...');
+      await exportPOAsExcel(po, supplier);
+    } catch (err) {
+      console.error(err);
+      alert('Failed to generate Excel');
+    } finally {
+      setExportLoading(null);
+    }
+  };
 
   return (
     <div>
@@ -175,6 +207,12 @@ function PODetail({ poId }: { poId: string }) {
           <button className="btn btn-secondary btn-sm" onClick={() => { duplicatePO(po.id); setSelectedPOId(null); }}>
             <Copy size={13} /> Duplicate
           </button>
+          <button className="btn btn-secondary btn-sm" onClick={handleExportPDF} disabled={!!exportLoading}>
+            <FileText size={13} /> {exportLoading === 'Generating PDF...' ? 'Generating...' : 'Export PDF'}
+          </button>
+          <button className="btn btn-secondary btn-sm" onClick={handleExportExcel} disabled={!!exportLoading}>
+            <FileSpreadsheet size={13} /> {exportLoading === 'Generating Excel...' ? 'Generating...' : 'Export Excel'}
+          </button>
           <button className="btn btn-ghost btn-sm" onClick={handlePrint}>
             <Printer size={13} /> Print
           </button>
@@ -193,6 +231,52 @@ function PODetail({ poId }: { poId: string }) {
           <p style={{ fontSize: 13, color: 'var(--text-secondary)', margin: 0 }}>{po.cancellationReason}</p>
         </div>
       )}
+
+      {/* Approval Timeline & Match Status */}
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 20, marginBottom: 20 }}>
+        <div className="card">
+          <div className="card-header">
+            <div className="card-title">Approval Workflow</div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 0, padding: '10px 0' }}>
+            {(po.approvalSteps || []).map((step, idx) => {
+              const isLast = idx === (po.approvalSteps?.length || 0) - 1;
+              const statusColor = step.status === 'Approved' ? '#10b981' : step.status === 'Rejected' ? '#f43f5e' : '#94a3b8';
+              return (
+                <React.Fragment key={idx}>
+                  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center', position: 'relative' }}>
+                    <div style={{ 
+                      width: 28, height: 28, borderRadius: '50%', background: step.status === 'Approved' ? 'rgba(16,185,129,0.1)' : 'rgba(255,255,255,0.05)', 
+                      border: `2px solid ${statusColor}`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: statusColor, fontSize: 10, fontWeight: 700, zIndex: 1
+                    }}>
+                      {idx + 1}
+                    </div>
+                    <div style={{ marginTop: 8 }}>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: '#f1f5f9' }}>{step.role.toUpperCase()}</div>
+                      <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>{step.status}</div>
+                    </div>
+                  </div>
+                  {!isLast && (
+                    <div style={{ flex: 1, height: 2, background: step.status === 'Approved' ? '#10b981' : 'rgba(255,255,255,0.05)', marginTop: 14, margin: '14px -14px 0' }} />
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="card" style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', textAlign: 'center' }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px', marginBottom: 12 }}>3-Way Match Status</div>
+          <div style={{ 
+            padding: '12px 20px', borderRadius: 12, background: po.matchStatus === 'Full Match' ? 'rgba(16,185,129,0.1)' : 'rgba(245,158,11,0.1)',
+            border: `1px solid ${po.matchStatus === 'Full Match' ? '#10b981' : '#f59e0b'}`, color: po.matchStatus === 'Full Match' ? '#34d399' : '#fbbf24',
+            fontWeight: 700, fontSize: 15
+          }}>
+            {po.matchStatus || 'Pending Match'}
+          </div>
+          <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 8 }}>PO ↔ GRN ↔ Invoice</div>
+        </div>
+      </div>
 
       {/* Details grid */}
       <div className="card" style={{ marginBottom: 20 }}>
@@ -271,13 +355,26 @@ function PODetail({ poId }: { poId: string }) {
         </div>
       </div>
 
-      {/* Remarks */}
-      {po.remarks && (
-        <div className="card">
-          <div className="card-header"><div className="card-title">Remarks</div></div>
-          <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.7, whiteSpace: 'pre-line' }}>{po.remarks}</p>
+      {/* Audit Trail (Roadmap Feature) */}
+      <div className="card">
+        <div className="card-header"><div className="card-title">Audit Trail & History</div></div>
+        <div style={{ marginTop: 10 }}>
+          {(useApp().auditLogs.filter(log => log.entityId === po.id) || []).map((log, idx) => (
+            <div key={log.id} style={{ display: 'flex', gap: 14, padding: '12px 0', borderBottom: idx === (useApp().auditLogs.filter(l => l.entityId === po.id).length - 1) ? 'none' : '1px solid rgba(255,255,255,0.05)' }}>
+              <div style={{ minWidth: 100, fontSize: 11, color: 'var(--text-muted)' }}>
+                {new Date(log.timestamp).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 13, color: '#f1f5f9', fontWeight: 600 }}>{log.action} · {log.actorName}</div>
+                <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{log.description}</div>
+              </div>
+            </div>
+          ))}
+          {useApp().auditLogs.filter(log => log.entityId === po.id).length === 0 && (
+            <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--text-muted)', fontSize: 13 }}>No historical logs available for this PO.</div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -292,7 +389,6 @@ export default function PurchaseOrdersPage() {
   const [viewMode, setViewMode]     = useState<'table' | 'kanban'>('table');
   const [cancelModal, setCancelModal] = useState<string | null>(null);
 
-  if (selectedPOId) return <PODetail poId={selectedPOId} />;
 
   const handleSort = (field: string) => {
     if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
@@ -333,6 +429,8 @@ export default function PurchaseOrdersPage() {
   );
 
   const kanbanCols: POStatus[] = ['Pending', 'Approved', 'Shipped', 'Delivered'];
+
+  if (selectedPOId) return <PODetail poId={selectedPOId} />;
 
   return (
     <div>

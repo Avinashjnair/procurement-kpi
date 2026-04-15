@@ -4,13 +4,13 @@
 
 // ── Auth / User Roles ────────────────────────────────────────
 
-export type UserRole = 'manager' | 'engineer';
+export type UserRole = 'manager' | 'engineer' | 'finance';
 
 export interface User {
   id: string;
   name: string;
   email: string;
-  passwordHash: string;   // stored as plain text for demo (no real auth)
+  passwordHash: string;
   role: UserRole;
   department: string;
   avatarInitials: string;
@@ -35,18 +35,36 @@ export const PERMISSIONS: Record<UserRole, string[]> = {
     'view_inventory', 'adjust_inventory',
     'view_grn', 'create_grn', 'approve_grn',
     'view_assets', 'create_asset', 'edit_asset', 'log_maintenance',
+    // Finance permissions (managers can also access)
+    'view_payments', 'record_payment', 'upload_payment_receipt',
+    'view_finance_reports', 'approve_payment',
   ],
   engineer: [
     'view_dashboard',
     'view_items',
     'view_suppliers',
-    'view_pos', 'create_po',             // can create but NOT approve/reject
+    'view_pos', 'create_po',
     'view_rfqs', 'create_rfq',
-    'view_quotations',                    // view only, no award
+    'view_quotations',
     'view_documents', 'upload_document',
     'view_inventory',
-    'view_grn', 'create_grn',             // can raise GRN but not approve
-    'view_assets', 'log_maintenance',     // view assets and Log maintenance
+    'view_grn', 'create_grn',
+    'view_assets', 'log_maintenance',
+  ],
+  finance: [
+    'view_dashboard',
+    // Finance core — full payment access
+    'view_payments', 'record_payment', 'upload_payment_receipt',
+    'view_finance_reports', 'approve_payment',
+    // Read-only access to procurement context
+    'view_pos',
+    'view_suppliers',
+    'view_documents', 'upload_document',
+    'view_grn',
+    'view_inventory',
+    'view_assets',
+    // Finance can also view quotations for cost context
+    'view_quotations',
   ],
 };
 
@@ -140,6 +158,29 @@ export interface Item {
   archived?: boolean;
 }
 
+// ── Payment Records (Finance Module) ────────────────────────
+
+export interface PaymentRecord {
+  id: string;
+  poId: string;
+  amount: number;
+  currency: string;
+  paymentDate: string;
+  referenceNumber: string;        // bank/transaction reference
+  paymentMethod: PaymentMethod;
+  recordedBy: string;             // user id
+  recordedByName: string;
+  receiptFileName?: string;
+  receiptFileSize?: string;
+  notes?: string;
+  approvedBy?: string;
+  approvedAt?: string;
+  status: PaymentRecordStatus;
+}
+
+export type PaymentMethod = 'Bank Transfer' | 'Cheque' | 'Cash' | 'Letter of Credit' | 'Online Payment';
+export type PaymentRecordStatus = 'Pending Approval' | 'Approved' | 'Rejected';
+
 // ── Purchase Orders ──────────────────────────────────────────
 
 export type POStatus = 'Draft' | 'Pending' | 'Approved' | 'Shipped' | 'Delivered' | 'Cancelled';
@@ -159,7 +200,7 @@ export interface POItem {
   quantity: number;
   unitPrice: number;
   isService?: boolean;
-  isAsset?: boolean; // ← NEW
+  isAsset?: boolean;
   serviceDetails?: ServicePOLineDetails;
 }
 
@@ -186,6 +227,7 @@ export interface PurchaseOrder {
   revisionNumber?: number;
   approvedBy?: string;
   approvedAt?: string;
+  paymentRecords?: PaymentRecord[];  // ← full payment ledger
 }
 
 // ── RFQ ─────────────────────────────────────────────────────
@@ -206,7 +248,7 @@ export interface RFQ {
   id: string;
   title: string;
   status: RFQStatus;
-  createdBy: string;         // user id
+  createdBy: string;
   createdByName: string;
   dateCreated: string;
   dateSent: string | null;
@@ -237,14 +279,14 @@ export interface QuotationLineItem {
 }
 
 export interface QuotationEvaluation {
-  price: number;          // 0–10
-  paymentTerms: number;   // 0–10
-  leadTime: number;       // 0–10
-  pastHistory: number;    // 0–10
-  serviceQuality: number; // 0–10
-  responsiveness: number; // 0–10
-  compliance: number;     // 0–10
-  totalScore: number;     // weighted average (auto-calculated)
+  price: number;
+  paymentTerms: number;
+  leadTime: number;
+  pastHistory: number;
+  serviceQuality: number;
+  responsiveness: number;
+  compliance: number;
+  totalScore: number;
   evaluatedBy: string;
   evaluatedAt: string;
   recommendation?: string;
@@ -267,7 +309,6 @@ export interface Quotation {
   notes?: string;
 }
 
-// Weights for total score calculation (must sum to 1)
 export const EVAL_WEIGHTS = {
   price:          0.30,
   leadTime:       0.20,
@@ -301,10 +342,10 @@ export interface StockItem {
   category: string;
   unit: string;
   currentStock: number;
-  reservedStock: number;    // committed to POs / projects
+  reservedStock: number;
   reorderPoint: number;
   maxStock: number;
-  location: string;         // warehouse bin / shelf
+  location: string;
   lastUpdated: string;
   lastGRNId?: string;
 }
@@ -315,15 +356,15 @@ export interface StockMovement {
   itemId: string;
   itemName: string;
   movementType: StockMovementType;
-  quantity: number;           // positive = in, negative = out
-  referenceId: string;        // GRN id or PO id or adjustment id
+  quantity: number;
+  referenceId: string;
   date: string;
   performedBy: string;
   notes?: string;
   balanceAfter: number;
 }
 
-// ── Goods Receipt Note ───────────────────────────────────────
+// ── GRN ─────────────────────────────────────────────────────
 
 export type GRNStatus = 'Draft' | 'Submitted' | 'Approved' | 'Rejected' | 'Partial';
 
@@ -355,7 +396,7 @@ export interface GRN {
   lineItems: GRNLineItem[];
   totalAccepted: number;
   totalRejected: number;
-  stockUpdated: boolean;   // true once inventory has been incremented
+  stockUpdated: boolean;
 }
 
 // ── Documents ────────────────────────────────────────────────
@@ -363,9 +404,10 @@ export interface GRN {
 export type DocumentCategory =
   | 'MTC' | 'COO' | 'BL/AWB' | 'Delivery Note' | 'Packing List'
   | 'Invoice' | 'Internal Inspection Report'
-  | 'Work Completion Certificate' | 'Service Report' | 'Timesheet' | 'SLA Report';
+  | 'Work Completion Certificate' | 'Service Report' | 'Timesheet' | 'SLA Report'
+  | 'Payment Receipt';   // ← NEW: finance uploads
 
-export interface Document {
+export interface AppDocument {
   id: string;
   name: string;
   category: DocumentCategory;
@@ -400,15 +442,187 @@ export interface Asset {
   purchaseDate: string;
   purchaseValue: number;
   salvageValue: number;
-  depreciationRate: number; // percentage (e.g. 0.20 for 20%)
-  usefulLife: number;       // years
+  depreciationRate: number;
+  usefulLife: number;
   location: string;
   serialNumber?: string;
   warrantyExpiry?: string;
   warrantyDetails?: string;
-  maintenancePlan: string;  // e.g. "Every 6 months"
+  maintenancePlan: string;
   maintenanceHistory: MaintenanceRecord[];
   status: AssetStatus;
   description?: string;
-  poId?: string; // ← NEW: Link to original PO
+  poId?: string;
+}
+
+// ── Budgets ──────────────────────────────────────────────────
+
+export interface BudgetEnvelope {
+  id: string;
+  name: string;
+  department: string;
+  project?: string;
+  period: string; // e.g., "2026", "2026-Q1"
+  totalAmount: number;
+  committedAmount: number; // approved POs
+  spentAmount: number;      // paid POs
+  currency: string;
+  status: 'Active' | 'Closed' | 'Over-budget';
+}
+
+// ── Contracts & Blanket POs ───────────────────────────────────
+
+export interface Contract {
+  id: string;
+  title: string;
+  supplierId: string;
+  supplierName: string;
+  startDate: string;
+  endDate: string;
+  totalValue: number;
+  currency: string;
+  status: 'Draft' | 'Active' | 'Expiring' | 'Expired' | 'Terminated';
+  renewalWindowDays: number;
+  linkedPoIds: string[];
+  docId?: string;
+}
+
+export type BlanketStatus = 'Draft' | 'Active' | 'Expired' | 'Closed';
+
+export interface BlanketPO {
+  id: string;
+  supplierId: string;
+  supplierName: string;
+  totalCeiling: number;
+  consumedAmount: number;
+  validFrom: string;
+  validTo: string;
+  currency: string;
+  status: BlanketStatus;
+  releaseOrderIds: string[];
+  category?: ItemCategory;
+  department?: string;
+  project?: string;
+}
+
+// ── Invoices & Matching ──────────────────────────────────────
+
+export type InvoiceStatus = 'Pending' | 'Matched' | 'Variance' | 'Paid' | 'Cancelled';
+export type MatchStatus = 'Full Match' | 'Variance' | 'Missing GRN' | 'Missing PO' | 'Pending';
+
+export interface InvoiceLineItem {
+  poLineIndex: number;
+  itemId: string;
+  itemName: string;
+  billedQty: number;
+  unitPrice: number;
+  totalPrice: number;
+}
+
+export interface Invoice {
+  id: string;
+  invoiceNumber: string;
+  poId: string;
+  supplierId: string;
+  supplierName: string;
+  date: string;
+  dueDate: string;
+  totalAmount: number;
+  currency: string;
+  status: InvoiceStatus;
+  lineItems: InvoiceLineItem[];
+  matchStatus: MatchStatus;
+  notes?: string;
+}
+
+// ── Audit Trail ──────────────────────────────────────────────
+
+export interface AuditLogEntry {
+  id: string;
+  timestamp: string;
+  actorId: string;
+  actorName: string;
+  entityType: 'PO' | 'Supplier' | 'Item' | 'Budget' | 'Contract' | 'GRN' | 'Invoice';
+  entityId: string;
+  action: 'Create' | 'Update' | 'Delete' | 'Approve' | 'Reject' | 'Cancel' | 'StatusChange' | 'Payment';
+  changeSet?: {
+    field: string;
+    before: any;
+    after: any;
+  }[];
+  description?: string;
+}
+
+// ── Purchase Order Conversions ────────────────────────────────
+
+export interface ApprovalStep {
+  role: UserRole;
+  userId?: string;
+  userName?: string;
+  status: 'Pending' | 'Approved' | 'Rejected';
+  timestamp?: string;
+  comments?: string;
+}
+
+export interface PurchaseOrder {
+  id: string;
+  dateOfIssue: string;
+  supplierId: string;
+  supplierName: string;
+  items: POItem[];
+  totalAmount: number;
+  totalAmountBase: number;         // AED conversion
+  currency: string;                // USD, EUR, etc.
+  fxRate: number;                  // at time of PO
+  paymentTerms: string;
+  amountPaid: number;
+  dateOfPayment: string | null;
+  dueDate: string;
+  deliveryStatus: POStatus;
+  paymentStatus: PaymentStatus;
+  eta: string;
+  incoterms: string;
+  remarks?: string;
+  projectReference?: string;
+  requestNumber?: string;
+  approvalAuthority?: string;
+  cancellationReason?: string;
+  revisionNumber?: number;
+  approvedBy?: string;
+  approvedAt?: string;
+  paymentRecords?: PaymentRecord[];
+  
+  // Next Sprint extensions
+  budgetId?: string;               // Link to budget envelope
+  approvalSteps: ApprovalStep[];   // Multi-tier approval path
+  currentApprovalStep: number;     // Index of steps
+  matchStatus?: MatchStatus;       // Result of 3-way match
+  savingsAmount?: number;          // (Benchmark - Actual) * Qty
+  contractId?: string;             // Linked contract
+  blanketPoId?: string;            // Link to framework agreement (Release Order)
+}
+
+// ── Notifications ────────────────────────────────────────────
+
+export type NotificationType = 'alert' | 'success' | 'info' | 'warning';
+export type NotificationSource = 'PO' | 'Payment' | 'Document' | 'Budget' | 'Contract' | 'GRN';
+
+export interface AppNotification {
+  id: string;
+  type: NotificationType;
+  source: NotificationSource;
+  title: string;
+  message: string;
+  timestamp: string;
+  read: boolean;
+  entityId: string;
+  entityType: string;
+}
+
+export interface NotificationRule {
+  id: string;
+  eventType: string;
+  enabled: boolean;
+  threshold?: number;
+  channels: ('in-app' | 'email')[];
 }

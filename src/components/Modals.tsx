@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { useApp } from '@/context/AppContext';
 import { X, Upload, Plus, Trash2, MessageSquare, FileText, Building2, MapPin, Mail, Phone, Hash, Wrench, CheckSquare, Square, Landmark } from 'lucide-react';
-import type { POStatus, PaymentStatus, DocumentCategory, POItem, ServiceBillingType, ServiceMilestone } from '@/data/mockData';
+import type { POStatus, PaymentStatus, DocumentCategory, POItem, ServiceBillingType, ServiceMilestone, AppDocument } from '@/types';
 import { companyInfo } from '@/data/mockData';
 
 // ── All document categories (goods + services) ──
@@ -134,6 +134,13 @@ function NewPOModal() {
   const [requestNumber, setRequestNumber] = useState('');
   const [approvalAuthority, setApprovalAuthority] = useState('');
   const [remarks, setRemarks] = useState('');
+  const [currency, setCurrency] = useState('AED');
+  const [fxRate, setFxRate] = useState(1);
+  const [budgetId, setBudgetId] = useState('');
+  const [contractId, setContractId] = useState('');
+  const [blanketPoId, setBlanketPoId] = useState('');
+
+  const { fxRates, budgets, contracts, blanketPOs } = useApp();
 
   // Each row now carries optional serviceDetails
   const [poItems, setPOItems] = useState<{
@@ -207,9 +214,13 @@ function NewPOModal() {
     });
 
   const totalAmount = validItems.reduce((s, i) => s + i.quantity * i.unitPrice, 0);
+  const totalAmountBase = totalAmount * fxRate;
   const newId = `PO-${String(purchaseOrders.length + 1).padStart(3, '0')}`;
 
-  const canProceedStep1 = supplierId && dueDate && eta && validItems.length > 0 && (useCustomPayment ? customPaymentTerms.trim() : true);
+  const selectedBlanket = blanketPOs.find(b => b.id === blanketPoId);
+  const isOverBlanket = selectedBlanket && (selectedBlanket.consumedAmount + totalAmountBase > selectedBlanket.totalCeiling);
+
+  const canProceedStep1 = supplierId && dueDate && eta && validItems.length > 0 && !isOverBlanket && (useCustomPayment ? customPaymentTerms.trim() : true);
 
   const handleSubmit = () => {
     addPurchaseOrder({
@@ -231,6 +242,20 @@ function NewPOModal() {
       projectReference: projectReference.trim() || undefined,
       requestNumber: requestNumber.trim() || undefined,
       approvalAuthority: approvalAuthority.trim() || undefined,
+      
+      // Roadmap extensions
+      currency,
+      fxRate,
+      totalAmountBase: totalAmount * fxRate,
+      budgetId: budgetId || undefined,
+      contractId: contractId || undefined,
+      approvalSteps: [
+        { role: 'manager', status: 'Pending' },
+        { role: 'finance', status: 'Pending' }
+      ],
+      currentApprovalStep: 0,
+      matchStatus: 'Pending',
+      blanketPoId: blanketPoId || undefined,
     });
     setModalOpen(null);
   };
@@ -313,9 +338,58 @@ function NewPOModal() {
           <input type="text" className="form-input" value={requestNumber} onChange={e => setRequestNumber(e.target.value)} placeholder="e.g., REQ-04-0012" />
         </div>
       </div>
-      <div className="form-group">
-        <label className="form-label">Approval Authority</label>
-        <input type="text" className="form-input" value={approvalAuthority} onChange={e => setApprovalAuthority(e.target.value)} placeholder="Name and title" />
+      <div className="form-row">
+        <div className="form-group">
+          <label className="form-label">Approval Authority</label>
+          <input type="text" className="form-input" value={approvalAuthority} onChange={e => setApprovalAuthority(e.target.value)} placeholder="Name and title" />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Link to Contract (Optional)</label>
+          <select className="form-select" value={contractId} onChange={e => setContractId(e.target.value)}>
+            <option value="">No Linked Contract</option>
+            {contracts.filter(c => c.supplierId === supplierId).map(c => (
+              <option key={c.id} value={c.id}>{c.title} ({c.id})</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      <div className="form-row">
+        <div className="form-group">
+          <label className="form-label">Budget Envelope</label>
+          <select className="form-select" value={budgetId} onChange={e => setBudgetId(e.target.value)}>
+            <option value="">Select Budget</option>
+            {budgets.map(b => (
+              <option key={b.id} value={b.id}>{b.name} (${(b.totalAmount - b.spentAmount - b.committedAmount).toLocaleString()} left)</option>
+            ))}
+          </select>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Framework Agreement (Blanket PO)</label>
+          <select className="form-select" value={blanketPoId} onChange={e => setBlanketPoId(e.target.value)}>
+            <option value="">Standard PO (No Blanket)</option>
+            {blanketPOs.filter(b => b.supplierId === supplierId && b.status === 'Active').map(b => (
+              <option key={b.id} value={b.id}>{b.id} (${(b.totalCeiling - b.consumedAmount).toLocaleString()} remaining)</option>
+            ))}
+          </select>
+          {isOverBlanket && <div style={{ fontSize: 11, color: '#f43f5e', marginTop: 4, fontWeight: 600 }}>⚠️ Amount exceeds remaining blanket ceiling!</div>}
+        </div>
+      </div>
+
+      <div className="form-row">
+        <div className="form-group">
+          <label className="form-label">Currency</label>
+          <select className="form-select" value={currency} onChange={e => {
+            setCurrency(e.target.value);
+            setFxRate(fxRates[e.target.value] || 1);
+          }}>
+            {Object.keys(fxRates).map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+        <div className="form-group">
+          <label className="form-label">FX Rate (vs AED)</label>
+          <input type="number" className="form-input" value={fxRate} onChange={e => setFxRate(parseFloat(e.target.value))} step="0.0001" />
+        </div>
       </div>
 
       {/* Line Items */}

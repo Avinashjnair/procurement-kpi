@@ -2,7 +2,7 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '@/context/AppContext';
 import { Search, FileText, File, Download, Eye, Wrench, AlertTriangle, Clock, Upload } from 'lucide-react';
-import type { DocumentCategory } from '@/data/mockData';
+import type { AppDocument, DocumentCategory } from '@/types';
 import { exportCsv } from '@/utils/exportCsv';
 
 const GOODS_CATS: DocumentCategory[] = ['MTC','COO','BL/AWB','Delivery Note','Packing List','Invoice','Internal Inspection Report'];
@@ -21,6 +21,7 @@ const catColor: Record<DocumentCategory, string> = {
   'Service Report':              '#7c3aed',
   Timesheet:                     '#5b21b6',
   'SLA Report':                  '#4c1d95',
+  'Payment Receipt':             '#f43f5e',
 };
 
 function isSvcCat(c: DocumentCategory) { return SERVICE_CATS.includes(c); }
@@ -61,7 +62,7 @@ export default function DocumentsPage() {
 
   const today = new Date().toISOString().split('T')[0];
 
-  const filtered = useMemo(() => documents.filter(doc => {
+  const filtered = useMemo(() => documents.filter((doc: AppDocument) => {
     const ms   = doc.name.toLowerCase().includes(search.toLowerCase()) || doc.id.toLowerCase().includes(search.toLowerCase());
     const mc   = catFilter  === 'All' || doc.category === catFilter;
     const mp   = poFilter   === 'All' || doc.poId === poFilter;
@@ -71,10 +72,10 @@ export default function DocumentsPage() {
     return ms && mc && mp && mt && me;
   }), [documents, search, catFilter, poFilter, typeFilter, expiryFilter]);
 
-  const uniquePOs      = Array.from(new Set(documents.map(d => d.poId)));
-  const expiredCount   = documents.filter(d => expiryStatus(d.expiryDate) === 'expired').length;
-  const expiringCount  = documents.filter(d => expiryStatus(d.expiryDate) === 'expiring').length;
-  const svcDocCount    = documents.filter(d => isSvcCat(d.category)).length;
+  const uniquePOs      = Array.from(new Set(documents.map((d: AppDocument) => d.poId)));
+  const expiredCount   = documents.filter((d: AppDocument) => expiryStatus(d.expiryDate) === 'expired').length;
+  const expiringCount  = documents.filter((d: AppDocument) => expiryStatus(d.expiryDate) === 'expiring').length;
+  const svcDocCount    = documents.filter((d: AppDocument) => isSvcCat(d.category)).length;
   const goodsDocCount  = documents.length - svcDocCount;
 
   const handleExport = () => exportCsv('documents', filtered.map(d => ({
@@ -151,13 +152,13 @@ export default function DocumentsPage() {
       <div style={{ display:'flex',gap:6,marginBottom:16,flexWrap:'wrap' }}>
         {ALL_CATS
           .filter(c => typeFilter==='all' || (typeFilter==='services' ? isSvcCat(c) : !isSvcCat(c)))
-          .filter(c => documents.some(d => d.category === c))
+          .filter(c => documents.some((d: AppDocument) => d.category === c))
           .map(c => (
             <button key={c} onClick={() => setCatFilter(p => p===c ? 'All' : c)}
               style={{ display:'flex',alignItems:'center',gap:5,padding:'4px 12px',borderRadius:20,cursor:'pointer',fontFamily:'inherit',fontSize:12,fontWeight:500,border:`1px solid ${catFilter===c ? catColor[c] : 'var(--border-color)'}`,background:catFilter===c ? `${catColor[c]}15` : 'var(--bg-card)',color:catFilter===c ? catColor[c] : 'var(--text-secondary)',transition:'all 0.15s' }}>
               {isSvcCat(c) && <Wrench size={9} />}
               {c}
-              <span style={{ fontWeight:700,color:catColor[c] }}>{documents.filter(d => d.category===c).length}</span>
+              <span style={{ fontWeight:700,color:catColor[c] }}>{documents.filter((d: AppDocument) => d.category===c).length}</span>
             </button>
           ))}
       </div>
@@ -197,7 +198,7 @@ export default function DocumentsPage() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(doc => {
+              {filtered.map((doc: AppDocument) => {
                 const item    = items.find(i => i.id === doc.itemId);
                 const po      = purchaseOrders.find(p => p.id === doc.poId);
                 const isSvcPO = po?.items.some(i => i.isService);
