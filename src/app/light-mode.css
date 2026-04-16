@@ -1,102 +1,103 @@
-/* =============================================== */
-/* Light Mode — add to bottom of globals.css       */
-/* =============================================== */
+/* ═══════════════════════════════════════════════════════════
+   ProcureIQ — Refined Design System v2
+   LIGHT MODE OVERRIDES
+   ═══════════════════════════════════════════════════════════ */
 
 html.light-mode {
-  --bg-primary: #f8fafc;
-  --bg-secondary: #ffffff;
-  --bg-card: rgba(255, 255, 255, 0.95);
-  --bg-glass: rgba(255, 255, 255, 0.8);
-  --border-color: rgba(99, 102, 241, 0.12);
-  --border-glow: rgba(99, 102, 241, 0.25);
-  --text-primary: #0f172a;
-  --text-secondary: #334155;
-  --text-muted: #64748b;
-  --shadow-glow: 0 0 20px rgba(99, 102, 241, 0.08);
-  --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.06);
+  --bg-primary:      #f4f6fd;
+  --bg-secondary:    #ffffff;
+  --bg-tertiary:     #eef1fb;
+  --bg-card:         rgba(255,255,255,0.95);
+  --bg-glass:        rgba(255,255,255,0.80);
+  --bg-elevated:     rgba(255,255,255,0.98);
+  --border-color:    rgba(99,102,241,0.11);
+  --border-subtle:   rgba(99,102,241,0.07);
+  --border-glow:     rgba(99,102,241,0.28);
+  --border-active:   rgba(99,102,241,0.45);
+  --text-primary:    #0f172a;
+  --text-secondary:  #334155;
+  --text-muted:      #64748b;
+  --text-faint:      #94a3b8;
+  --shadow-card:     0 2px 14px rgba(15,23,42,0.07), 0 1px 3px rgba(15,23,42,0.05);
+  --shadow-glow:     0 0 20px rgba(99,102,241,0.08);
+  --shadow-md:       0 4px 16px rgba(15,23,42,0.1), 0 2px 6px rgba(15,23,42,0.06);
+  --shadow-lg:       0 8px 28px rgba(15,23,42,0.12);
 }
 
 html.light-mode body {
   background: var(--bg-primary);
-  color: var(--text-primary);
+  background-image:
+    radial-gradient(ellipse 80% 60% at 20% 0%, rgba(99,102,241,0.04) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 80% 100%, rgba(139,92,246,0.03) 0%, transparent 50%);
 }
 
 html.light-mode .sidebar {
-  background: #ffffff;
-  border-right-color: rgba(99, 102, 241, 0.1);
+  background: var(--bg-glass);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border-right-color: rgba(99,102,241,0.06);
+  box-shadow: 2px 0 16px rgba(15,23,42,0.04);
 }
 
-html.light-mode .card {
-  background: #ffffff;
+html.light-mode .sidebar::before {
+  background: linear-gradient(180deg, rgba(99,102,241,0.03) 0%, transparent 40%);
 }
 
-html.light-mode .metric-card {
-  background: #ffffff;
+html.light-mode .card  { background: var(--bg-secondary); }
+html.light-mode .card::before { background: linear-gradient(90deg, transparent, rgba(99,102,241,0.15), transparent); }
+
+html.light-mode .metric-card    { background: var(--bg-secondary); }
+html.light-mode .fab-menu-item  { background: var(--bg-secondary); }
+html.light-mode .modal          { background: var(--bg-secondary); }
+html.light-mode .modal-overlay  { background: rgba(15,23,42,0.45); }
+
+html.light-mode .nav-item:hover  { 
+  background: rgba(99,102,241,0.05); 
+  color: var(--text-primary);
+  border-color: rgba(99,102,241,0.1);
 }
 
-html.light-mode .data-table tbody tr:hover {
-  background: rgba(99, 102, 241, 0.03);
-}
-
-html.light-mode .data-table thead th {
-  background: rgba(99, 102, 241, 0.03);
-}
-
-html.light-mode .data-table tbody td {
-  color: #334155;
-  border-bottom-color: rgba(99, 102, 241, 0.05);
-}
-
-html.light-mode .nav-item {
-  color: #475569;
-}
-
-html.light-mode .nav-item:hover {
-  background: rgba(99, 102, 241, 0.06);
-  color: #1e293b;
-}
-
-html.light-mode .nav-item.active {
-  background: rgba(99, 102, 241, 0.08);
+html.light-mode .nav-item.active { 
+  background: rgba(99,102,241,0.08); 
   color: var(--accent-indigo);
+  border-color: rgba(99,102,241,0.15);
 }
 
 html.light-mode .form-input,
-html.light-mode .form-select {
-  background: #f8fafc;
-  color: #0f172a;
-  border-color: rgba(99, 102, 241, 0.15);
-}
+html.light-mode .form-select     { background: #f8fafd; border-color: rgba(99,102,241,0.13); color: var(--text-primary); }
 
 html.light-mode .form-input:focus,
-html.light-mode .form-select:focus {
-  border-color: var(--accent-indigo);
-  background: #ffffff;
-}
-
-html.light-mode .modal {
-  background: #ffffff;
-}
-
-html.light-mode .modal-overlay {
-  background: rgba(15, 23, 42, 0.5);
-}
+html.light-mode .form-select:focus { background: white; }
 
 html.light-mode .page-header h2 {
-  background: linear-gradient(135deg, #1e293b, #475569);
-  background-clip: text;
+  background: linear-gradient(135deg, #1e293b 0%, #475569 100%);
   -webkit-background-clip: text;
+  background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
-html.light-mode .recharts-text {
-  fill: #64748b;
-}
+html.light-mode .data-table tbody tr:hover { background: rgba(99,102,241,0.04); }
+html.light-mode .data-table thead th       { background: rgba(99,102,241,0.04); }
 
-html.light-mode ::-webkit-scrollbar-track {
-  background: #f1f5f9;
-}
+html.light-mode .recharts-text { fill: var(--text-muted); }
 
-html.light-mode ::-webkit-scrollbar-thumb {
-  background: rgba(99, 102, 241, 0.2);
-}
+html.light-mode ::-webkit-scrollbar-track  { background: #f1f5f9; }
+html.light-mode ::-webkit-scrollbar-thumb  { background: rgba(99,102,241,0.18); }
+html.light-mode ::-webkit-scrollbar-thumb:hover { background: rgba(99,102,241,0.35); }
+
+html.light-mode .status-dropdown-menu { background: var(--bg-secondary); }
+html.light-mode .upload-zone { border-color: rgba(99,102,241,0.25); }
+
+/* Additional Light Mode Overrides */
+html.light-mode .badge.violet { background: rgba(139,92,246,0.11); color: #7c3aed; }
+html.light-mode .badge.indigo { background: rgba(99,102,241,0.11); color: #4f46e5; }
+html.light-mode .badge.rose   { background: rgba(244,63,94,0.11); color: #e11d48; }
+html.light-mode .badge.cyan   { background: rgba(6,182,212,0.11); color: #0891b2; }
+html.light-mode .badge.teal   { background: rgba(20,184,166,0.11); color: #0d9488; }
+
+html.light-mode .alert-banner.success { background: #ecfdf5; border-color: #10b98133; color: #065f46; }
+html.light-mode .alert-banner.warning { background: #fffbeb; border-color: #f59e0b33; color: #92400e; }
+html.light-mode .alert-banner.danger  { background: #fef2f2; border-color: #f43f5e33; color: #991b1b; }
+
+html.light-mode .kanban-column .bg-glass { background: #f8fafd; }
+html.light-mode .notification-panel      { background: var(--bg-secondary); border-color: var(--border-color); }

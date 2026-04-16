@@ -51,8 +51,20 @@ export default function Sidebar() {
   } = useApp();
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [notifOpen,  setNotifOpen]  = React.useState(false);
+  const [shortcutOpen, setShortcutOpen] = React.useState(false);
 
-  useEffect(() => { document.documentElement.classList.toggle('light-mode', !darkMode); }, [darkMode]);
+  // Synchronize CSS class for light mode
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const html = document.documentElement;
+      if (darkMode) {
+        html.classList.remove('light-mode');
+      } else {
+        html.classList.add('light-mode');
+      }
+    }
+  }, [darkMode]);
+
 
   const unreadNotifications = notifications.filter(n => !n.read);
   const notifCount = unreadNotifications.length;
@@ -123,43 +135,56 @@ export default function Sidebar() {
           ))}
         </nav>
 
-        <div style={{ padding: '12px 12px 20px', borderTop: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <div style={{ position: 'relative' }}>
-            <button style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 10, border: '1px solid var(--border-color)', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 500 }}
-              onClick={() => setNotifOpen(o => !o)}>
+        <div className="sidebar-footer">
+          <div className="footer-item-wrapper">
+            <button 
+              className="footer-action-btn"
+              onClick={() => setNotifOpen(!notifOpen)}
+            >
               <Bell size={16} /> Alerts
-              {notifCount > 0 && <span style={{ marginLeft: 'auto', minWidth: 18, height: 18, borderRadius: 9, background: '#f43f5e', color: '#fff', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>{notifCount}</span>}
+              {notifCount > 0 && <span className="notif-badge">{notifCount}</span>}
             </button>
+            
             {notifOpen && (
-              <div style={{ position: 'absolute', bottom: '100%', left: 0, right: 0, marginBottom: 8, background: 'var(--bg-secondary)', border: '1px solid var(--border-color)', borderRadius: 12, padding: 12, boxShadow: 'var(--shadow-card)', maxHeight: 340, overflowY: 'auto', zIndex: 60 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1px' }}>Notifications</div>
-                  <button style={{ fontSize: 10, background: 'transparent', border: 'none', color: '#6366f1', cursor: 'pointer', fontWeight: 600 }} onClick={markAllNotificationsRead}>Clear All</button>
-                </div>
-                {notifCount === 0 && <p style={{ fontSize: 13, color: 'var(--text-muted)', textAlign: 'center', padding: '12px 0' }}>All clear</p>}
-                {unreadNotifications.map(n => (
-                  <div key={n.id} style={{ padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.05)', cursor: 'pointer' }} onClick={() => { markNotificationRead(n.id); setActivePage('notifications'); setNotifOpen(false); }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                      <span style={{ fontSize: 10, fontWeight: 700, color: n.type === 'warning' ? '#f43f5e' : '#6366f1', textTransform: 'uppercase' }}>{n.source}</span>
-                      <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 'auto' }}>{new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                    </div>
-                    <div style={{ fontSize: 12, fontWeight: 600, color: '#f1f5f9' }}>{n.title}</div>
-                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{n.message}</div>
+              <div className="notification-panel">
+                <div className="panel-header">System Notifications</div>
+                {notifCount === 0 && <div className="empty-notif">No unread alerts</div>}
+                
+                {notifCount > 0 && (
+                  <div className="notif-section">
+                    <div className="notif-section-title danger">Action Required</div>
+                    {unreadNotifications.map(n => (
+                      <div key={n.id} className="notif-row" onClick={() => { markNotificationRead(n.id); setActivePage('notifications'); setNotifOpen(false); }}>
+                        <div className="notif-details">
+                          <div className="notif-title">{n.title}</div>
+                          <div className="notif-meta">{n.source} • {new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                ))}
-                <button style={{ width: '100%', padding: '8px 0', marginTop: 8, background: 'rgba(99,102,241,0.1)', border: 'none', borderRadius: 8, color: '#6366f1', fontSize: 12, fontWeight: 600, cursor: 'pointer' }} onClick={() => { setActivePage('notifications'); setNotifOpen(false); }}>View All Alerts</button>
+                )}
+                
+                <button 
+                  className="btn btn-secondary btn-sm" 
+                  style={{ width: '100%', marginTop: 8 }}
+                  onClick={() => { setActivePage('notifications'); setNotifOpen(false); }}
+                >
+                  See all notifications
+                </button>
               </div>
             )}
           </div>
 
-          <button style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 10, border: '1px solid var(--border-color)', background: 'transparent', color: 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 500 }}
-            onClick={toggleDarkMode}>
+          <button className="footer-action-btn" onClick={toggleDarkMode}>
             {darkMode ? <Sun size={16} /> : <Moon size={16} />}
-            {darkMode ? 'Light Mode' : 'Dark Mode'}
+            {darkMode ? 'Light Theme' : 'Dark Theme'}
           </button>
 
-          <button style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '9px 12px', borderRadius: 10, border: '1px solid rgba(244,63,94,0.2)', background: 'transparent', color: '#f43f5e', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 500 }}
-            onClick={logout}>
+          <button 
+            className="footer-action-btn" 
+            style={{ color: 'var(--accent-rose)', borderColor: 'rgba(244,63,94,0.15)' }}
+            onClick={logout}
+          >
             <LogOut size={16} /> Sign Out
           </button>
         </div>

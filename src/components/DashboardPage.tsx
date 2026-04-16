@@ -164,7 +164,8 @@ function KPICard({
   label, 
   colorClass, 
   trend, 
-  onClick 
+  onClick,
+  priority
 }: { 
   icon: any; 
   value: string | number; 
@@ -172,10 +173,13 @@ function KPICard({
   colorClass: string; 
   trend?: { val: string; up: boolean };
   onClick: () => void;
+  priority?: boolean;
 }) {
   return (
-    <button className={`metric-card uniform-card`} onClick={onClick}>
-      <div className="card-click-hint"><Eye size={12} /> View Details</div>
+    <button className={`uniform-card ${priority ? 'priority-pulse' : ''}`} onClick={onClick} style={{ position: 'relative', zIndex: 1 }}>
+      <div className="card-click-hint">
+        <Activity size={10} /> View Details
+      </div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
         <div className={`metric-icon ${colorClass}`} style={{ margin: 0 }}>
           <Icon size={20} />
@@ -187,8 +191,8 @@ function KPICard({
           </div>
         )}
       </div>
-      <div className="metric-value" style={{ fontSize: 24, letterSpacing: '-0.5px' }}>{value}</div>
-      <div className="metric-label" style={{ fontSize: 12, opacity: 0.8, marginTop: 4 }}>{label}</div>
+      <div className="metric-value">{value}</div>
+      <div className="metric-label">{label}</div>
     </button>
   );
 }
@@ -276,41 +280,11 @@ export default function DashboardPage() {
         />
       )}
 
-      {/* ── Row 1: Core metrics ── */}
-      {/* ── Budget Summary (Roadmap Feature) ── */}
-      <div className="card" style={{ marginBottom: 28 }}>
-        <div className="card-header">
-          <div>
-            <div className="card-title">Budget Utilization</div>
-            <div className="card-subtitle">Tracking by department & project</div>
-          </div>
-          <button className="btn btn-sm btn-secondary" onClick={() => setActivePage('budgets')}>Manage Budgets</button>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 20 }}>
-          {budgets.map(b => {
-            const utilization = Math.round(((b.spentAmount + b.committedAmount) / b.totalAmount) * 100);
-            const statusColor = utilization >= 100 ? '#f43f5e' : utilization >= 80 ? '#f59e0b' : '#10b981';
-            return (
-              <div key={b.id} style={{ padding: 16, background: 'rgba(99,102,241,0.04)', borderRadius: 12, border: '1px solid rgba(99,102,241,0.1)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
-                  <span style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>{b.name}</span>
-                  <span style={{ fontSize: 11, color: statusColor, fontWeight: 700 }}>{utilization}%</span>
-                </div>
-                <div style={{ height: 8, background: 'rgba(255,255,255,0.05)', borderRadius: 4, overflow: 'hidden', marginBottom: 12 }}>
-                  <div style={{ height: '100%', width: `${Math.min(utilization, 100)}%`, background: statusColor, borderRadius: 4 }} />
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                    Committed: <span style={{ color: '#f1f5f9' }}>${(b.committedAmount / 1000).toFixed(1)}k</span>
-                  </div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>
-                    Spent: <span style={{ color: '#f1f5f9' }}>${(b.spentAmount / 1000).toFixed(1)}k</span>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+      {/* ── Performance Analytics Header ── */}
+      <div style={{ marginBottom: 16, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ height: 2, flex: 1, background: 'linear-gradient(90deg, var(--accent-indigo), transparent)' }} />
+        <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '1.5px' }}>Performance Analytics</span>
+        <div style={{ height: 2, flex: 1, background: 'linear-gradient(-90deg, var(--accent-indigo), transparent)' }} />
       </div>
 
       <div className="metrics-grid">
@@ -358,10 +332,6 @@ export default function DashboardPage() {
           colorClass="violet"
           onClick={() => setDrillDown({ title: 'Approved Supplier Roster', type: 'supplier', data: suppliers })}
         />
-      </div>
-
-      {/* ── Row 2: New KPI cards ── */}
-      <div className="metrics-grid" style={{ marginBottom: 28 }}>
         <KPICard 
           icon={TrendingDown} 
           value={`$${(dashboardMetrics.costReduction / 1000).toFixed(1)}K`}
@@ -381,6 +351,7 @@ export default function DashboardPage() {
           value={`${dashboardMetrics.emergencyPORatio}%`}
           label="Emergency PO Ratio"
           colorClass={emergencyAlert ? 'rose' : 'amber'}
+          priority={emergencyAlert}
           onClick={() => setDrillDown({ title: 'Urgent / Emergency Requisitions', type: 'po', data: purchaseOrders.slice(4, 7).map(po => ({ ...po, status: 'Urgent' })) })}
         />
         <KPICard 
@@ -404,6 +375,48 @@ export default function DashboardPage() {
           colorClass="amber"
           onClick={() => setDrillDown({ title: 'Service & Maintenance Spend', type: 'po', data: purchaseOrders.filter(p => p.items.some(i => i.isService)) })}
         />
+      </div>
+
+      {/* ── Row 1: Budget and Spend Focus ── */}
+      <div className="grid-2" style={{ marginBottom: 28 }}>
+        <div className="card">
+          <div className="card-header">
+            <div>
+              <div className="card-title">Budget Utilization</div>
+              <div className="card-subtitle">Tracking by department & project</div>
+            </div>
+            <button className="btn btn-sm btn-secondary" onClick={() => setActivePage('budgets')}>Manage</button>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            {budgets.slice(0, 3).map(b => {
+              const utilization = Math.round(((b.spentAmount + b.committedAmount) / b.totalAmount) * 100);
+              const statusColor = utilization >= 100 ? '#f43f5e' : utilization >= 80 ? '#f59e0b' : '#10b981';
+              return (
+                <div key={b.id}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: '#f1f5f9' }}>{b.name}</span>
+                    <span style={{ fontSize: 11, color: statusColor, fontWeight: 700 }}>{utilization}%</span>
+                  </div>
+                  <div style={{ height: 6, background: 'rgba(255,255,255,0.05)', borderRadius: 3, overflow: 'hidden' }}>
+                    <div style={{ height: '100%', width: `${Math.min(utilization, 100)}%`, background: statusColor, borderRadius: 3 }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="card">
+          <div className="card-header">
+            <div>
+              <div className="card-title">Spend Health Gauge</div>
+              <div className="card-subtitle">% spend via preferred suppliers</div>
+            </div>
+          </div>
+          <div style={{ height: 160, marginTop: -10 }}>
+            <SpendGauge pct={dashboardMetrics.spendUnderManagement} />
+          </div>
+        </div>
       </div>
 
       {/* ── Charts Row 1: Spend trend + Category breakdown ── */}
@@ -487,23 +500,22 @@ export default function DashboardPage() {
         <div className="card">
           <div className="card-header">
             <div>
-              <div className="card-title">Spend Under Management</div>
-              <div className="card-subtitle">% spend via preferred suppliers</div>
+              <div className="card-title">Analytics Detail</div>
+              <div className="card-subtitle">Key procurement breakdown</div>
             </div>
           </div>
-          <SpendGauge pct={dashboardMetrics.spendUnderManagement} />
-          <div style={{ textAlign: 'center', marginTop: 8, fontSize: 13, color: 'var(--text-secondary)' }}>
-            ${((dashboardMetrics.totalSpend * dashboardMetrics.spendUnderManagement) / 100 / 1000).toFixed(0)}K of ${(dashboardMetrics.totalSpend / 1000).toFixed(0)}K through preferred suppliers
+          <div style={{ marginTop: 8, display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <div style={{ textAlign: 'center', padding: '12px 18px', background: 'rgba(99,102,241,0.06)', borderRadius: 12, flex: 1, minWidth: 120 }}>
+              <div style={{ fontSize: 20, fontWeight: 700, color: '#f1f5f9' }}>{dashboardMetrics.preferredSuppliers}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Preferred vendors</div>
+            </div>
+            <div style={{ textAlign: 'center', padding: '12px 18px', background: 'rgba(99,102,241,0.06)', borderRadius: 12, flex: 1, minWidth: 120 }}>
+              <div style={{ fontSize: 20, fontWeight: 700, color: '#f1f5f9' }}>{dashboardMetrics.totalSuppliers - dashboardMetrics.preferredSuppliers}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Standard pool</div>
+            </div>
           </div>
-          <div style={{ marginTop: 16, display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <div style={{ textAlign: 'center', padding: '8px 14px', background: 'rgba(99,102,241,0.06)', borderRadius: 8 }}>
-              <div style={{ fontSize: 18, fontWeight: 700, color: '#f1f5f9' }}>{dashboardMetrics.preferredSuppliers}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Preferred suppliers</div>
-            </div>
-            <div style={{ textAlign: 'center', padding: '8px 14px', background: 'rgba(99,102,241,0.06)', borderRadius: 8 }}>
-              <div style={{ fontSize: 18, fontWeight: 700, color: '#f1f5f9' }}>{dashboardMetrics.totalSuppliers - dashboardMetrics.preferredSuppliers}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Other suppliers</div>
-            </div>
+          <div style={{ textAlign: 'center', marginTop: 16, fontSize: 12.5, color: 'var(--text-secondary)', padding: '0 10px', lineHeight: 1.5 }}>
+            Efficiently managing <b>${((dashboardMetrics.totalSpend * dashboardMetrics.spendUnderManagement) / 100 / 1000).toFixed(0)}K</b> through pre-vetted contracts.
           </div>
         </div>
       </div>
