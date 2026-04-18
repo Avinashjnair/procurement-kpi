@@ -104,6 +104,20 @@ export interface Supplier {
   kpis: SupplierKPIs;
   preferred?: boolean;
   notes?: SupplierNote[];
+  // Phase 3 Extensions
+  kpiHistory?: { month: string; delivery: number; rejection: number; response: number }[];
+  contactList?: { id: string; name: string; role: string; email: string }[];
+  bankInfo?: { bankName: string; accountNo: string; iban: string; swiftCode: string };
+  preferredStatusCriteria?: { criterion: string; met: boolean }[];
+}
+
+export interface POMessage {
+  id: string;
+  poId?: string;
+  rfqId?: string;
+  sender: 'Supplier' | 'Buyer';
+  text: string;
+  timestamp: string;
 }
 
 export type ItemCategory =
@@ -184,7 +198,7 @@ export type PaymentRecordStatus = 'Pending Approval' | 'Approved' | 'Rejected';
 
 // ── Purchase Orders ──────────────────────────────────────────
 
-export type POStatus = 'Draft' | 'Pending' | 'Approved' | 'Shipped' | 'Delivered' | 'Cancelled';
+export type POStatus = 'Draft' | 'Pending' | 'Approved' | 'Shipped' | 'Partially Delivered' | 'Delivered' | 'Cancelled';
 export type PaymentStatus = 'Unpaid' | 'Partial' | 'Paid';
 
 export interface ServicePOLineDetails {
@@ -203,6 +217,7 @@ export interface POItem {
   isService?: boolean;
   isAsset?: boolean;
   serviceDetails?: ServicePOLineDetails;
+  deliveredQty: number; // For partial delivery tracking
 }
 
 export interface PurchaseOrder {
@@ -226,9 +241,25 @@ export interface PurchaseOrder {
   approvalAuthority?: string;
   cancellationReason?: string;
   revisionNumber?: number;
-  approvedBy?: string;
   approvedAt?: string;
   paymentRecords?: PaymentRecord[];  // ← full payment ledger
+  
+  // Supplier Portal Extension
+  acknowledgedAt?: string;
+  trackingNumber?: string;
+  carrier?: string;
+  shippedAt?: string;
+  amendmentRequest?: POAmendmentRequest;
+}
+
+export interface POAmendmentRequest {
+  id: string;
+  poId: string;
+  requestedQtyChanges?: Record<string, number>; // itemId -> new Qty
+  requestedDueDate?: string;
+  reason: string;
+  status: 'Pending' | 'Approved' | 'Rejected';
+  timestamp: string;
 }
 
 // ── RFQ ─────────────────────────────────────────────────────
@@ -308,6 +339,19 @@ export interface Quotation {
   lineItems: QuotationLineItem[];
   evaluation?: QuotationEvaluation;
   notes?: string;
+  feedback?: string;       // Official feedback from the buyer
+  negotiationCount?: number;
+}
+
+export interface NegotiationMessage {
+  id: string;
+  quotationId: string;
+  senderId: string;
+  senderName: string;
+  role: 'buyer' | 'supplier';
+  text: string;
+  timestamp: string;
+  type: 'offer' | 'counter-offer' | 'info';
 }
 
 export const EVAL_WEIGHTS = {
@@ -534,6 +578,34 @@ export interface Invoice {
   lineItems: InvoiceLineItem[];
   matchStatus: MatchStatus;
   notes?: string;
+  expectedPaymentDate?: string;
+  invoiceFileName?: string;
+}
+
+export interface ComplianceDocument {
+  id: string;
+  supplierId: string;
+  title: string;
+  category: 'Trade License' | 'VAT Certificate' | 'ISO Certification' | 'Insurance' | 'Other';
+  expiryDate: string;
+  status: 'Active' | 'Expiring Soon' | 'Expired';
+  fileName: string;
+  fileSize?: string;
+  uploadedAt: string;
+}
+
+export interface GRNDispute {
+  id: string;
+  grnId: string;
+  poId: string;
+  supplierId: string;
+  itemId: string;
+  itemName: string;
+  rejectedQty: number;
+  reason: string;
+  supportingDocs?: string[];
+  status: 'Open' | 'Resolved' | 'Rejected';
+  timestamp: string;
 }
 
 // ── Audit Trail ──────────────────────────────────────────────

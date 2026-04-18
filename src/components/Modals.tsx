@@ -1,7 +1,7 @@
 'use client';
 import React, { useState } from 'react';
 import { useApp } from '@/context/AppContext';
-import { X, Upload, Plus, Trash2, MessageSquare, FileText, Building2, MapPin, Mail, Phone, Hash, Wrench, CheckSquare, Square, Landmark } from 'lucide-react';
+import { X, Upload, Plus, Trash2, MessageSquare, FileText, Building2, MapPin, Mail, Phone, Hash, Wrench, CheckSquare, Square, Landmark, Send, Calendar, AlertTriangle, ShieldCheck, Info } from 'lucide-react';
 import type { POStatus, PaymentStatus, DocumentCategory, POItem, ServiceBillingType, ServiceMilestone, AppDocument } from '@/types';
 import { companyInfo } from '@/data/mockData';
 
@@ -199,6 +199,7 @@ function NewPOModal() {
         quantity: parseFloat(pi.quantity),
         unitPrice: parseFloat(pi.unitPrice),
         isAsset: pi.isAsset,
+        deliveredQty: 0,
       };
       if (isSvc) {
         base.isService = true;
@@ -1177,6 +1178,659 @@ function LogMaintenanceModal() {
 }
 
 // ────────────────────────────────────────────────
+// New Quotation Modal (Supplier Portal)
+// ────────────────────────────────────────────────
+function NewQuotationModal() {
+  const { rfqs, selectedRFQId, addQuotation, quotations, setModalOpen } = useApp();
+  const targetRFQ = rfqs.find(r => r.id === selectedRFQId);
+
+  const [unitPrices, setUnitPrices] = useState<Record<string, string>>({});
+  const [leadTimes, setLeadTimes] = useState<Record<string, string>>({});
+  const [paymentTerms, setPaymentTerms] = useState('Net 30');
+  const [deliveryTerms, setDeliveryTerms] = useState('CIF');
+  const [validUntil, setValidUntil] = useState('');
+  const [notes, setNotes] = useState('');
+
+  if (!targetRFQ) return <div className="p-4 text-center">RFQ Not Found</div>;
+
+  const handlePriceChange = (lineId: string, val: string) => {
+    setUnitPrices(prev => ({ ...prev, [lineId]: val }));
+  };
+
+  const handleLeadTimeChange = (lineId: string, val: string) => {
+    setLeadTimes(prev => ({ ...prev, [lineId]: val }));
+  };
+
+  const lineItems = targetRFQ.lineItems.map(li => ({
+    rfqLineItemId: li.id,
+    itemId: li.itemId,
+    itemName: li.itemName,
+    quantity: li.quantity,
+    unit: li.unit,
+    unitPrice: parseFloat(unitPrices[li.id] || '0'),
+    totalPrice: li.quantity * parseFloat(unitPrices[li.id] || '0'),
+    leadTimeDays: parseInt(leadTimes[li.id] || '0'),
+    notes: ''
+  }));
+
+  const totalAmount = lineItems.reduce((s, i) => s + i.totalPrice, 0);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const newQuotationId = `QUO-${String(quotations.length + 1).padStart(3, '0')}`;
+    addQuotation({
+      id: newQuotationId,
+      rfqId: targetRFQ.id,
+      supplierId: 'SUP-001', // demo
+      supplierName: 'SteelMax Industries', // demo
+      status: 'Received',
+      dateReceived: new Date().toISOString().split('T')[0],
+      validUntil,
+      paymentTerms,
+      deliveryTerms,
+      currency: 'USD',
+      totalAmount,
+      lineItems,
+      notes,
+    });
+    setModalOpen(null);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} style={{ width: '100%' }}>
+      <div style={{ marginBottom: 20, padding: 12, background: 'rgba(99,102,241,0.06)', borderRadius: 10, border: '1px solid rgba(99,102,241,0.1)' }}>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Bidding for RFQ</div>
+        <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>{targetRFQ.title} ({targetRFQ.id})</div>
+      </div>
+
+      <div style={{ marginBottom: 20 }}>
+        <label className="form-label">Line Items</label>
+        {targetRFQ.lineItems.map(li => (
+          <div key={li.id} style={{ marginBottom: 16, padding: 12, background: 'rgba(255,255,255,0.02)', borderRadius: 10, border: '1px solid var(--border-color)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+              <span style={{ fontWeight: 600, fontSize: 13 }}>{li.itemName}</span>
+              <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>Qty: {li.quantity} {li.unit}</span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label" style={{ fontSize: 11 }}>Unit Price ($)</label>
+                <input type="number" step="0.01" className="form-input" value={unitPrices[li.id] || ''} onChange={e => handlePriceChange(li.id, e.target.value)} required placeholder="0.00" />
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label" style={{ fontSize: 11 }}>Lead Time (Days)</label>
+                <input type="number" className="form-input" value={leadTimes[li.id] || ''} onChange={e => handleLeadTimeChange(li.id, e.target.value)} required placeholder="e.g. 14" />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div className="form-row">
+        <div className="form-group">
+          <label className="form-label">Valid Until</label>
+          <input type="date" className="form-input" value={validUntil} onChange={e => setValidUntil(e.target.value)} required />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Payment Terms</label>
+          <select className="form-select" value={paymentTerms} onChange={e => setPaymentTerms(e.target.value)}>
+             <option>Net 30</option><option>Net 45</option><option>Net 60</option><option>Immediate</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">Delivery Terms (Incoterms)</label>
+        <select className="form-select" value={deliveryTerms} onChange={e => setDeliveryTerms(e.target.value)}>
+           <option>CIF</option><option>FOB</option><option>EXW</option><option>DDP</option><option>DAP</option>
+        </select>
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">Additional Notes</label>
+        <textarea className="form-input" rows={2} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Warranty details, technical specs..." />
+      </div>
+
+      <div style={{ margin: '20px 0', padding: 16, background: 'rgba(99,102,241,0.08)', borderRadius: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span style={{ fontWeight: 600 }}>Quotation Total (USD)</span>
+        <span style={{ fontSize: 22, fontWeight: 800, color: 'var(--accent-indigo)' }}>${totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+      </div>
+
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+        <button type="button" className="btn btn-secondary" onClick={() => setModalOpen(null)}>Cancel</button>
+        <button type="submit" className="btn btn-primary"><Send size={16} /> Submit Quotation</button>
+      </div>
+    </form>
+  );
+}
+
+// ────────────────────────────────────────────────
+// Negotiation Modal (Messaging)
+// ────────────────────────────────────────────────
+function NegotiationModal() {
+  const { 
+    selectedQuotationId, quotations, negotiationMessages, 
+    addNegotiationMessage, currentUser, setModalOpen 
+  } = useApp();
+  
+  const [text, setText] = useState('');
+  const quotation = quotations.find(q => q.id === selectedQuotationId);
+  const messages = negotiationMessages.filter(m => m.quotationId === selectedQuotationId);
+
+  if (!quotation) return <div className="p-4 text-center">Quotation Not Found</div>;
+
+  const handleSend = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!text.trim()) return;
+    
+    addNegotiationMessage({
+      quotationId: quotation.id,
+      senderId: currentUser?.id || 'USR-001',
+      senderName: currentUser?.name || 'User',
+      role: (currentUser?.role === 'manager' || currentUser?.role === 'finance') ? 'buyer' : 'supplier',
+      text,
+      type: 'info'
+    });
+    setText('');
+  };
+
+  return (
+    <div style={{ width: '100%', display: 'flex', flexDirection: 'column', height: '60vh' }}>
+      <div style={{ padding: '12px 16px', background: 'rgba(255,255,255,0.02)', borderRadius: 12, border: '1px solid var(--border-color)', marginBottom: 16 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Negotiation Thread</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>{quotation.supplierName} • {quotation.id}</div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent-indigo)' }}>${quotation.totalAmount.toLocaleString()}</div>
+            <div className="status-badge" data-status={quotation.status} style={{ fontSize: 9 }}>{quotation.status}</div>
+          </div>
+        </div>
+      </div>
+
+      <div style={{ flex: 1, overflowY: 'auto', padding: '0 4px', display: 'flex', flexDirection: 'column', gap: 12, marginBottom: 20 }}>
+        {messages.length === 0 ? (
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', opacity: 0.6 }}>
+            <MessageSquare size={48} style={{ marginBottom: 16 }} />
+            <p style={{ fontSize: 13 }}>No messages yet. Start a conversation or request a counter-offer.</p>
+          </div>
+        ) : (
+          messages.map(m => {
+            const isBuyer = m.role === 'buyer';
+            
+            return (
+              <div key={m.id} style={{ 
+                alignSelf: isBuyer ? 'flex-start' : 'flex-end',
+                maxWidth: '85%',
+                padding: '10px 14px',
+                borderRadius: 16,
+                background: isBuyer ? 'rgba(99,102,241,0.08)' : 'rgba(177,202,215,0.06)',
+                border: isBuyer ? '1px solid rgba(99,102,241,0.12)' : '1px solid var(--border-subtle)',
+                borderBottomLeftRadius: isBuyer ? 4 : 16,
+                borderBottomRightRadius: isBuyer ? 16 : 4,
+              }}>
+                <div style={{ fontSize: 10, fontWeight: 800, color: isBuyer ? 'var(--accent-indigo)' : 'var(--accent-slate)', marginBottom: 4 }}>
+                  {m.senderName} ({m.role.toUpperCase()})
+                </div>
+                <div style={{ fontSize: 13, color: 'var(--text-primary)', lineHeight: 1.5 }}>{m.text}</div>
+                <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 6, textAlign: 'right' }}>
+                  {new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      <form onSubmit={handleSend} style={{ display: 'flex', gap: 10 }}>
+        <input 
+          type="text" 
+          className="form-input" 
+          placeholder="Type your message..." 
+          value={text} 
+          onChange={e => setText(e.target.value)}
+          style={{ margin: 0 }}
+        />
+        <button type="submit" className="btn btn-primary btn-icon" disabled={!text.trim()}><Send size={18} /></button>
+      </form>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────────
+// ────────────────────────────────────────────────
+// Shipment Confirmation Modal
+// ────────────────────────────────────────────────
+function ShipmentConfirmationModal() {
+  const { selectedPOId, updateShipment, setModalOpen } = useApp();
+  const [carrier, setCarrier] = useState('');
+  const [tracking, setTracking] = useState('');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (selectedPOId) updateShipment(selectedPOId, tracking, carrier);
+    setModalOpen(null);
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <div className="form-group">
+        <label className="form-label">Shipping Carrier</label>
+        <input type="text" className="form-input" value={carrier} onChange={e => setCarrier(e.target.value)} required placeholder="e.g. FedEx, DHL, Maersk" />
+      </div>
+      <div className="form-group">
+        <label className="form-label">Tracking Number / AWB</label>
+        <input type="text" className="form-input" value={tracking} onChange={e => setTracking(e.target.value)} required placeholder="Enter tracking reference" />
+      </div>
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16 }}>
+        <button type="button" className="btn btn-secondary" onClick={() => setModalOpen(null)}>Cancel</button>
+        <button type="submit" className="btn btn-primary">Confirm Shipment</button>
+      </div>
+    </form>
+  );
+}
+
+// ────────────────────────────────────────────────
+// PO Amendment Request Modal
+// ────────────────────────────────────────────────
+function POAmendmentModal() {
+  const { selectedPOId, purchaseOrders, requestAmendment, setModalOpen } = useApp();
+  const po = purchaseOrders.find(p => p.id === selectedPOId);
+  
+  const [qtyChanges, setQtyChanges] = useState<Record<string, number>>({});
+  const [dueDate, setDueDate] = useState(po?.dueDate || '');
+  const [reason, setReason] = useState('');
+
+  if (!po) return <div>PO Not Found</div>;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    requestAmendment(po.id, {
+      poId: po.id,
+      requestedQtyChanges: qtyChanges,
+      requestedDueDate: dueDate,
+      reason
+    });
+    setModalOpen(null);
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <div style={{ marginBottom: 16, fontSize: 13, color: 'var(--text-secondary)' }}>
+        Request changes to quantities or delivery dates. These must be approved by the buyer.
+      </div>
+      
+      {po.items.map(item => (
+        <div key={item.itemId} style={{ marginBottom: 12, padding: 12, borderRadius: 8, background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
+            <span style={{ fontWeight: 600 }}>{item.itemName}</span>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Current Qty: {item.quantity}</span>
+          </div>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label className="form-label" style={{ fontSize: 11 }}>Requested Quantity</label>
+            <input 
+              type="number" 
+              className="form-input" 
+              placeholder={String(item.quantity)}
+              onChange={e => setQtyChanges(p => ({ ...p, [item.itemId]: Number(e.target.value) }))}
+            />
+          </div>
+        </div>
+      ))}
+
+      <div className="form-group">
+        <label className="form-label">Requested Delivery Date</label>
+        <input type="date" className="form-input" value={dueDate} onChange={e => setDueDate(e.target.value)} />
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">Reason for Amendment</label>
+        <textarea className="form-input" rows={2} value={reason} onChange={e => setReason(e.target.value)} required placeholder="e.g. Raw material delay, production capacity..." />
+      </div>
+
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16 }}>
+        <button type="button" className="btn btn-secondary" onClick={() => setModalOpen(null)}>Cancel</button>
+        <button type="submit" className="btn btn-primary">Submit Request</button>
+      </div>
+    </form>
+  );
+}
+
+// ────────────────────────────────────────────────
+// Partial Delivery Modal
+// ────────────────────────────────────────────────
+function PartialDeliveryModal() {
+  const { selectedPOId, purchaseOrders, updateDeliveredQty, setModalOpen } = useApp();
+  const po = purchaseOrders.find(p => p.id === selectedPOId);
+  const [deliveries, setDeliveries] = useState<Record<string, number>>({});
+
+  if (!po) return <div>PO Not Found</div>;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    Object.entries(deliveries).forEach(([itemId, qty]) => {
+      if (qty > 0) updateDeliveredQty(po.id, itemId, qty);
+    });
+    setModalOpen(null);
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <div style={{ marginBottom: 16, fontSize: 13, color: 'var(--text-secondary)' }}>
+        Notify the buyer of items delivered in this shipment.
+      </div>
+
+      {po.items.map(item => (
+        <div key={item.itemId} style={{ marginBottom: 12, padding: 12, borderRadius: 8, background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+            <span style={{ fontWeight: 600 }}>{item.itemName}</span>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{item.deliveredQty || 0} / {item.quantity} Delivered</span>
+          </div>
+          <div className="form-group" style={{ marginBottom: 0 }}>
+            <label className="form-label" style={{ fontSize: 11 }}>Quantity Delivered Now</label>
+            <input 
+              type="number" 
+              className="form-input" 
+              placeholder="0"
+              max={item.quantity - (item.deliveredQty || 0)}
+              onChange={e => setDeliveries(p => ({ ...p, [item.itemId]: Number(e.target.value) }))}
+            />
+          </div>
+        </div>
+      ))}
+
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16 }}>
+        <button type="button" className="btn btn-secondary" onClick={() => setModalOpen(null)}>Cancel</button>
+        <button type="submit" className="btn btn-primary">Log Delivery</button>
+      </div>
+    </form>
+  );
+}
+
+// ────────────────────────────────────────────────
+
+// ── Submit Invoice Modal ──────────────────────────────────────
+function SubmitInvoiceModal() {
+  const { purchaseOrders, submitInvoice, setModalOpen, selectedPOId } = useApp();
+  const [invoiceNumber, setInvoiceNumber] = useState('');
+  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [dueDate, setDueDate] = useState('');
+  const [amount, setAmount] = useState<number>(0);
+  const [notes, setNotes] = useState('');
+
+  const po = purchaseOrders.find(p => p.id === selectedPOId);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!po) return;
+    submitInvoice({
+      invoiceNumber,
+      poId: po.id,
+      supplierId: po.supplierId,
+      supplierName: po.supplierName,
+      date,
+      dueDate,
+      totalAmount: amount,
+      currency: po.currency,
+      lineItems: [], // Simplification for demo
+      notes,
+      invoiceFileName: 'INV_SUBMISSION.pdf'
+    });
+    setModalOpen(null);
+  };
+
+  if (!po) return <div>No PO selected.</div>;
+
+  return (
+    <form onSubmit={handleSubmit} className="stack-lg">
+      <div className="alert alert-info" style={{ fontSize: '0.9rem' }}>
+        Submit invoice for PO <strong>{po.id}</strong> ({po.supplierName}). Total: {po.totalAmount} {po.currency}.
+      </div>
+      <div className="grid-2">
+        <div className="input-group">
+          <label className="label">Invoice Number</label>
+          <input type="text" className="input" required value={invoiceNumber} onChange={e => setInvoiceNumber(e.target.value)} placeholder="INV-2026-XXXX" />
+        </div>
+        <div className="input-group">
+          <label className="label">Amount ({po.currency})</label>
+          <input type="number" className="input" required value={amount} onChange={e => setAmount(Number(e.target.value))} />
+        </div>
+      </div>
+      <div className="grid-2">
+        <div className="input-group">
+          <label className="label">Invoice Date</label>
+          <input type="date" className="input" required value={date} onChange={e => setDate(e.target.value)} />
+        </div>
+        <div className="input-group">
+          <label className="label">Due Date</label>
+          <input type="date" className="input" required value={dueDate} onChange={e => setDueDate(e.target.value)} />
+        </div>
+      </div>
+      <div className="input-group">
+        <label className="label">Supporting Notes</label>
+        <textarea className="input" style={{ minHeight: '80px' }} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Optional comments for finance..." />
+      </div>
+      <div className="upload-zone" style={{ border: '2px dashed var(--border)', borderRadius: '8px', padding: '20px', textAlign: 'center' }}>
+        <Upload className="mx-auto mb-2 text-muted" size={24} />
+        <p className="text-muted">Click or drag invoice PDF here</p>
+      </div>
+      <button type="submit" className="button button-primary w-full">Submit Invoice</button>
+    </form>
+  );
+}
+
+// ── Dispute GRN Modal ─────────────────────────────────────────
+function DisputeGRNModal() {
+  const { grns, disputeGRN, setModalOpen, selectedGRNId } = useApp();
+  const [reason, setReason] = useState('');
+  const [selectedItem, setSelectedItem] = useState('');
+
+  const grn = grns.find(g => g.id === selectedGRNId);
+  const rejectedItems = grn?.lineItems.filter(i => (i.rejectedQty || 0) > 0) || [];
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!grn || !selectedItem) return;
+    const item = rejectedItems.find(i => i.itemId === selectedItem);
+    if (!item) return;
+
+    disputeGRN({
+      grnId: grn.id,
+      poId: grn.poId,
+      supplierId: grn.supplierId,
+      itemId: item.itemId,
+      itemName: item.itemName,
+      rejectedQty: item.rejectedQty || 0,
+      reason,
+      supportingDocs: ['Supporting_Evidence.zip']
+    });
+    setModalOpen(null);
+  };
+
+  if (!grn) return <div>No GRN selected.</div>;
+
+  return (
+    <form onSubmit={handleSubmit} className="stack-lg">
+      <div className="alert alert-warning" style={{ fontSize: '0.9rem' }}>
+        Disputing rejections for GRN <strong>{grn.id}</strong> (PO {grn.poId}).
+      </div>
+      <div className="input-group">
+        <label className="label">Select Rejected Item</label>
+        <select className="input" required value={selectedItem} onChange={e => setSelectedItem(e.target.value)}>
+          <option value="">Choose item...</option>
+          {rejectedItems.map(i => (
+            <option key={i.itemId} value={i.itemId}>{i.itemName} ({i.rejectedQty} rejected)</option>
+          ))}
+        </select>
+      </div>
+      <div className="input-group">
+        <label className="label">Justification / Dispute Reason</label>
+        <textarea className="input" style={{ minHeight: '120px' }} required value={reason} onChange={e => setReason(e.target.value)} placeholder="Explain why the rejection is being disputed (e.g. MTC correction, calibration report attached)..." />
+      </div>
+      <div className="upload-zone" style={{ border: '2px dashed var(--border)', borderRadius: '8px', padding: '20px', textAlign: 'center' }}>
+        <CheckSquare className="mx-auto mb-2 text-muted" size={24} />
+        <p className="text-muted">Upload supporting docs / photos</p>
+      </div>
+      <button type="submit" className="button button-primary w-full" disabled={!selectedItem}>Submit Dispute</button>
+    </form>
+  );
+}
+
+// ── Compliance Upload Modal ───────────────────────────────────
+function ComplianceUploadModal() {
+  const { uploadComplianceDoc, setModalOpen, currentUser } = useApp();
+  const [title, setTitle] = useState('');
+  const [category, setCategory] = useState<any>('Trade License');
+  const [expiryDate, setExpiryDate] = useState('');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    uploadComplianceDoc({
+      supplierId: currentUser?.id?.replace('USR-', 'SUP-') || 'SUP-001',
+      title,
+      category,
+      expiryDate,
+      fileName: `${category.replace(' ', '_')}.pdf`,
+    });
+    setModalOpen(null);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="stack-lg">
+      <div className="input-group">
+        <label className="label">Document Title</label>
+        <input type="text" className="input" required value={title} onChange={e => setTitle(e.target.value)} placeholder="e.g. UAE Trade License 2026" />
+      </div>
+      <div className="grid-2">
+        <div className="input-group">
+          <label className="label">Category</label>
+          <select className="input" value={category} onChange={e => setCategory(e.target.value)}>
+            <option>Trade License</option>
+            <option>VAT Certificate</option>
+            <option>ISO Certification</option>
+            <option>Insurance</option>
+            <option>Other</option>
+          </select>
+        </div>
+        <div className="input-group">
+          <label className="label">Expiry Date</label>
+          <input type="date" className="input" required value={expiryDate} onChange={e => setExpiryDate(e.target.value)} />
+        </div>
+      </div>
+      <div className="upload-zone" style={{ border: '2px dashed var(--border)', borderRadius: '8px', padding: '20px', textAlign: 'center' }}>
+        <Upload className="mx-auto mb-2 text-muted" size={24} />
+        <p className="text-muted">Click to upload document file</p>
+      </div>
+      <button type="submit" className="button button-primary w-full">Register Document</button>
+    </form>
+  );
+}
+
+// ── Early Payment Modal ──────────────────────────────────────
+function EarlyPaymentModal() {
+  const { purchaseOrders, requestEarlyPayment, setModalOpen, selectedPOId } = useApp();
+  const [discountRate, setDiscountRate] = useState(2); // 2% for demo
+
+  const po = purchaseOrders.find(p => p.id === selectedPOId);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!po) return;
+    requestEarlyPayment(po.id, discountRate);
+    setModalOpen(null);
+  };
+
+  if (!po) return <div>No Invoice/PO selected.</div>;
+
+  return (
+    <form onSubmit={handleSubmit} className="stack-lg">
+      <div className="alert alert-info" style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+        <Info size={20} className="text-primary" />
+        <div>
+          <div style={{ fontWeight: 700 }}>Dynamic Discounting</div>
+          <div style={{ fontSize: 12 }}>Receive payment in <b>72 hours</b> by offering a small discount on the invoice value.</div>
+        </div>
+      </div>
+      
+      <div style={{ padding: 16, borderRadius: 12, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-subtle)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
+          <span className="text-muted">Invoice Value</span>
+          <span className="font-mono" style={{ fontWeight: 700 }}>${po.totalAmount.toLocaleString()}</span>
+        </div>
+        <div className="input-group">
+          <label className="label">Discount Offered (%)</label>
+          <div style={{ display: 'flex', gap: 8 }}>
+            {[1, 2, 3, 5].map(rate => (
+              <button 
+                key={rate} 
+                type="button" 
+                className={`btn btn-xs ${discountRate === rate ? 'btn-primary' : 'btn-outline'}`}
+                onClick={() => setDiscountRate(rate)}
+              >
+                {rate}%
+              </button>
+            ))}
+          </div>
+        </div>
+        <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border-subtle)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
+            <span>Settlement Amount</span>
+            <span className="text-success" style={{ fontWeight: 800 }}>${(po.totalAmount * (1 - discountRate/100)).toLocaleString()}</span>
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+            Processing Fee: $0.00 (Waived for Priority Vendors)
+          </div>
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 8 }}>
+        <button type="button" className="btn btn-secondary" onClick={() => setModalOpen(null)}>Cancel</button>
+        <button type="submit" className="btn btn-primary">Submit Request</button>
+      </div>
+    </form>
+  );
+}
+
+// ── Add Contact Modal ─────────────────────────────────────────
+function AddContactModal() {
+  const { addSupplierContact, setModalOpen, currentUser } = useApp();
+  const [name, setName] = useState('');
+  const [role, setRole] = useState('');
+  const [email, setEmail] = useState('');
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const supplierId = currentUser?.id?.replace('USR-', 'SUP-') || 'SUP-001';
+    addSupplierContact(supplierId, { name, role, email });
+    setModalOpen(null);
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="stack-md">
+      <div className="input-group">
+        <label className="label">Full Name</label>
+        <input type="text" className="input" required value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Jane Doe" />
+      </div>
+      <div className="input-group">
+        <label className="label">Work Role</label>
+        <input type="text" className="input" required value={role} onChange={e => setRole(e.target.value)} placeholder="e.g. Logistics Coordinator" />
+      </div>
+      <div className="input-group">
+        <label className="label">Email Address</label>
+        <input type="email" className="input" required value={email} onChange={e => setEmail(e.target.value)} placeholder="jane@company.com" />
+      </div>
+      <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginTop: 8, padding: 12, borderRadius: 8, background: 'rgba(99,102,241,0.05)' }}>
+        <ShieldCheck size={18} className="text-primary" />
+        <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>This contact will receive PO dispatch and payment notifications.</span>
+      </div>
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16 }}>
+        <button type="button" className="btn btn-secondary" onClick={() => setModalOpen(null)}>Cancel</button>
+        <button type="submit" className="btn btn-primary">Add Contact</button>
+      </div>
+    </form>
+  );
+}
+
 // Modal Container
 // ────────────────────────────────────────────────
 export default function Modals() {
@@ -1189,6 +1843,16 @@ export default function Modals() {
     uploadDoc: 'Upload Document',
     newAsset: 'Register Capital Asset',
     logMaintenance: 'Log Maintenance Activity',
+    newQuotation: 'Submit New Quotation',
+    negotiation: 'Negotiation Thread',
+    confirmShipment: 'Confirm Shipment',
+    requestAmendment: 'Request PO Amendment',
+    notifyDelivery: 'Partial Delivery Notification',
+    submitInvoice: 'Submit Invoice',
+    disputeGRN: 'Dispute GRN Rejection',
+    uploadCompliance: 'Upload Compliance Document',
+    earlyPayment: 'Request Early Settlement',
+    addContact: 'Add Authorized Contact',
   };
 
   return (
@@ -1204,6 +1868,16 @@ export default function Modals() {
           {modalOpen === 'uploadDoc' && <UploadDocModal />}
           {modalOpen === 'newAsset' && <NewAssetModal />}
           {modalOpen === 'logMaintenance' && <LogMaintenanceModal />}
+          {modalOpen === 'newQuotation' && <NewQuotationModal />}
+          {modalOpen === 'negotiation' && <NegotiationModal />}
+          {modalOpen === 'confirmShipment' && <ShipmentConfirmationModal />}
+          {modalOpen === 'requestAmendment' && <POAmendmentModal />}
+          {modalOpen === 'notifyDelivery' && <PartialDeliveryModal />}
+          {modalOpen === 'submitInvoice' && <SubmitInvoiceModal />}
+          {modalOpen === 'disputeGRN' && <DisputeGRNModal />}
+          {modalOpen === 'uploadCompliance' && <ComplianceUploadModal />}
+          {modalOpen === 'earlyPayment' && <EarlyPaymentModal />}
+          {modalOpen === 'addContact' && <AddContactModal />}
         </div>
       </div>
     </div>

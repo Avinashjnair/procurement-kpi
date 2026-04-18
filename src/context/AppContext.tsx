@@ -13,12 +13,14 @@ import {
 } from '@/data/extendedMockData';
 import {
   initialBudgets, initialContracts, initialInvoices, initialBlankets,
+  initialComplianceDocs, initialDisputes
 } from '@/data/roadmapMockData';
 import type {
   User, RFQ, Quotation, QuotationEvaluation, StockItem, StockMovement, GRN, GRNLineItem,
   Asset, MaintenanceRecord, AssetStatus, PaymentRecord, PaymentRecordStatus,
   BudgetEnvelope, Contract, Invoice, AuditLogEntry, MatchStatus, ApprovalStep, BlanketPO,
-  AppNotification, NotificationRule,
+  AppNotification, NotificationRule, NegotiationMessage, POAmendmentRequest,
+  ComplianceDocument, GRNDispute, POMessage,
 } from '@/types';
 import { calcEvalScore } from '@/types';
 
@@ -57,6 +59,11 @@ interface AppState {
   notifications: AppNotification[];
   notificationRules: NotificationRule[];
   isSupplierPortal: boolean;
+  selectedQuotationId: string | null;
+  negotiationMessages: NegotiationMessage[];
+  complianceDocs: ComplianceDocument[];
+  disputes: GRNDispute[];
+  poMessages: POMessage[];
 }
 
 interface AppContextType extends AppState {
@@ -137,7 +144,22 @@ interface AppContextType extends AppState {
   markNotificationRead: (id: string) => void;
   markAllNotificationsRead: () => void;
   toggleNotificationRule: (id: string) => void;
+  setSelectedQuotationId: (id: string | null) => void;
   setSupplierPortal: (val: boolean) => void;
+  addNegotiationMessage: (msg: Omit<NegotiationMessage, 'id' | 'timestamp'>) => void;
+  updateQuotationFeedback: (id: string, feedback: string) => void;
+  acknowledgePO: (poId: string) => void;
+  updateShipment: (poId: string, tracking: string, carrier: string) => void;
+  requestAmendment: (poId: string, request: Omit<POAmendmentRequest, 'id' | 'timestamp' | 'status'>) => void;
+  updateDeliveredQty: (poId: string, itemId: string, qty: number) => void;
+  submitInvoice: (data: Omit<Invoice, 'id' | 'matchStatus' | 'status'>) => void;
+  disputeGRN: (data: Omit<GRNDispute, 'id' | 'timestamp' | 'status'>) => void;
+  uploadComplianceDoc: (data: Omit<ComplianceDocument, 'id' | 'uploadedAt' | 'status'>) => void;
+  poMessages: POMessage[];
+  sendPOMessage: (msg: Omit<POMessage, 'id' | 'timestamp'>) => void;
+  updateSupplierProfile: (id: string, updates: Partial<Supplier>) => void;
+  requestEarlyPayment: (invoiceId: string, discountPct: number) => void;
+  addSupplierContact: (supplierId: string, contact: { name: string; role: string; email: string }) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -185,6 +207,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
       { id: 'RULE-3', eventType: 'low_stock', enabled: true, threshold: 10, channels: ['in-app'] }
     ],
     isSupplierPortal: false,
+    selectedQuotationId: null,
+    negotiationMessages: [],
+    complianceDocs: initialComplianceDocs,
+    disputes: initialDisputes,
+    poMessages: [],
   });
 
   // ── Roadmap Extensions ───────────────────────────────────
@@ -344,6 +371,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setSelectedGRNId      = useCallback((id: string | null) => setState(p => ({ ...p, selectedGRNId: id })), []);
   const setSelectedAssetId    = useCallback((id: string | null) => setState(p => ({ ...p, setSelectedAssetId: id })), []);
   const setSelectedBlanketId  = useCallback((id: string | null) => setState(p => ({ ...p, selectedBlanketId: id })), []);
+  const setSelectedQuotationId = useCallback((id: string | null) => setState(p => ({ ...p, selectedQuotationId: id })), []);
   const setFabOpen            = useCallback((open: boolean) => setState(p => ({ ...p, fabOpen: open })), []);
   const setModalOpen          = useCallback((modal: string | null) => setState(p => ({ ...p, modalOpen: modal, fabOpen: false })), []);
   const toggleDarkMode        = useCallback(() => setState(p => ({ ...p, darkMode: !p.darkMode })), []);
@@ -418,6 +446,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState(p => ({ ...p, purchaseOrders: p.purchaseOrders.map(po => po.id === poId ? { ...po, deliveryStatus: 'Cancelled' as POStatus, cancellationReason: `REJECTED: ${reason}` } : po) })), []);
   const cancelPO  = useCallback((poId: string, reason: string) =>
     setState(p => ({ ...p, purchaseOrders: p.purchaseOrders.map(po => po.id === poId ? { ...po, deliveryStatus: 'Cancelled' as POStatus, cancellationReason: reason } : po) })), []);
+
   const duplicatePO = useCallback((poId: string) => {
     setState(p => {
       const original = p.purchaseOrders.find(po => po.id === poId);
@@ -425,6 +454,94 @@ export function AppProvider({ children }: { children: ReactNode }) {
       const newId = `PO-${String(p.purchaseOrders.length + 1).padStart(3, '0')}`;
       return { ...p, purchaseOrders: [{ ...original, id: newId, dateOfIssue: new Date().toISOString().split('T')[0], deliveryStatus: 'Draft' as POStatus, paymentStatus: 'Unpaid' as PaymentStatus, amountPaid: 0, dateOfPayment: null, paymentRecords: [] }, ...p.purchaseOrders] };
     });
+  }, []);
+
+  const acknowledgePO    = useCallback((poId: string) => {
+    setState(p => ({
+      ...p,
+      purchaseOrders: p.purchaseOrders.map(po => po.id === poId ? { ...po, acknowledgedAt: new Date().toISOString() } : po)
+    }));
+  }, []);
+
+  const updateShipment   = useCallback((poId: string, tracking: string, carrier: string) => {
+    setState(p => ({
+      ...p,
+      purchaseOrders: p.purchaseOrders.map(po => po.id === poId ? { 
+        ...po, 
+        deliveryStatus: 'Shipped', 
+        trackingNumber: tracking, 
+        carrier, 
+        shippedAt: new Date().toISOString() 
+      } : po)
+    }));
+  }, []);
+
+  const requestAmendment = useCallback((poId: string, request: Omit<POAmendmentRequest, 'id' | 'timestamp' | 'status'>) => {
+    setState(p => ({
+      ...p,
+      purchaseOrders: p.purchaseOrders.map(po => po.id === poId ? { 
+        ...po, 
+        amendmentRequest: { 
+          ...request, 
+          id: `AMD-${Date.now()}`, 
+          timestamp: new Date().toISOString(), 
+          status: 'Pending' 
+        } 
+      } : po)
+    }));
+  }, []);
+
+  const updateDeliveredQty = useCallback((poId: string, itemId: string, qty: number) => {
+    setState(p => ({
+      ...p,
+      purchaseOrders: p.purchaseOrders.map(po => {
+        if (po.id !== poId) return po;
+        const newItems = po.items.map(item => item.itemId === itemId ? { ...item, deliveredQty: (item.deliveredQty || 0) + Number(qty) } : item);
+        
+        // Determine status
+        const allDelivered = newItems.every(i => (i.deliveredQty || 0) >= i.quantity);
+        const someDelivered = newItems.some(i => (i.deliveredQty || 0) > 0);
+        const newStatus: POStatus = allDelivered ? 'Delivered' : (someDelivered ? 'Partially Delivered' : po.deliveryStatus);
+        
+        return { ...po, items: newItems, deliveryStatus: newStatus };
+      })
+    }));
+  }, []);
+
+  const submitInvoice = useCallback((data: Omit<Invoice, 'id' | 'matchStatus' | 'status'>) => {
+    const newInvoice: Invoice = {
+      ...data,
+      id: `INV-${Date.now()}`,
+      status: 'Pending',
+      matchStatus: 'Pending',
+    };
+    setState(p => ({ ...p, invoices: [newInvoice, ...p.invoices] }));
+  }, []);
+
+  const disputeGRN = useCallback((data: Omit<GRNDispute, 'id' | 'timestamp' | 'status'>) => {
+    const newDispute: GRNDispute = {
+      ...data,
+      id: `DSP-${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      status: 'Open'
+    };
+    setState(p => ({ ...p, disputes: [newDispute, ...p.disputes] }));
+  }, []);
+
+  const uploadComplianceDoc = useCallback((data: Omit<ComplianceDocument, 'id' | 'uploadedAt' | 'status'>) => {
+    const expires = new Date(data.expiryDate);
+    const now = new Date();
+    const diff = (expires.getTime() - now.getTime()) / (1000 * 3600 * 24);
+    
+    const status: ComplianceDocument['status'] = expires < now ? 'Expired' : (diff < 30 ? 'Expiring Soon' : 'Active');
+    
+    const newDoc: ComplianceDocument = {
+      ...data,
+      id: `CDOC-${Date.now()}`,
+      uploadedAt: new Date().toISOString(),
+      status
+    };
+    setState(p => ({ ...p, complianceDocs: [newDoc, ...p.complianceDocs] }));
   }, []);
 
   // ── Finance actions ────────────────────────────────────────
@@ -498,8 +615,29 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Quotations
-  const addQuotation    = useCallback((q: Quotation) => setState(p => ({ ...p, quotations: [...p.quotations, q] })), []);
+  const addQuotation    = useCallback((q: Quotation) => {
+    setState(p => ({ ...p, quotations: [q, ...p.quotations] }));
+    addNotification({
+      type: 'info',
+      source: 'Document',
+      title: 'New Bid Received',
+      message: `${q.supplierName} submitted a bid for RFQ ${q.rfqId}`,
+      entityId: q.id,
+      entityType: 'Quotation'
+    });
+  }, [addNotification]);
   const updateQuotation = useCallback((id: string, updates: Partial<Quotation>) => setState(p => ({ ...p, quotations: p.quotations.map(q => q.id === id ? { ...q, ...updates } : q) })), []);
+  const updateQuotationFeedback = useCallback((id: string, feedback: string) => setState(p => ({ ...p, quotations: p.quotations.map(q => q.id === id ? { ...q, feedback } : q) })), []);
+  const addNegotiationMessage = useCallback((msg: Omit<NegotiationMessage, 'id' | 'timestamp'>) => {
+    setState(p => {
+      const newMsg: NegotiationMessage = {
+        ...msg,
+        id: `MSG-${Date.now()}`,
+        timestamp: new Date().toISOString(),
+      };
+      return { ...p, negotiationMessages: [...p.negotiationMessages, newMsg] };
+    });
+  }, []);
   const submitEvaluation = useCallback((quotationId: string, evalData: Omit<QuotationEvaluation, 'totalScore' | 'evaluatedBy' | 'evaluatedAt'>) => {
     setState(p => {
       const totalScore = calcEvalScore(evalData);
@@ -568,6 +706,38 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const getPOById        = useCallback((id: string) => state.purchaseOrders.find(po => po.id === id), [state.purchaseOrders]);
   const getRFQById       = useCallback((id: string) => state.rfqs.find(r => r.id === id), [state.rfqs]);
   const getStockByItemId = useCallback((itemId: string) => state.stockItems.find(s => s.itemId === itemId), [state.stockItems]);
+  const sendPOMessage = useCallback((msg: Omit<POMessage, 'id' | 'timestamp'>) => {
+    setState(p => ({
+      ...p,
+      poMessages: [...p.poMessages, { ...msg, id: `MSG-${Date.now()}`, timestamp: new Date().toISOString() }]
+    }));
+  }, []);
+
+  const updateSupplierProfile = useCallback((id: string, updates: Partial<Supplier>) => {
+    setState(p => ({
+      ...p,
+      suppliers: p.suppliers.map(s => s.id === id ? { ...s, ...updates } : s)
+    }));
+  }, []);
+
+  const requestEarlyPayment = useCallback((invoiceId: string, discountPct: number) => {
+    setState(p => ({
+      ...p,
+      invoices: p.invoices.map(inv => inv.id === invoiceId ? { ...inv, status: 'Processing' as any, matchStatus: `Early Pay (${discountPct}%)` as any } : inv)
+    }));
+    logAudit({ entityType: 'Invoice', entityId: invoiceId, action: 'Payment', description: `Early payment requested with ${discountPct}% discount.` });
+  }, [logAudit]);
+
+  const addSupplierContact = useCallback((supplierId: string, contact: { name: string; role: string; email: string }) => {
+    setState(p => ({
+      ...p,
+      suppliers: p.suppliers.map(s => s.id === supplierId ? { 
+        ...s, 
+        contactList: [...(s.contactList || []), { ...contact, id: `CON-${Date.now()}` }] 
+      } : s)
+    }));
+  }, []);
+
   return (
     <AppContext.Provider value={{
       ...state,
@@ -585,13 +755,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       adjustStock,
       addAsset, updateAssetStatus, addAssetCategory, logMaintenance, calculateCurrentAssetValue,
       getSupplierById, getItemById, getPOById, getRFQById, getStockByItemId,
-      setSelectedAssetId,
+      setSelectedAssetId, setSelectedQuotationId,
       // Roadmap Extensions
       addBudget, updateBudget, addContract, updateContract, addInvoice, updateInvoice,
       logAudit, processApprovalStep, performMatch,
       addBlanket, updateBlanket, setSelectedBlanketId,
       addNotification, markNotificationRead, markAllNotificationsRead, toggleNotificationRule,
-      setSupplierPortal
+      setSupplierPortal, addNegotiationMessage, updateQuotationFeedback,
+      acknowledgePO, updateShipment, requestAmendment, updateDeliveredQty,
+      submitInvoice, disputeGRN, uploadComplianceDoc,
+      sendPOMessage, updateSupplierProfile, requestEarlyPayment, addSupplierContact
     }}>
       {children}
     </AppContext.Provider>

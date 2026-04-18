@@ -1,4 +1,4 @@
-import { BudgetEnvelope, Contract, Invoice, BlanketPO } from '@/types';
+import { BudgetEnvelope, Contract, Invoice, BlanketPO, ComplianceDocument, GRNDispute } from '@/types';
 
 export const initialBudgets: BudgetEnvelope[] = [
   {
@@ -113,5 +113,56 @@ export const initialBlankets: BlanketPO[] = [
     status: 'Active',
     releaseOrderIds: ['PO-003'],
     category: 'Chemicals'
+  }
+];
+
+export const initialComplianceDocs: ComplianceDocument[] = [
+  {
+    id: 'CDOC-001',
+    supplierId: 'SUP-001',
+    title: 'Trade License 2026',
+    category: 'Trade License',
+    expiryDate: '2026-12-15',
+    status: 'Active',
+    fileName: 'Trade_License_SteelMax.pdf',
+    fileSize: '1.2 MB',
+    uploadedAt: '2026-01-05T10:00:00Z'
+  },
+  {
+    id: 'CDOC-002',
+    supplierId: 'SUP-001',
+    title: 'VAT Registration Certificate',
+    category: 'VAT Certificate',
+    expiryDate: '2027-06-30',
+    status: 'Active',
+    fileName: 'VAT_Cert_SteelMax.pdf',
+    fileSize: '0.8 MB',
+    uploadedAt: '2026-01-05T10:05:00Z'
+  },
+  {
+    id: 'CDOC-003',
+    supplierId: 'SUP-001',
+    title: 'ISO 9001:2015 Certification',
+    category: 'ISO Certification',
+    expiryDate: '2025-11-20',
+    status: 'Expiring Soon',
+    fileName: 'ISO9001_SteelMax_2025.pdf',
+    fileSize: '2.4 MB',
+    uploadedAt: '2023-11-20T14:30:00Z'
+  }
+];
+
+export const initialDisputes: GRNDispute[] = [
+  {
+    id: 'DSP-001',
+    grnId: 'GRN-002',
+    poId: 'PO-002',
+    supplierId: 'SUP-001',
+    itemId: 'ITM-002',
+    itemName: 'Flange Gaskets (4")',
+    rejectedQty: 5,
+    reason: 'Rejected due to minor surface scratches. These do not affect seal performance according to ASME B16.5 standards. Requesting re-inspection.',
+    status: 'Open',
+    timestamp: '2026-04-12T09:00:00Z'
   }
 ];

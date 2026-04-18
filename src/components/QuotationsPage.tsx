@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { useApp } from '@/context/AppContext';
 import { can, EVAL_WEIGHTS, calcEvalScore } from '@/types';
 import type { Quotation, QuotationEvaluation, RFQ } from '@/types';
-import { Award, BarChart2, ChevronDown, ChevronUp, Star, Lock, X, Check } from 'lucide-react';
+import { Award, BarChart2, ChevronDown, ChevronUp, Star, Lock, X, Check, MessageSquare } from 'lucide-react';
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer } from 'recharts';
 
 const CRITERIA: { key: keyof Omit<QuotationEvaluation, 'totalScore' | 'evaluatedBy' | 'evaluatedAt' | 'recommendation'>; label: string; weight: number }[] = [
@@ -30,7 +30,7 @@ function ScoreBar({ score }: { score: number }) {
 
 // ── Evaluation Modal ──
 function EvaluationModal({ quotation, onClose }: { quotation: Quotation; onClose: () => void }) {
-  const { submitEvaluation } = useApp();
+  const { submitEvaluation, updateQuotationFeedback } = useApp();
   const initial = quotation.evaluation;
   type EvalScores = Omit<QuotationEvaluation, 'totalScore' | 'evaluatedBy' | 'evaluatedAt' | 'recommendation'>;
 
@@ -44,11 +44,13 @@ function EvaluationModal({ quotation, onClose }: { quotation: Quotation; onClose
     compliance:     initial?.compliance     ?? 5,
   });
   const [recommendation, setRecommendation] = useState(initial?.recommendation || '');
+  const [feedback, setFeedback] = useState(quotation.feedback || '');
 
   const preview = calcEvalScore(scores);
 
   const handleSave = () => {
     submitEvaluation(quotation.id, { ...scores, recommendation });
+    updateQuotationFeedback(quotation.id, feedback);
     onClose();
   };
 
@@ -90,8 +92,13 @@ function EvaluationModal({ quotation, onClose }: { quotation: Quotation; onClose
         ))}
 
         <div className="form-group">
-          <label className="form-label">Recommendation / Notes</label>
+          <label className="form-label">Recommendation / Internal Notes</label>
           <textarea className="form-input" rows={2} value={recommendation} onChange={e => setRecommendation(e.target.value)} placeholder="Summarise your recommendation…" />
+        </div>
+
+        <div className="form-group">
+          <label className="form-label">Official Feedback (Visible to Supplier)</label>
+          <textarea className="form-input" rows={2} value={feedback} onChange={e => setFeedback(e.target.value)} placeholder="Explain why the bid was rejected or what was good..." style={{ border: '1px solid var(--accent-indigo)', background: 'rgba(99,102,241,0.02)' }} />
         </div>
 
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16 }}>
@@ -104,7 +111,10 @@ function EvaluationModal({ quotation, onClose }: { quotation: Quotation; onClose
 }
 
 export default function QuotationsPage() {
-  const { quotations, rfqs, suppliers, currentUser, awardRFQ, setActivePage } = useApp();
+  const { 
+    quotations, rfqs, suppliers, currentUser, awardRFQ, setActivePage,
+    setSelectedQuotationId, setModalOpen
+  } = useApp();
   const [viewMode, setViewMode] = useState<'rfqs' | 'quotes' | 'compare'>('rfqs');
   const [selectedRFQId, setSelectedRFQId] = useState<string | null>(null);
   const [evaluating, setEvaluating] = useState<Quotation | null>(null);
@@ -235,9 +245,14 @@ export default function QuotationsPage() {
                    {expandedQuo === q.id ? 'Close' : 'View Items'}
                 </button>
                 {can(currentUser, 'evaluate_quotation') && (
-                  <button className="btn btn-secondary btn-sm" style={{ flex: 1 }} onClick={() => setEvaluating(q)}>
-                    <Star size={12} /> {q.evaluation ? 'Re-evaluate' : 'Evaluate'}
-                  </button>
+                  <>
+                    <button className="btn btn-secondary btn-sm" style={{ flex: 1 }} onClick={() => setEvaluating(q)}>
+                      <Star size={12} /> {q.evaluation ? 'Re-evaluate' : 'Evaluate'}
+                    </button>
+                    <button className="btn btn-ghost btn-sm" onClick={() => { setSelectedQuotationId(q.id); setModalOpen('negotiation'); }}>
+                      <MessageSquare size={14} />
+                    </button>
+                  </>
                 )}
               </div>
 
@@ -374,9 +389,14 @@ export default function QuotationsPage() {
           {rfqQuotes.map(q => (
             <div key={q.id} style={{ display: 'flex', gap: 6 }}>
               {can(currentUser, 'evaluate_quotation') && (
-                <button className="btn btn-secondary btn-sm" onClick={() => setEvaluating(q)}>
-                  {q.evaluation ? 'Re-evaluate' : 'Evaluate'} {q.supplierName.split(' ')[0]}
-                </button>
+                <div style={{ display: 'flex', gap: 4 }}>
+                  <button className="btn btn-secondary btn-sm" onClick={() => setEvaluating(q)}>
+                    {q.evaluation ? 'Re-evaluate' : 'Evaluate'} {q.supplierName.split(' ')[0]}
+                  </button>
+                  <button className="btn btn-ghost btn-sm" title="Negotiate" onClick={() => { setSelectedQuotationId(q.id); setModalOpen('negotiation'); }}>
+                    <MessageSquare size={14} />
+                  </button>
+                </div>
               )}
               {can(currentUser, 'award_quotation') && activeRFQ?.status !== 'Awarded' && q.evaluation && (
                 <button className="btn btn-sm" style={{ background: 'rgba(16,185,129,0.1)', color: '#10b981', border: '1px solid rgba(16,185,129,0.3)' }} onClick={() => activeRFQ && awardRFQ(activeRFQ.id, q.id)}>
