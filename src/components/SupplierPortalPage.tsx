@@ -1,12 +1,14 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
-import { 
-  Building2, FileText, Send, Clock, CheckCircle2, 
+import {
+  Building2, FileText, Send, Clock, CheckCircle2,
   AlertTriangle, Download, Upload, ExternalLink,
   DollarSign, Package, ShieldCheck, MessageSquare,
-  Search, Filter, ChevronRight, BarChart3, Calendar, Plus, TrendingUp, TrendingDown, Scale, UserPlus, Settings, Info, CreditCard, FileBarChart, Activity, User, Globe, Landmark, Lock, X, XCircle, Award, Mail, Edit2
+  Search, ChevronRight, BarChart3, Plus, TrendingUp, TrendingDown,
+  UserPlus, Settings, CreditCard, FileBarChart, Activity, User,
+  Globe, Landmark, Lock, X, Award, Mail, Edit2, Bell, Star
 } from 'lucide-react';
 
 import {
@@ -16,567 +18,454 @@ import {
 
 import { PortalTab } from '@/types';
 
+// ─── Sub-components ───────────────────────────────────────────────────────────
+
+function HealthScoreRing({ score }: { score: number }) {
+  const r = 22;
+  const circ = 2 * Math.PI * r;
+  const filled = (score / 100) * circ;
+  const color = score >= 90 ? '#4ade80' : score >= 75 ? '#60a5fa' : '#f59e0b';
+  return (
+    <div style={{ position: 'relative', width: 56, height: 56, flexShrink: 0 }}>
+      <svg width="56" height="56" viewBox="0 0 56 56" style={{ transform: 'rotate(-90deg)' }}>
+        <circle cx="28" cy="28" r={r} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="3.5" />
+        <circle
+          cx="28" cy="28" r={r} fill="none"
+          stroke={color} strokeWidth="3.5"
+          strokeDasharray={`${filled} ${circ - filled}`}
+          strokeLinecap="round"
+          style={{ transition: 'stroke-dasharray 0.8s cubic-bezier(.4,0,.2,1)' }}
+        />
+      </svg>
+      <div style={{
+        position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column',
+        alignItems: 'center', justifyContent: 'center', lineHeight: 1
+      }}>
+        <span style={{ fontSize: 13, fontWeight: 800, fontFamily: 'Manrope, sans-serif', color }}>{score}</span>
+        <span style={{ fontSize: 8, color: 'rgba(255,255,255,0.4)', fontWeight: 700, letterSpacing: '0.05em' }}>SCORE</span>
+      </div>
+    </div>
+  );
+}
+
+function StatusPill({ status }: { status: string }) {
+  const getStyles = () => {
+    switch (status) {
+      case 'Released':
+      case 'Active':
+      case 'Approved':
+      case 'Awarded':
+        return { bg: 'rgba(74,222,128,0.08)', color: '#4ade80', border: 'rgba(74,222,128,0.15)' };
+      case 'Pending Ack':
+      case 'Expiring Soon':
+      case 'Processing':
+      case 'In Review':
+        return { bg: 'rgba(233,193,118,0.08)', color: 'var(--accent-amber)', border: 'rgba(233,193,118,0.15)' };
+      case 'Expired':
+      case 'Rejected':
+      case 'Overdue':
+      case 'QC Variance':
+        return { bg: 'rgba(248,113,113,0.08)', color: '#f87171', border: 'rgba(248,113,113,0.15)' };
+      case 'Draft':
+      case 'Under Evaluation':
+        return { bg: 'rgba(255,255,255,0.04)', color: 'var(--text-muted)', border: 'var(--border-subtle)' };
+      default:
+        return { bg: 'rgba(177,202,215,0.08)', color: 'var(--accent-slate)', border: 'rgba(177,202,215,0.15)' };
+    }
+  };
+  const { bg, color, border } = getStyles();
+  return (
+    <span style={{
+      fontSize: 9, fontWeight: 800, padding: '3px 9px', borderRadius: 20,
+      background: bg, color, border: `1px solid ${border}`,
+      letterSpacing: '0.02em', textTransform: 'uppercase', display: 'inline-flex', alignItems: 'center'
+    }}>
+      {status}
+    </span>
+  );
+}
+
+function AlertBadge({ count, label, color }: { count: number, label: string, color: string }) {
+  if (count === 0) return null;
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
+      background: 'rgba(255,255,255,0.02)', borderLeft: `3px solid ${color}`, borderRadius: '0 8px 8px 0'
+    }}>
+      <div style={{ fontSize: 16, fontWeight: 800, color, fontFamily: 'Manrope, sans-serif' }}>{count}</div>
+      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.02em' }}>{label.toUpperCase()}</div>
+    </div>
+  );
+}
+
+function ProgressBar({ value, label, total }: { value: number, label: string, total: number }) {
+  const pct = Math.min((value / total) * 100, 100);
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5, fontSize: 10, fontWeight: 700 }}>
+        <span style={{ color: 'var(--text-muted)' }}>{label}</span>
+        <span>{value}/{total}</span>
+      </div>
+      <div style={{ height: 4, background: 'rgba(255,255,255,0.05)', borderRadius: 2 }}>
+        <div style={{ height: '100%', width: `${pct}%`, background: 'var(--accent-slate)', borderRadius: 2, transition: 'width 0.6s ease' }} />
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Component ──────────────────────────────────────────────────────────
+
 export default function SupplierPortalPage({ standalone = false }: { standalone?: boolean }) {
   const router = useRouter();
-  const { 
-    acknowledgePO, setSelectedPOId,
-    invoices, grns, complianceDocs, disputes,
-    setSelectedGRNId, setModalOpen, suppliers, purchaseOrders, quotations, rfqs,
-    setSelectedRFQId, setSelectedQuotationId, documents, poMessages,
-    sendPOMessage, updateSupplierProfile, requestEarlyPayment, addSupplierContact,
-    currentSupplier, supplierLogout, selectedSupplierId, products
-  } = useApp();
-  
-  // Use currently logged in supplier if in standalone mode, otherwise use selected/default
-  const mySupplierId = standalone ? (currentSupplier?.id || '') : (selectedSupplierId || 'SUP-001');
-  const myData = suppliers.find(s => s.id === mySupplierId);
-  
+  const {
+    currentSupplier, purchaseOrders, rfqs, quotations, invoices,
+    complianceDocs, disputes, grns, poMessages, products,
+    sendPOMessage, acknowledgePO, updateShipment, submitInvoice,
+    requestEarlyPayment, updateSupplierProfile, supplierLogout,
+    mySupplierId
+  } = useApp() as any;
+
   const [activeTab, setActiveTab] = useState<PortalTab>('dashboard');
-  const [searchTerm, setSearchTerm] = useState('');
-  const [activeMessageThread, setActiveMessageThread] = useState('RFQ-001');
+  const [modalOpen, setModalOpen] = useState<string | null>(null);
+  const [selectedPOId, setSelectedPOId] = useState<string | null>(null);
+  const [selectedRFQId, setSelectedRFQId] = useState<string | null>(null);
+  const [selectedGRNId, setSelectedGRNId] = useState<string | null>(null);
+
+  // Profile data
+  const myData = currentSupplier || { name: 'Sovereign Heavy Industries', id: 'SUP-001', location: 'Dubai, UAE' };
+
+  // Derived Data
+  const myPOs = purchaseOrders.filter((p: any) => p.supplierId === myData.id);
+  const pendingAck = myPOs.filter((p: any) => !p.acknowledgedAt).length;
+  const inProduction = myPOs.filter((p: any) => p.deliveryStatus === 'Processing' || p.deliveryStatus === 'Approved').length;
+
+  const eligibleRFQs = rfqs.filter((r: any) => r.status === 'Published');
+  const myBids = quotations.filter((q: any) => q.supplierId === myData.id);
+
+  const expiringDocs = complianceDocs.filter((d: any) => d.status === 'Expiring Soon');
+  const expiredDocs = complianceDocs.filter((d: any) => d.status === 'Expired');
+
+  // Financials
+  const myInvoices = invoices.filter((i: any) => i.supplierId === myData.id);
+  const totalOutstanding = myInvoices.filter((i: any) => i.status !== 'Paid').reduce((acc: number, cur: any) => acc + cur.totalAmount, 0);
+  const releasedPayments = myInvoices.filter((i: any) => i.status === 'Paid').reduce((acc: number, cur: any) => acc + cur.totalAmount, 0);
+
+  // Messaging state
+  const [activeMessageThread, setActiveMessageThread] = useState<string | null>(null);
+  const [newMessage, setNewMessage] = useState('');
+  const chatEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (chatEndRef.current) chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+  }, [poMessages, activeMessageThread]);
+
+  const activeThreadMessages = poMessages.filter((m: any) => m.poId === activeMessageThread);
+
+  const handleSendMessage = () => {
+    if (!newMessage.trim() || !activeMessageThread) return;
+    sendPOMessage({
+      poId: activeMessageThread,
+      sender: 'supplier',
+      senderName: myData.name,
+      message: newMessage
+    });
+    setNewMessage('');
+  };
+
+  // Modals state
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [showEditProfile, setShowEditProfile] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
 
-  const myPOs = purchaseOrders.filter(po => po.supplierId === mySupplierId);
-  const myBids = quotations.filter(q => q.supplierId === mySupplierId);
-  
-  // Tendering Engine: Discovery Logic
-  const eligibleRFQs = rfqs.filter(rfq => {
-    const isAlreadyBid = myBids.some(b => b.rfqId === rfq.id);
-    if (isAlreadyBid) return false;
-    
-    const isOpenAndPublished = rfq.tenderType === 'open' && rfq.status === 'Published';
-    const isInvitedAndSent = rfq.tenderType === 'selective' && rfq.status === 'Sent' && rfq.invitedSupplierIds.includes(mySupplierId);
-    
-    return isOpenAndPublished || isInvitedAndSent;
-  });
+  // Tab config
+  const tabs = [
+    { id: 'dashboard', label: 'Briefing', icon: <Activity size={16} /> },
+    { id: 'pos', label: 'Procurement', icon: <Package size={16} />, badge: pendingAck + inProduction },
+    { id: 'performance', label: 'Performance', icon: <FileBarChart size={16} /> },
+    { id: 'financials', label: 'Financials', icon: <CreditCard size={16} />, badge: totalOutstanding > 0 ? 1 : 0 },
+    { id: 'communication', label: 'Intelligence', icon: <MessageSquare size={16} /> },
+    { id: 'compliance', label: 'Legal Vault', icon: <ShieldCheck size={16} />, badge: expiringDocs.length + expiredDocs.length },
+    { id: 'quality', label: 'Quality', icon: <Activity size={16} /> },
+    { id: 'product-library', label: 'Portfolio', icon: <Globe size={16} /> },
+    { id: 'account', label: 'Settings', icon: <Settings size={16} /> },
+  ];
 
-  const myInvoices = invoices.filter(inv => inv.supplierId === mySupplierId);
+  // Performance data
+  const deliveryHistory = [
+    { month: 'Jan', onTime: 92, delayed: 8 },
+    { month: 'Feb', onTime: 95, delayed: 5 },
+    { month: 'Mar', onTime: 88, delayed: 12 },
+    { month: 'Apr', onTime: 98, delayed: 2 },
+  ];
 
-  // Negotiation Threads Integration
-  const negotiationThreads = quotations
-    .filter(q => q.supplierId === mySupplierId)
-    .map(q => ({
-      id: q.id,
-      rfqId: q.rfqId,
-      type: 'Negotiation',
-      title: `Proposal ${q.id} Feedback`,
-      time: 'Active',
-      active: activeMessageThread === q.id
-    }));
-
-  // DYNAMIC METRICS CALCULATION
-  const totalOutstanding = myInvoices
-    .filter(inv => inv.status !== 'Paid' && inv.status !== 'Cancelled')
-    .reduce((sum, inv) => sum + inv.totalAmount, 0);
-
-  const releasedPayments = myPOs
-    .filter(po => po.paymentStatus === 'Paid')
-    .reduce((sum, po) => sum + po.amountPaid, 0);
-
-  // Calculate Average Payment Cycle (Mock computation based on invoice dates)
-  const paidInvoices = myInvoices.filter(inv => inv.status === 'Paid');
-  const avgPayCycle = paidInvoices.length > 0
-    ? Math.round(paidInvoices.reduce((acc, inv) => acc + 30, 0) / paidInvoices.length) // Simplification for demo
-    : 28.4;
-
-  // Auto-scroll to top on tab change
-  useEffect(() => {
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [activeTab]);
-
-  if (!myData) return <div className="p-8 text-center">Supplier Data Not Found</div>;
+  const liveAlerts = [
+    { count: pendingAck, label: 'POs awaiting ack', color: 'var(--accent-amber)' },
+    { count: expiringDocs.length, label: 'Docs expiring', color: '#60a5fa' },
+    { count: expiredDocs.length, label: 'Overdue compliance', color: '#f87171' },
+    { count: 2, label: 'Unread messages', color: 'var(--accent-slate)' },
+  ].filter(a => a.count > 0);
 
   return (
-    <div className="page-content animate-in"><div className="content-wrapper" style={{ padding: 'var(--padding-page)', maxWidth: 1600 }}>
-      {/* Sovereign Editorial Header */}
-      <div className="page-header" style={{ 
-        marginBottom: 24, 
-        padding: '24px', 
-        background: 'var(--gradient-surface)', 
-        borderRadius: 'var(--radius-standard)',
-        border: '1px solid var(--border-subtle)',
-        display: 'flex',
-        alignItems: 'center',
-        gap: 24,
-        position: 'relative',
-        overflow: 'hidden'
+    <div style={{
+      minHeight: '100vh', background: '#0b0e14', color: '#fff',
+      fontFamily: 'Inter, sans-serif', paddingBottom: 60
+    }}>
+      {/* ═══ INTERNAL CSS ══════════════════════════════════════════════════ */}
+      <style jsx global>{`
+        :root {
+          --bg-card: #12161f;
+          --bg-secondary: #1a1f2b;
+          --border-subtle: rgba(255,255,255,0.06);
+          --accent-slate: #b1cad7;
+          --accent-amber: #e9c176;
+          --text-primary: #ffffff;
+          --text-muted: #94a3b8;
+          --text-faint: #475569;
+          --radius-standard: 12px;
+          --font-heading: 'Manrope', sans-serif;
+        }
+        .btn {
+          display: inline-flex; items: center; gap: 8px;
+          padding: 8px 16px; border-radius: 10px; font-size: 13px;
+          font-weight: 700; cursor: pointer; transition: all 0.2s;
+          border: 1px solid transparent; text-transform: none;
+        }
+        .btn-primary {
+          background: var(--accent-slate); color: #000;
+        }
+        .btn-primary:hover {
+          background: #cfdee6; transform: translateY(-1px);
+        }
+        .btn-ghost {
+          background: rgba(255,255,255,0.03); color: #fff;
+          border-color: var(--border-subtle);
+        }
+        .btn-ghost:hover {
+          background: rgba(255,255,255,0.06);
+        }
+        .hover-row:hover {
+          background: rgba(255,255,255,0.02) !important;
+        }
+        .tab-btn {
+          position: relative; padding: 12px 20px; border: none;
+          background: none; color: var(--text-muted); cursor: pointer;
+          font-size: 13px; font-weight: 700; display: flex;
+          align-items: center; gap: 10px; transition: all 0.2s;
+        }
+        .tab-btn-active {
+          color: #fff;
+        }
+        .tab-indicator {
+          position: absolute; bottom: 0; left: 20px; right: 20px;
+          height: 2px; background: var(--accent-slate);
+          box-shadow: 0 0 10px rgba(177,202,215,0.4);
+        }
+        .card-header-label {
+          font-size: 10px; font-weight: 800; color: var(--text-faint);
+          letter-spacing: 0.1em; text-transform: uppercase; margin-bottom: 4px;
+        }
+      `}</style>
+
+      {/* ═══ NAVIGATION ═════════════════════════════════════════════════════ */}
+      <nav style={{
+        background: 'var(--bg-card)', borderBottom: '1px solid var(--border-subtle)',
+        position: 'sticky', top: 0, zIndex: 100, backdropFilter: 'blur(12px)'
       }}>
-        {/* Ambient Shimmer Background */}
-        <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(circle at 10% 0%, rgba(177,202,215,0.05) 0%, transparent 50%)', pointerEvents: 'none' }} />
-        
-        <div 
-          style={{ 
-            width: 72, 
-            height: 72, 
-            borderRadius: 18, 
-            background: myData.logo ? 'none' : 'var(--gradient-primary)', 
-            display: 'flex', 
-            alignItems: 'center', 
-            justifyContent: 'center',
-            fontSize: 28,
-            fontFamily: 'Manrope, sans-serif',
-            fontWeight: 800,
-            color: 'rgba(0,0,0,0.6)',
-            overflow: 'hidden',
-            border: myData.logo ? '1px solid var(--border-subtle)' : 'none',
-            flexShrink: 0
-          }}
-        >
-          {myData.logo ? (
-            <img src={myData.logo} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-          ) : myData.name[0]}
-        </div>
-        <div style={{ flex: 1, position: 'relative', zIndex: 1 }}>
-          <div className="flex items-center gap-12 mb-4">
-            <h1 style={{ margin: 0, fontSize: 28, fontFamily: 'Manrope, sans-serif', fontWeight: 800, letterSpacing: '-0.02em' }}>{myData.name} Vendor Portal</h1>
-            <div className="badge" style={{ background: 'rgba(177,202,215,0.1)', color: 'var(--accent-slate)', padding: '4px 10px', fontSize: 10, letterSpacing: '0.05em' }}>
-              <ShieldCheck size={12} /> VERIFIED PARTNER
-            </div>
-          </div>
-          <div className="flex gap-20 text-xs text-muted">
-            <div className="flex items-center gap-6"><Building2 size={12} /> ID: {myData.id}</div>
-            <div className="flex items-center gap-6"><Mail size={12} /> {myData.email}</div>
-            <div className="flex items-center gap-6 text-indigo"><Award size={12} /> Preferred Status</div>
-          </div>
-        </div>
-        <div className="flex items-center gap-12">
-          <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setShowEditProfile(true)}>
-             <Settings size={14} /> Profile Settings
-          </button>
-          <button className="btn btn-primary shadow-neon" style={{ padding: '10px 20px', borderRadius: 12 }}>
-            <Upload size={18} /> Submit New Offer
-          </button>
-        </div>
-      </div>
-
-      {/* Sovereign Intelligence Rail */}
-      {activeTab === 'dashboard' && (
-        <div className="metrics-grid animate-in" style={{ marginBottom: 24, display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--gap-standard)' }}>
-          <div className="metric-card" style={{ padding: '16px', background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)' }}>
-            <div className="metric-icon" style={{ background: 'rgba(177,202,215,0.06)', color: 'var(--accent-slate)', width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}><FileText size={18} /></div>
-            <div className="metric-value" style={{ fontSize: 26, fontFamily: 'Manrope, sans-serif', fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1 }}>{myPOs.filter(p => !['Delivered', 'Cancelled'].includes(p.deliveryStatus)).length}</div>
-            <div className="metric-label" style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, letterSpacing: '0.02em' }}>ACTIVE ORDERS</div>
-            <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 8, display: 'flex', alignItems: 'center', gap: 4 }}>
-              <Clock size={10} /> 2 awaiting action
-            </div>
-          </div>
-
-          <div className="metric-card" style={{ padding: '16px', background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)' }}>
-            <div className="metric-icon" style={{ background: 'rgba(177,202,215,0.06)', color: 'var(--accent-slate)', width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}><CheckCircle2 size={18} /></div>
-            <div className="metric-value" style={{ fontSize: 26, fontFamily: 'Manrope, sans-serif', fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1 }}>{myData.kpis.deliveryPerformance}%</div>
-            <div className="metric-label" style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, letterSpacing: '0.02em' }}>ON-TIME DELIVERY</div>
-            <div className="stat-trend positive" style={{ marginTop: 8, fontSize: 10, color: 'var(--accent-slate)' }}>Top 5% Globally</div>
-          </div>
-
-          <div className="metric-card" style={{ padding: '16px', background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)' }}>
-            <div className="metric-icon" style={{ background: 'rgba(177,202,215,0.06)', color: 'var(--accent-slate)', width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}><ShieldCheck size={18} /></div>
-            <div className="metric-value" style={{ fontSize: 26, fontFamily: 'Manrope, sans-serif', fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1 }}>{100 - myData.kpis.rejectionRate}%</div>
-            <div className="metric-label" style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, letterSpacing: '0.02em' }}>QUALITY PASS RATE</div>
-            <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 8 }}>Target Baseline: 98%</div>
-          </div>
-
-          <div className="metric-card" style={{ padding: '16px', background: 'rgba(233,193,118,0.03)', border: '1px solid rgba(233,193,118,0.1)', borderRadius: 'var(--radius-standard)' }}>
-            <div className="metric-icon" style={{ background: 'rgba(233,193,118,0.1)', color: 'var(--accent-amber)', width: 36, height: 36, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12 }}><DollarSign size={18} /></div>
-            <div className="metric-value" style={{ fontSize: 26, fontFamily: 'Manrope, sans-serif', fontWeight: 800, letterSpacing: '-0.02em', lineHeight: 1, color: 'var(--accent-amber)' }}>${(totalOutstanding / 1000).toFixed(1)}K</div>
-            <div className="metric-label" style={{ fontSize: 11, color: 'var(--accent-amber)', opacity: 0.8, marginTop: 4, letterSpacing: '0.02em' }}>TOTAL OUTSTANDING</div>
-            <div style={{ fontSize: 10, color: 'var(--accent-amber)', marginTop: 8, cursor: 'pointer', fontWeight: 700 }} onClick={() => setActiveTab('financials')}>
-              LEDGER <ChevronRight size={10} style={{ verticalAlign: 'middle' }} />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Sovereign Horizontal Tab Rail */}
-      <div className="tabs-wrapper" style={{ 
-        position: 'sticky', top: 0, zIndex: 50,
-        background: 'rgba(11,14,20,0.92)',
-        backdropFilter: 'blur(16px)',
-        margin: '0 -24px 24px',
-        padding: '0 24px',
-        borderBottom: '1px solid var(--border-subtle)'
-      }}>
-        <div className="tabs-minimal" style={{ 
-          overflowX: 'auto', 
-          whiteSpace: 'nowrap', 
-          display: 'flex', 
-          gap: 12,
-          scrollbarWidth: 'none',
-          padding: '8px 0'
-        }}>
-          {[
-            { id: 'dashboard', label: 'Briefing', icon: <Activity size={14} /> },
-            { id: 'pos', label: 'Procurement', icon: <Package size={14} /> },
-            { id: 'bids', label: 'Bidding Hub', icon: <FileBarChart size={14} /> },
-            { id: 'performance', label: 'Performance', icon: <BarChart3 size={14} /> },
-            { id: 'financials', label: 'Financials', icon: <DollarSign size={14} /> },
-            { id: 'communication', label: 'Secure Messages', icon: <MessageSquare size={14} /> },
-            { id: 'compliance', label: 'Legal Vault', icon: <ShieldCheck size={14} /> },
-            { id: 'product-library', label: 'Portfolios', icon: <Package size={14} /> },
-            { id: 'account', label: 'Entity Profile', icon: <Building2 size={14} /> },
-          ].map(tab => (
-            <button 
-              key={tab.id}
-              className={activeTab === tab.id ? 'active' : ''} 
-              onClick={() => setActiveTab(tab.id as PortalTab)}
-              style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: 8,
-                padding: '8px 16px',
-                borderRadius: 10,
-                fontSize: 12,
-                fontWeight: 700,
-                color: activeTab === tab.id ? 'var(--accent-slate)' : 'var(--text-muted)',
-                background: activeTab === tab.id ? 'rgba(177,202,215,0.08)' : 'transparent',
-                transition: 'all 0.2s ease',
-                border: 'none',
-                fontFamily: 'Manrope, sans-serif'
-              }}
-            >
-              {tab.icon} {tab.label.toUpperCase()}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Tab Content with Animation Wrapper */}
-      <div className="tab-viewport animate-in" style={{ animationDuration: '0.3s' }}>
-        
-        {/* DASHBOARD / OVERVIEW TAB */}
-        {activeTab === 'dashboard' && (
-          <div className="stack-lg animate-in">
-            <div className="grid grid-2" style={{ gap: 'var(--gap-standard)' }}>
-               {/* Intelligence Briefing */}
-               <div className="metric-card" style={{ padding: '20px', background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)' }}>
-                  <div className="flex items-center gap-16 mb-16">
-                     <div style={{ width: 42, height: 42, borderRadius: 12, background: 'var(--gradient-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                        <Activity className="text-bg-deep" size={20} />
-                     </div>
-                     <div>
-                        <h3 style={{ margin: 0, fontSize: 18, fontFamily: 'Manrope, sans-serif', fontWeight: 700, letterSpacing: '-0.01em' }}>Sovereign Briefing</h3>
-                        <p style={{ fontSize: 11, color: 'var(--text-muted)', margin: 0 }}>Current Intelligence Status for {myData.name}</p>
-                     </div>
-                  </div>
-                  <div className="stack-sm" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                     {[
-                        { title: 'PO ACKNOWLEDGEMENT PENDING', desc: 'PO-008, PO-009 requiring verification.', type: 'critical' },
-                        { title: 'VAULT EXPIRY NOTICE', desc: 'ISO 9001 Certificate expires in 12 days.', type: 'info' },
-                        { title: 'INBOUND SECURE MESSAGE', desc: 'Feedback on Proposal Q-2026-003.', type: 'message' }
-                     ].map((alert, i) => (
-                        <div key={i} className="flex items-center gap-12 p-10" style={{ borderRadius: 10, background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-subtle)', transition: 'background 0.2s' }}>
-                           <div style={{ width: 6, height: 6, borderRadius: '50%', background: alert.type === 'critical' ? 'var(--accent-amber)' : 'var(--accent-slate)' }} />
-                           <div style={{ flex: 1 }}>
-                              <div style={{ fontSize: 11, fontWeight: 800, color: alert.type === 'critical' ? 'var(--accent-amber)' : 'var(--text-primary)', letterSpacing: '0.03em' }}>{alert.title}</div>
-                              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{alert.desc}</div>
-                           </div>
-                           <ChevronRight size={14} className="text-faint" />
-                        </div>
-                     ))}
-                  </div>
-               </div>
-
-               {/* Analytics Dashboard */}
-               <div className="metric-card" style={{ padding: '20px', background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)' }}>
-                  <div className="flex justify-between items-center mb-16">
-                     <h3 style={{ margin: 0, fontSize: 13, fontFamily: 'Manrope, sans-serif', fontWeight: 800, letterSpacing: '0.05em', color: 'var(--text-muted)' }}>PERFORMANCE RADAR</h3>
-                     <button className="btn btn-ghost" style={{ fontSize: 10, padding: '4px 8px' }} onClick={() => setActiveTab('performance')}>DETAILED SCORECARD</button>
-                  </div>
-                  <div style={{ height: 160 }}>
-                     <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={myData.kpiHistory?.slice(-6)}>
-                           <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />
-                           <XAxis dataKey="month" stroke="var(--text-faint)" fontSize={9} tickLine={false} axisLine={false} />
-                           <Tooltip cursor={{fill: 'rgba(255,255,255,0.02)'}} contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-glow)', borderRadius: 10 }} />
-                           <Bar dataKey="delivery" fill="var(--accent-slate)" radius={[3, 3, 0, 0]} barSize={20}>
-                              {myData.kpiHistory?.slice(-6).map((entry, index) => (
-                                 <Cell key={`cell-${index}`} fill={entry.delivery > 95 ? 'var(--accent-slate)' : 'rgba(177,202,215,0.3)'} />
-                              ))}
-                           </Bar>
-                        </BarChart>
-                     </ResponsiveContainer>
-                  </div>
-               </div>
+        <div style={{ maxWidth: 1400, margin: '0 auto', padding: '0 24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', height: 72 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0, marginRight: 40 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--accent-slate)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <Building2 size={20} color="#000" />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontSize: 16, fontWeight: 800, fontFamily: 'Manrope, sans-serif' }}>Sovereign Portal</span>
+                <span style={{ fontSize: 9, color: 'var(--accent-amber)', fontWeight: 800, letterSpacing: '0.1em' }}>{myData.name.toUpperCase()}</span>
+              </div>
             </div>
 
-            <div className="grid grid-3" style={{ gap: 'var(--gap-standard)' }}>
-               <div className="metric-card" style={{ padding: '16px', background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)' }}>
-                  <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: 4 }}>LATEST PROCUREMENT</div>
-                  <div className="font-mono text-lg" style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{myPOs[0]?.id || 'N/A'}</div>
-                  <div className="flex justify-between items-center mt-8">
-                     <span className="badge" style={{ background: 'rgba(177,202,215,0.1)', color: 'var(--accent-slate)', fontSize: 10 }}>{myPOs[0]?.deliveryStatus || 'Pending'}</span>
-                     <span style={{ fontSize: 10, color: 'var(--text-faint)' }}>{myPOs[0]?.dateOfIssue}</span>
-                  </div>
-               </div>
-               <div className="metric-card" style={{ padding: '16px', background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)' }}>
-                  <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: 4 }}>ACTIVE BIDS</div>
-                  <div style={{ fontSize: 18, fontWeight: 800, fontFamily: 'Manrope, sans-serif' }}>{myBids.filter(b => b.status === 'Pending' || b.status === 'Evaluated').length} ACTIVE PROPOSALS</div>
-                  <div style={{ height: 4, background: 'rgba(255,255,255,0.05)', borderRadius: 2, marginTop: 12, overflow: 'hidden' }}>
-                     <div style={{ width: '65%', height: '100%', background: 'var(--gradient-primary)' }} />
-                  </div>
-               </div>
-               <div className="metric-card" style={{ padding: '16px', background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)' }}>
-                  <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em', marginBottom: 4 }}>ENTITY COMPLIANCE</div>
-                  <div style={{ fontSize: 18, fontWeight: 800, fontFamily: 'Manrope, sans-serif' }}>{complianceDocs.filter(d => d.status === 'Active').length} / {complianceDocs.length} VAULT ITEMS</div>
-                  <div style={{ fontSize: 11, color: 'var(--accent-slate)', display: 'flex', alignItems: 'center', gap: 6, marginTop: 8, fontWeight: 700 }}>
-                     <CheckCircle2 size={12} /> VERIFIED COMPLIANCE
-                  </div>
-               </div>
-            </div>
-          </div>
-        )}
-
-        {/* PURCHASE ORDERS TAB */}
-        {activeTab === 'pos' && (
-          <div className="stack-lg animate-in" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-            <div className="grid grid-4" style={{ gap: 'var(--gap-standard)' }}>
-              {[
-                { label: 'ACK PENDING', value: myPOs.filter(p => !p.acknowledgedAt).length, icon: <Clock size={16} />, color: 'var(--accent-amber)', trend: 'Immediate Action' },
-                { label: 'PRODUCTION', value: myPOs.filter(p => p.deliveryStatus === 'Approved').length, icon: <Activity size={16} />, color: 'var(--accent-slate)', trend: 'Active Logic' },
-                { label: 'IN TRANSIT', value: myPOs.filter(p => p.deliveryStatus === 'Shipped').length, icon: <Globe size={16} />, color: 'var(--accent-slate)', trend: 'Global Log' },
-                { label: 'FULFILLED', value: myPOs.filter(p => p.deliveryStatus === 'Delivered').length, icon: <CheckCircle2 size={16} />, color: 'var(--accent-slate)', trend: 'Archive' },
-              ].map((m, i) => (
-                <div key={i} className="metric-card" style={{ padding: '16px', background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                   <div className="flex justify-between items-center">
-                    <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>{m.label}</div>
-                    <div style={{ color: m.color }}>{m.icon}</div>
-                  </div>
-                  <div style={{ fontSize: 22, fontWeight: 800, fontFamily: 'Manrope, sans-serif' }}>{m.value}</div>
-                  <div style={{ fontSize: 10, color: m.color, fontWeight: 700, opacity: 0.8 }}>{m.trend}</div>
-                </div>
+            <div style={{ display: 'flex', gap: 4, height: '100%' }}>
+              {tabs.map(t => (
+                <button
+                  key={t.id}
+                  onClick={() => setActiveTab(t.id as PortalTab)}
+                  className={`tab-btn ${activeTab === t.id ? 'tab-btn-active' : ''}`}
+                >
+                  {t.icon}
+                  {t.label}
+                  {t.badge && t.badge > 0 ? (
+                    <span style={{ padding: '2px 6px', background: t.id === 'pos' ? 'var(--accent-amber)' : 'var(--accent-slate)', color: '#000', fontSize: 9, borderRadius: 6, fontWeight: 900 }}>{t.badge}</span>
+                  ) : null}
+                  {activeTab === t.id && <div className="tab-indicator" />}
+                </button>
               ))}
             </div>
 
-            <div className="metric-card" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)', padding: 0, overflow: 'hidden' }}>
-              <div className="flex justify-between items-center p-20" style={{ borderBottom: '1px solid var(--border-subtle)', background: 'rgba(255,255,255,0.01)' }}>
-                <div className="flex items-center gap-12">
-                   <Package className="text-slate" size={18} />
-                   <h3 style={{ margin: 0, fontSize: 16, fontFamily: 'Manrope, sans-serif', fontWeight: 700 }}>Procurement Ledger</h3>
+            <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 16 }}>
+              <button className="btn btn-ghost" style={{ padding: 8 }}><Bell size={18} /></button>
+              <div style={{ height: 24, width: 1, background: 'var(--border-subtle)' }} />
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <div style={{ textAlign: 'right', display: 'none', md: 'block' } as any}>
+                  <div style={{ fontSize: 13, fontWeight: 700 }}>{myData.contactList?.[0]?.name || 'Account Admin'}</div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Security Level 4</div>
                 </div>
-                <div className="search-box-minimal" style={{ background: 'var(--bg-secondary)', borderRadius: 8, padding: '6px 12px', display: 'flex', alignItems: 'center', gap: 8, border: '1px solid var(--border-subtle)' }}>
-                  <Search size={14} className="text-faint" />
-                  <input 
-                    type="text" 
-                    placeholder="Filter Registry..." 
-                    value={searchTerm} 
-                    onChange={e => setSearchTerm(e.target.value)} 
-                    style={{ background: 'none', border: 'none', color: 'var(--text-primary)', fontSize: 12, outline: 'none', width: 180 }}
-                  />
+                <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-subtle)' }}>
+                  <User size={18} className="text-slate" />
                 </div>
-              </div>
-              <div className="table-responsive">
-                <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr>
-                      <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>LEDGER ID</th>
-                      <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>DATE</th>
-                      <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>FISCAL VALUE</th>
-                      <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>TARGET DATE</th>
-                      <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>INTEL STATUS</th>
-                      <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>SHIPPING</th>
-                      <th style={{ padding: '12px 20px', textAlign: 'right', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>CONTROL</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {myPOs.filter(po => po.id.toLowerCase().includes(searchTerm.toLowerCase())).map(po => (
-                      <tr key={po.id} className="hover-row" style={{ borderBottom: '1px solid var(--border-subtle)', transition: 'background 0.2s' }}>
-                        <td style={{ padding: '14px 20px', fontSize: 13, fontWeight: 700, fontFamily: 'Inter, sans-serif' }}>{po.id}</td>
-                        <td style={{ padding: '14px 20px', fontSize: 12, color: 'var(--text-muted)' }}>{po.dateOfIssue}</td>
-                        <td style={{ padding: '14px 20px', fontSize: 13, fontWeight: 700 }}>${po.totalAmount.toLocaleString()}</td>
-                        <td style={{ padding: '14px 20px', fontSize: 12, color: 'var(--text-muted)' }}>{po.expectedDeliveryDate}</td>
-                        <td style={{ padding: '14px 20px' }}>
-                          <span className="badge" style={{ 
-                            background: po.deliveryStatus === 'Delivered' ? 'rgba(177,202,215,0.08)' : 'rgba(233,193,118,0.05)', 
-                            color: po.deliveryStatus === 'Delivered' ? 'var(--accent-slate)' : 'var(--accent-amber)',
-                            fontSize: 10,
-                            fontWeight: 800
-                          }}>
-                            {po.deliveryStatus.toUpperCase()}
-                          </span>
-                        </td>
-                        <td style={{ padding: '14px 20px', fontSize: 11, color: 'var(--text-muted)' }}>
-                          {po.trackingNumber ? (
-                            <div className="flex items-center gap-4">
-                              <Globe size={12} className="text-slate" /> {po.carrier}
-                            </div>
-                          ) : <span style={{ opacity: 0.5 }}>Pending Logistic Hub</span>}
-                        </td>
-                        <td style={{ padding: '14px 20px', textAlign: 'right' }}>
-                          <div className="flex justify-end gap-6">
-                            <button className="btn btn-ghost" style={{ padding: 4 }} title="Download PDF"><Download size={14} /></button>
-                            {!po.acknowledgedAt && (
-                              <button className="btn btn-primary" style={{ fontSize: 10, padding: '4px 8px' }} onClick={() => acknowledgePO(po.id)}>ACKNOWLEDGE</button>
-                            )}
-                            {po.deliveryStatus === 'Approved' && po.acknowledgedAt && (
-                              <button className="btn btn-ghost" style={{ fontSize: 10, padding: '4px 8px' }} onClick={() => { setSelectedPOId(po.id); setModalOpen('confirmShipment'); }}>DISPATCH</button>
-                            )}
-                            {['Shipped', 'Partially Delivered'].includes(po.deliveryStatus) && (
-                              <button className="btn btn-ghost" style={{ fontSize: 10, padding: '4px 8px' }} onClick={() => { setSelectedPOId(po.id); setModalOpen('notifyDelivery'); }}>LOG DELIVERY</button>
-                            )}
-                            {['Shipped', 'Partially Delivered', 'Delivered'].includes(po.deliveryStatus) && (
-                              <button className="btn btn-primary" style={{ fontSize: 10, padding: '4px 8px' }} onClick={() => { setSelectedPOId(po.id); setModalOpen('submitInvoice'); }}>INVOICE</button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
               </div>
             </div>
           </div>
-        )}
+        </div>
+      </nav>
 
-        {/* PERFORMANCE TAB */}
-        {activeTab === 'performance' && (
-          <div className="stack-lg animate-in" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-            <div className="grid grid-4" style={{ gap: 'var(--gap-standard)' }}>
-              {[
-                { label: 'ANALYTIC SCORE', value: `${myData.kpis.deliveryPerformance}%`, icon: <BarChart3 size={16} />, color: 'var(--accent-slate)', trend: 'Benchmark: 92%' },
-                { label: 'MARKET POSITION', value: '#12 / 450', icon: <TrendingUp size={16} />, color: 'var(--accent-slate)', trend: '+3 positions' },
-                { label: 'YOY GROWTH', value: '+4.2%', icon: <Activity size={16} />, color: 'var(--accent-slate)', trend: 'Calculated Logic' },
-                { label: 'RISK FACTOR', value: `${myData.kpis.rejectionRate}%`, icon: <ShieldCheck size={16} />, color: 'var(--accent-amber)', trend: 'Actionable Delta' },
-              ].map((m, i) => (
-                <div key={i} className="metric-card" style={{ padding: '16px', background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <div className="flex justify-between items-center text-xs" style={{ fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>
-                    {m.label}
-                    <div style={{ color: m.color }}>{m.icon}</div>
-                  </div>
-                  <div style={{ fontSize: 22, fontWeight: 800, fontFamily: 'Manrope, sans-serif' }}>{m.value}</div>
-                  <div style={{ fontSize: 10, color: m.color, fontWeight: 700, opacity: 0.8 }}>{m.trend}</div>
-                </div>
-              ))}
-            </div>
+      {/* ═══ MAIN CONTENT AREA ═══════════════════════════════════════════════ */}
+      <div style={{ maxWidth: 1400, margin: '0 auto', padding: '28px 24px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
 
-            <div className="section-header" style={{ marginBottom: 16 }}>
-               <h3 style={{ margin: 0, fontSize: 18, fontFamily: 'Manrope, sans-serif', fontWeight: 800 }}>Strategic Intelligence Radar</h3>
-               <p style={{ margin: 0, fontSize: 11, color: 'var(--text-muted)' }}>Long-term fulfillment and quality metrics derived from historical ledger data.</p>
-            </div>
-
-            <div className="grid grid-2" style={{ gap: 'var(--gap-standard)' }}>
-              <div className="metric-card" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)', padding: '20px' }}>
-                <div className="flex justify-between items-center mb-16">
-                  <h3 style={{ margin: 0, fontSize: 13, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '0.02em' }}>HISTORICAL FULFILLMENT</h3>
-                  <div className="badge" style={{ background: 'rgba(177,202,215,0.05)', fontSize: 9 }}>UNIT: ON-TIME %</div>
-                </div>
-                <div style={{ height: 260 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <AreaChart data={myData.kpiHistory}>
-                      <defs>
-                        <linearGradient id="colorPerfTab" x1="0" y1="0" x2="0" y2="1">
-                          <stop offset="5%" stopColor="var(--accent-slate)" stopOpacity={0.4}/>
-                          <stop offset="95%" stopColor="var(--accent-slate)" stopOpacity={0}/>
-                        </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />
-                      <XAxis dataKey="month" stroke="var(--text-faint)" fontSize={10} tickLine={false} axisLine={false} />
-                      <YAxis domain={[80, 100]} stroke="var(--text-faint)" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} />
-                      <Tooltip contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-glow)', borderRadius: 10 }} />
-                      <Area type="monotone" dataKey="delivery" stroke="var(--accent-slate)" strokeWidth={3} fillOpacity={1} fill="url(#colorPerfTab)" />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-
-              <div className="metric-card" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)', padding: '20px' }}>
-                <div className="flex justify-between items-center mb-16">
-                  <h3 style={{ margin: 0, fontSize: 13, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '0.02em' }}>REJECTION ANALYTICS</h3>
-                  <div className="badge" style={{ background: 'rgba(233,193,118,0.05)', color: 'var(--accent-amber)', fontSize: 9 }}>STATUS: ANOMALY TRACKING</div>
-                </div>
-                <div style={{ height: 260 }}>
-                  <ResponsiveContainer width="100%" height="100%">
-                    <LineChart data={myData.kpiHistory}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />
-                      <XAxis dataKey="month" stroke="var(--text-faint)" fontSize={10} tickLine={false} axisLine={false} />
-                      <YAxis stroke="var(--text-faint)" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `${v}%`} />
-                      <Tooltip contentStyle={{ background: 'var(--bg-secondary)', border: '1px solid var(--border-glow)', borderRadius: 10 }} />
-                      <Line type="monotone" dataKey="rejection" stroke="var(--accent-amber)" strokeWidth={3} dot={{ r: 4, fill: 'var(--accent-amber)' }} />
-                    </LineChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            </div>
-
-            <div className="metric-card" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)', padding: '24px' }}>
-              <div className="flex flex-col gap-4 mb-20">
-                <h3 style={{ margin: 0, fontSize: 16, fontFamily: 'Manrope, sans-serif', fontWeight: 800 }}>Sovereign Preferred Criteria</h3>
-                <p style={{ margin: 0, fontSize: 11, color: 'var(--text-muted)' }}>Target thresholds required to maintain Intellectual Supply Partner status.</p>
-              </div>
-              <div className="grid grid-2" style={{ gap: 'var(--gap-standard)' }}>
-                {myData.preferredStatusCriteria?.map((c, i) => (
-                  <div key={i} className="kpi-target-row" style={{ 
-                    display: 'flex', alignItems: 'center', gap: 16, 
-                    padding: '16px', borderRadius: 'var(--radius-standard)', background: 'rgba(255,255,255,0.02)',
-                    border: '1px solid var(--border-subtle)'
-                  }}>
-                    {c.met ? <CheckCircle2 className="text-slate" size={20} /> : <div style={{ width: 18, height: 18, borderRadius: '50%', border: '2px dashed var(--border-subtle)' }} />}
+          {/* ═══ DASHBOARD (BRIEFING) ════════════════════════════════════════ */}
+          {activeTab === 'dashboard' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 24 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+                  {/* Status board */}
+                  <div style={{ padding: 28, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)', display: 'flex', alignItems: 'center', gap: 40 }}>
+                    <HealthScoreRing score={94} />
                     <div style={{ flex: 1 }}>
-                      <div style={{ fontSize: 12, fontWeight: 700, color: c.met ? 'var(--text-primary)' : 'var(--text-muted)' }}>{c.criterion.toUpperCase()}</div>
-                      <div className="progress-bar-container" style={{ margin: '8px 0', height: 4, background: 'rgba(255,255,255,0.05)', borderRadius: 2, overflow: 'hidden' }}>
-                        <div className="progress-bar-fill" style={{ width: c.met ? '100%' : '65%', background: c.met ? 'var(--gradient-primary)' : 'var(--accent-amber)' }} />
-                      </div>
+                      <h2 style={{ margin: '0 0 6px', fontSize: 24, fontFamily: 'Manrope, sans-serif', fontWeight: 800 }}>Systems Nominal</h2>
+                      <p style={{ margin: 0, fontSize: 13, color: 'var(--text-muted)' }}>You are holding **Preferred Supplier** status. 14 items currently in procurement cycle.</p>
                     </div>
-                    <span className="badge" style={{ fontSize: 9, background: c.met ? 'rgba(177,202,215,0.1)' : 'rgba(233,193,118,0.05)', color: c.met ? 'var(--accent-slate)' : 'var(--accent-amber)', fontWeight: 800 }}>{c.met ? 'VALID' : 'PENDING'}</span>
+                    <div style={{ display: 'flex', gap: 12 }}>
+                      {liveAlerts.map((a, i) => <AlertBadge key={i} {...a} />)}
+                    </div>
+                  </div>
+
+                  {/* Performance Radar */}
+                  <div style={{ padding: 24, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                      <h3 style={{ margin: 0, fontSize: 16, fontFamily: 'Manrope, sans-serif', fontWeight: 800 }}>Fulfillment analytics</h3>
+                      <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>Last 4 months</span>
+                    </div>
+                    <div style={{ height: 260 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={deliveryHistory}>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.03)" />
+                          <XAxis dataKey="month" stroke="var(--text-faint)" fontSize={11} axisLine={false} tickLine={false} />
+                          <YAxis stroke="var(--text-faint)" fontSize={11} axisLine={false} tickLine={false} />
+                          <Tooltip
+                            contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 12, fontSize: 12 }}
+                            itemStyle={{ fontWeight: 800 }}
+                          />
+                          <Bar dataKey="onTime" fill="var(--accent-slate)" radius={[4, 4, 0, 0]} barSize={40} />
+                          <Bar dataKey="delayed" fill="rgba(248,113,113,0.3)" radius={[4, 4, 0, 0]} barSize={40} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  {/* Latest Procurement */}
+                  <div style={{ padding: 24, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)' }}>
+                    <div className="card-header-label">ACTIVE BIDS</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 12 }}>
+                      {eligibleRFQs.slice(0, 2).map((rfq: any) => (
+                        <div key={rfq.id} style={{ display: 'flex', flexDirection: 'column', gap: 6, paddingBottom: 12, borderBottom: '1px solid var(--border-subtle)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: 9, fontWeight: 900, color: 'var(--accent-slate)' }}>{rfq.id}</span>
+                            <span style={{ fontSize: 10, fontWeight: 700, color: '#f87171' }}>{rfq.bidDeadline}</span>
+                          </div>
+                          <div style={{ fontSize: 13, fontWeight: 700, fontFamily: 'Manrope, sans-serif' }}>{rfq.title}</div>
+                        </div>
+                      ))}
+                      <button className="btn btn-ghost" style={{ width: '100%', justifyContent: 'center', fontSize: 11 }} onClick={() => setActiveTab('bids' as PortalTab)}>View all tenders</button>
+                    </div>
+                  </div>
+
+                  {/* Summary Metric Cards */}
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12 }}>
+                    {[
+                      { label: 'Released capital', value: `$${releasedPayments.toLocaleString()}`, icon: <CheckCircle2 size={14} />, color: '#4ade80' },
+                      { label: 'Fulfillment rate', value: '98.4%', icon: <Star size={14} />, color: 'var(--accent-amber)' },
+                    ].map((m, i) => (
+                      <div key={i} style={{ padding: 20, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)', display: 'flex', alignItems: 'center', gap: 16 }}>
+                        <div style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(255,255,255,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: m.color }}>{m.icon}</div>
+                        <div>
+                          <div className="card-header-label">{m.label}</div>
+                          <div style={{ fontSize: 18, fontWeight: 800, fontFamily: 'Manrope, sans-serif' }}>{m.value}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ═══ PROCUREMENT (POs) ═══════════════════════════════════════════ */}
+          {activeTab === 'pos' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+                {[
+                  { label: 'Ack. pending', value: pendingAck, color: 'var(--accent-amber)', icon: <Clock size={16} /> },
+                  { label: 'In production', value: inProduction, color: 'var(--accent-slate)', icon: <Activity size={16} /> },
+                  { label: 'In transit', value: myPOs.filter((p: any) => p.deliveryStatus === 'Shipped').length, color: 'var(--accent-slate)', icon: <Globe size={16} /> },
+                  { label: 'Fulfilled', value: myPOs.filter((p: any) => p.deliveryStatus === 'Delivered').length, color: '#4ade80', icon: <CheckCircle2 size={16} /> },
+                ].map((m, i) => (
+                  <div key={i} style={{ padding: 18, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                      <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>{m.label.toUpperCase()}</span>
+                      <span style={{ color: m.color }}>{m.icon}</span>
+                    </div>
+                    <div style={{ fontSize: 24, fontWeight: 800, fontFamily: 'Manrope, sans-serif' }}>{m.value}</div>
                   </div>
                 ))}
               </div>
-            </div>
-          </div>
-        )}
 
-        {/* FINANCIALS TAB */}
-        {activeTab === 'financials' && (
-          <div className="stack-lg animate-in" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-            <div className="grid grid-4" style={{ gap: 'var(--gap-standard)' }}>
-              {[
-                { label: 'OUTSTANDING FISCAL', value: `$${totalOutstanding.toLocaleString()}`, icon: <DollarSign size={18} />, color: 'var(--accent-amber)', trend: 'Actionable Balance' },
-                { label: 'SETTLED TO DATE', value: `$${releasedPayments.toLocaleString()}`, icon: <CreditCard size={18} />, color: 'var(--accent-slate)', trend: 'Released Funds' },
-                { label: 'SETTLEMENT CYCLE', value: `${avgPayCycle} DAYS`, icon: <Clock size={18} />, color: 'var(--accent-slate)', trend: 'Operational Velocity' },
-                { label: 'LIQUIDITY RESERVE', value: '$500,000', icon: <Landmark size={18} />, color: 'var(--accent-slate)', trend: 'Locked Logic' },
-              ].map((m, i) => (
-                <div key={i} className="metric-card" style={{ padding: '16px', background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                   <div className="flex justify-between items-center text-xs" style={{ fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>
-                    {m.label}
-                    <div style={{ color: m.color }}>{m.icon}</div>
+              <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)', overflow: 'hidden' }}>
+                <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1 }}>
+                    <Search size={14} className="text-muted" />
+                    <input type="text" placeholder="Filter by ID or reference…" style={{ background: 'none', border: 'none', outline: 'none', color: '#fff', fontSize: 13, width: 280 }} />
                   </div>
-                  <div style={{ fontSize: 22, fontWeight: 800, fontFamily: 'Manrope, sans-serif' }}>{m.value}</div>
-                  <div style={{ fontSize: 10, color: m.color, fontWeight: 700, opacity: 0.8 }}>{m.trend}</div>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    <button className="btn btn-ghost" style={{ fontSize: 11 }}><Download size={13} /> Export manifest</button>
+                    <button className="btn btn-primary" style={{ fontSize: 11 }}><Plus size={13} /> Batch acknowledgement</button>
+                  </div>
                 </div>
-              ))}
-            </div>
 
-            <div className="section-header" style={{ marginBottom: 16 }}>
-               <h3 style={{ margin: 0, fontSize: 18, fontFamily: 'Manrope, sans-serif', fontWeight: 800 }}>Financial Settlement Hub</h3>
-               <p style={{ margin: 0, fontSize: 11, color: 'var(--text-muted)' }}>Real-time statement of account and dynamic liquidity management.</p>
-            </div>
-
-            <div className="grid grid-2" style={{ gridTemplateColumns: '1.6fr 1fr', gap: 'var(--gap-standard)' }}>
-              <div className="metric-card" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)', padding: 0, overflow: 'hidden' }}>
-                <div className="flex justify-between items-center p-20" style={{ borderBottom: '1px solid var(--border-subtle)', background: 'rgba(255,255,255,0.01)' }}>
-                  <h3 style={{ margin: 0, fontSize: 14, fontFamily: 'Manrope, sans-serif', fontWeight: 700 }}>Statement of Account</h3>
-                  <button className="btn btn-ghost" style={{ fontSize: 10, padding: '4px 8px' }}><Download size={12} /> EXPORT LEDGER</button>
-                </div>
-                <div className="table-responsive">
-                  <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
-                      <tr>
-                        <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>DATE</th>
-                        <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>REFERENCE</th>
-                        <th style={{ padding: '12px 20px', textAlign: 'right', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>DEBIT</th>
-                        <th style={{ padding: '12px 20px', textAlign: 'right', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>CREDIT</th>
-                        <th style={{ padding: '12px 20px', textAlign: 'right', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>BALANCE</th>
+                      <tr style={{ background: 'rgba(255,255,255,0.01)' }}>
+                        {['PO identifier', 'Date issued', 'Total value', 'Status', 'Tracking', ''].map(h => (
+                          <th key={h} style={{ padding: '11px 18px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em', borderBottom: '1px solid var(--border-subtle)' }}>{h.toUpperCase()}</th>
+                        ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {myInvoices.map((inv, i) => (
-                        <tr key={inv.id} className="hover-row" style={{ borderBottom: '1px solid var(--border-subtle)', transition: 'background 0.2s' }}>
-                          <td style={{ padding: '14px 20px', fontSize: 12 }}>{inv.date}</td>
-                          <td style={{ padding: '14px 20px', fontSize: 11, fontFamily: 'Inter, sans-serif', fontWeight: 700 }}>{inv.invoiceNumber}</td>
-                          <td style={{ padding: '14px 20px', textAlign: 'right', fontSize: 12, color: 'var(--accent-amber)', opacity: 0.5 }}>—</td>
-                          <td style={{ padding: '14px 20px', textAlign: 'right', fontSize: 12, color: 'var(--accent-slate)', fontWeight: 700 }}>${inv.totalAmount.toLocaleString()}</td>
-                          <td style={{ padding: '14px 20px', textAlign: 'right', fontSize: 12, fontWeight: 800 }}>
-                            ${(totalOutstanding + releasedPayments - (i * 2000)).toLocaleString()}
+                      {myPOs.map((po: any) => (
+                        <tr key={po.id} className="hover-row" style={{ borderBottom: '1px solid var(--border-subtle)', transition: 'background 0.15s' }}>
+                          <td style={{ padding: '14px 18px' }}>
+                            <div style={{ fontSize: 13, fontWeight: 700 }}>{po.id}</div>
+                            <div style={{ fontSize: 9, color: 'var(--text-faint)', marginTop: 2 }}>{po.items.length} LINE ITEMS</div>
+                          </td>
+                          <td style={{ padding: '14px 18px', fontSize: 12, color: 'var(--text-muted)' }}>{po.dateOfIssue}</td>
+                          <td style={{ padding: '14px 18px', fontSize: 13, fontWeight: 700 }}>${po.totalAmount.toLocaleString()}</td>
+                          <td style={{ padding: '14px 18px' }}><StatusPill status={!po.acknowledgedAt ? 'Pending Ack' : po.deliveryStatus} /></td>
+                          <td style={{ padding: '14px 18px' }}>
+                            {po.trackingNumber ? (
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <Globe size={12} className="text-slate" />
+                                <span style={{ fontSize: 11, fontFamily: 'monospace' }}>{po.trackingNumber}</span>
+                              </div>
+                            ) : <span style={{ opacity: 0.2 }}>—</span>}
+                          </td>
+                          <td style={{ padding: '14px 18px', textAlign: 'right' }}>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                              {!po.acknowledgedAt && (
+                                <button className="btn btn-primary" style={{ padding: '4px 10px', fontSize: 10 }} onClick={() => acknowledgePO(po.id)}>Acknowledge</button>
+                              )}
+                              <button className="btn btn-ghost" style={{ padding: 6 }}><ExternalLink size={13} /></button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -584,258 +473,322 @@ export default function SupplierPortalPage({ standalone = false }: { standalone?
                   </table>
                 </div>
               </div>
+            </div>
+          )}
 
-              <div className="metric-card" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)', padding: '24px' }}>
-                <div className="flex justify-between items-center mb-20">
-                  <div>
-                    <h3 style={{ margin: 0, fontSize: 16, fontFamily: 'Manrope, sans-serif', fontWeight: 800 }}>Liquidity Optimization</h3>
-                    <p style={{ margin: 0, fontSize: 11, color: 'var(--text-muted)' }}>Accelerate cash flow via dynamic discounting.</p>
+          {/* ═══ PERFORMANCE ══════════════════════════════════════════════════ */}
+          {activeTab === 'performance' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+                {[
+                  { label: 'Market position', value: '#14 Global', color: 'var(--accent-slate)', trend: '+3 spots', positive: true },
+                  { label: 'YoY Growth', value: '24.2%', color: '#4ade80', trend: 'In-sector', positive: true },
+                  { label: 'Dispute rate', value: '0.4%', color: '#f87171', trend: 'Below threshold', positive: true },
+                  { label: 'Avg. lead time', value: '14.2 Days', color: 'var(--accent-slate)', trend: '-1.2d improvement', positive: true },
+                ].map((m, i) => (
+                  <div key={i} style={{ padding: 20, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)' }}>
+                    <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', marginBottom: 12, letterSpacing: '0.05em' }}>{m.label.toUpperCase()}</div>
+                    <div style={{ fontSize: 22, fontWeight: 800, fontFamily: 'Manrope, sans-serif' }}>{m.value}</div>
+                    <div style={{ fontSize: 10, color: m.positive ? '#4ade80' : '#f87171', fontWeight: 700, marginTop: 6 }}>{m.trend}</div>
                   </div>
-                  <TrendingUp className="text-slate" size={20} />
-                </div>
-                <div className="stack-sm" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                  {invoices.filter(inv => inv.supplierId === mySupplierId && inv.matchStatus === 'Full Match').map(inv => (
-                    <div key={inv.id} className="payment-offer-card" style={{ 
-                      padding: '16px', borderRadius: 'var(--radius-standard)', 
-                      background: 'rgba(255,255,255,0.02)',
-                      border: '1px solid var(--border-subtle)',
-                      transition: 'border-color 0.2s'
-                    }}>
-                      <div className="flex justify-between items-center mb-12">
-                        <span style={{ fontSize: 11, fontWeight: 800, fontFamily: 'Inter, sans-serif' }}>{inv.invoiceNumber}</span>
-                        <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--accent-slate)' }}>${inv.totalAmount.toLocaleString()}</span>
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>TARGET MATURITY: {inv.dueDate}</div>
-                        <button className="btn btn-primary" style={{ fontSize: 10, padding: '4px 10px' }} onClick={() => { setSelectedPOId(inv.id); setModalOpen('earlyPayment'); }}>
-                          WITHDRAW NOW
-                        </button>
-                      </div>
+                ))}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 400px', gap: 24 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+                  <div style={{ padding: 24, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)' }}>
+                    <div className="card-header-label">HISTORICAL FULFILLMENT</div>
+                    <div style={{ height: 300, marginTop: 24 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <AreaChart data={deliveryHistory}>
+                          <defs>
+                            <linearGradient id="colorValue" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="var(--accent-slate)" stopOpacity={0.15} />
+                              <stop offset="95%" stopColor="var(--accent-slate)" stopOpacity={0} />
+                            </linearGradient>
+                          </defs>
+                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.03)" />
+                          <XAxis dataKey="month" stroke="var(--text-faint)" fontSize={11} axisLine={false} tickLine={false} />
+                          <YAxis stroke="var(--text-faint)" fontSize={11} axisLine={false} tickLine={false} />
+                          <Tooltip
+                            contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 12, fontSize: 12 }}
+                          />
+                          <Area type="monotone" dataKey="onTime" stroke="var(--accent-slate)" strokeWidth={2} fillOpacity={1} fill="url(#colorValue)" />
+                        </AreaChart>
+                      </ResponsiveContainer>
                     </div>
-                  ))}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <div style={{ padding: 24, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)' }}>
+                    <div className="card-header-label">PREFERRED STATUS CRITERIA</div>
+                    <div style={{ marginTop: 20 }}>
+                      <ProgressBar label="Fulfillment rate (Min 95%)" value={98} total={100} />
+                      <ProgressBar label="Response time (Max 24h)" value={12} total={24} />
+                      <ProgressBar label="Quality pass (Min 98%)" value={99} total={100} />
+                      <ProgressBar label="Digital maturity" value={8} total={10} />
+                    </div>
+                  </div>
+
+                  <div style={{ padding: 24, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)' }}>
+                    <div className="card-header-label">REJECTION ANALYTICS</div>
+                    <div style={{ height: 160, marginTop: 12 }}>
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={deliveryHistory}>
+                          <Line type="stepAfter" dataKey="delayed" stroke="#f87171" strokeWidth={2} dot={{ r: 3, fill: '#f87171' }} />
+                          <Tooltip contentStyle={{ display: 'none' }} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* QUALITY TAB */}
-        {activeTab === 'quality' && (
-          <div className="stack-lg animate-in">
-            <div className="grid grid-4" style={{ gap: 16 }}>
-              {[
-                { label: 'Inspection Pass', value: '98.2%', icon: <CheckCircle2 size={16} />, color: 'var(--accent-emerald)' },
-                { label: 'Active Disputes', value: disputes.filter(d => d.status === 'Open').length, icon: <AlertTriangle size={16} />, color: 'var(--accent-rose)' },
-                { label: 'Average Variance', value: '1.4%', icon: <TrendingDown size={16} />, color: 'var(--accent-amber)' },
-                { label: 'QC Gates Passed', value: '24', icon: <Activity size={16} />, color: 'var(--accent-cyan)' },
-              ].map((m, i) => (
-                <div key={i} className="card glass luxury-border p-16 flex items-center gap-12" style={{ borderLeft: `3px solid ${m.color}` }}>
-                  <div style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(255,255,255,0.03)', color: m.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                    {m.icon}
+          {/* ═══ FINANCIALS ═══════════════════════════════════════════════════ */}
+          {activeTab === 'financials' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+                {[
+                  { label: 'Total outstanding', value: `$${totalOutstanding.toLocaleString()}`, color: 'var(--accent-amber)', icon: <Clock size={16} /> },
+                  { label: 'Settled this month', value: `$${releasedPayments.toLocaleString()}`, color: '#4ade80', icon: <DollarSign size={16} /> },
+                  { label: 'Average settlement', value: '28.4 Days', color: 'var(--accent-slate)', icon: <CalendarIcon size={16} /> },
+                  { label: 'Early pay potential', value: `$${(totalOutstanding * 0.98).toLocaleString()}`, color: 'var(--accent-slate)', icon: <TrendingUp size={16} /> },
+                ].map((m: any, i) => (
+                  <div key={i} style={{ padding: 18, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                      <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>{m.label.toUpperCase()}</span>
+                      <span style={{ color: m.color }}>{m.icon || <Activity size={16} />}</span>
+                    </div>
+                    <div style={{ fontSize: 24, fontWeight: 800, fontFamily: 'Manrope, sans-serif' }}>{m.value}</div>
                   </div>
-                  <div>
-                    <div style={{ fontSize: 10, color: 'var(--text-muted)', textTransform: 'uppercase' }}>{m.label}</div>
-                    <div style={{ fontSize: 18, fontWeight: 700 }}>{m.value}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            <div className="section-header">
-               <div className="flex items-center gap-10">
-                  <Activity className="text-indigo" size={18} />
-                  <h3 className="card-title">Delivery & Quality Governance</h3>
-               </div>
-            </div>
-
-            <div className="card glass">
-              <div className="card-header">
-                <h3 className="card-title">Goods Receipt & Inspection Logs</h3>
-                <div className="badge pending">Live Feed</div>
+                ))}
               </div>
-              <div className="table-responsive">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>GRN ID</th>
-                      <th>Received Date</th>
-                      <th>Passed Qty</th>
-                      <th>Rejected Qty</th>
-                      <th>Status</th>
-                      <th className="text-right">Action</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {grns.filter(g => g.supplierId === mySupplierId).map(grn => {
-                      const rejectedTotal = grn.lineItems.reduce((acc, item) => acc + (item.rejectedQty || 0), 0);
-                      const passedTotal = grn.lineItems.reduce((acc, item) => acc + (item.receivedQty || 0), 0) - rejectedTotal;
-                      return (
-                        <tr key={grn.id}>
-                          <td className="font-mono text-primary font-bold">{grn.id}</td>
-                          <td>{grn.dateCreated}</td>
-                          <td className="text-success font-bold">{passedTotal}</td>
-                          <td className="text-danger font-bold">{rejectedTotal}</td>
-                          <td>
-                            <div className="badge shadow-sm" data-status={rejectedTotal > 0 ? 'Variance' : 'Approved'}>
-                              <span className="badge-dot" /> {rejectedTotal > 0 ? 'QC VARIANCE' : 'QC PASSED'}
-                            </div>
-                          </td>
-                          <td className="text-right">
-                            {rejectedTotal > 0 && (
-                              <button className="btn btn-xs btn-ghost text-danger" onClick={() => { setSelectedGRNId(grn.id); setModalOpen('disputeGRN'); }}>
-                                Dispute
-                              </button>
-                            )}
-                          </td>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 340px', gap: 24 }}>
+                <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)', overflow: 'hidden' }}>
+                  <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <h3 style={{ margin: 0, fontSize: 15, fontFamily: 'Manrope, sans-serif', fontWeight: 700 }}>Statement of account</h3>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button className="btn btn-ghost" style={{ fontSize: 11 }}><Search size={13} /> Filter</button>
+                      <button className="btn btn-ghost" style={{ fontSize: 11 }}><Download size={13} /> Ledger PDF</button>
+                    </div>
+                  </div>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr>
+                        {['Document #', 'Type', 'Issue Date', 'Settlement Date', 'Amount', 'Status'].map(h => (
+                          <th key={h} style={{ padding: '11px 18px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.04em', borderBottom: '1px solid var(--border-subtle)' }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {myInvoices.map((inv: any) => (
+                        <tr key={inv.id} className="hover-row" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                          <td style={{ padding: '13px 18px', fontWeight: 700, fontSize: 13 }}>{inv.invoiceNumber}</td>
+                          <td style={{ padding: '13px 18px', fontSize: 11, color: 'var(--text-muted)' }}>SERVICE/GOODS</td>
+                          <td style={{ padding: '13px 18px', fontSize: 12 }}>{inv.invoiceDate}</td>
+                          <td style={{ padding: '13px 18px', fontSize: 12, color: 'var(--text-faint)' }}>{inv.dueDate}</td>
+                          <td style={{ padding: '13px 18px', fontWeight: 800 }}>${inv.totalAmount.toLocaleString()}</td>
+                          <td style={{ padding: '13px 18px' }}><StatusPill status={inv.status} /></td>
                         </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* COMMUNICATION HUB */}
-        {activeTab === 'communication' && (
-          <div className="stack-lg animate-in" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-            <div className="section-header mb-0">
-               <h3 style={{ margin: 0, fontSize: 18, fontFamily: 'Manrope, sans-serif', fontWeight: 800 }}>Collaboration Hub</h3>
-               <p style={{ margin: 0, fontSize: 11, color: 'var(--text-muted)' }}>Secure communication protocol for real-time procurement negotiation.</p>
-            </div>
-            
-            <div className="metric-card" style={{ padding: 0, height: 600, display: 'flex', overflow: 'hidden', background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)' }}>
-              <div className="chat-sidebar" style={{ width: 280, borderRight: '1px solid var(--border-subtle)', background: 'rgba(255,255,255,0.01)' }}>
-                <div style={{ padding: 20, borderBottom: '1px solid var(--border-subtle)' }}>
-                  <h4 style={{ margin: 0, fontSize: 12, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>TACTICAL THREADS</h4>
+                      ))}
+                      {myInvoices.length === 0 && (
+                        <tr><td colSpan={6} style={{ textAlign: 'center', padding: 40, opacity: 0.3, fontSize: 13 }}>No financial transactions found.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
                 </div>
-                <div className="chat-threads-list" style={{ overflowY: 'auto', height: 'calc(600px - 60px)' }}>
-                  {[
-                    ...negotiationThreads,
-                    { id: 'RFQ-001', type: 'Clarification', title: 'Carbon Steel Pipes Specs', time: '10:45 AM', active: activeMessageThread === 'RFQ-001' },
-                    { id: 'PO-001', type: 'Logistics', title: 'Delivery Window Steele', time: 'Yesterday', active: activeMessageThread === 'PO-001' },
-                  ].map(thread => (
-                    <div 
-                      key={thread.id} 
-                      className={`chat-thread-item ${thread.active ? 'active' : ''}`}
-                      onClick={() => setActiveMessageThread(thread.id)}
-                      style={{ 
-                        padding: '20px', cursor: 'pointer', 
-                        background: thread.active ? 'rgba(177,202,215,0.04)' : 'transparent',
-                        borderLeft: thread.active ? '3px solid var(--accent-slate)' : '3px solid transparent',
-                        borderBottom: '1px solid rgba(255,255,255,0.02)'
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <div style={{ padding: 24, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)' }}>
+                    <div className="card-header-label">EARLY PAYMENT PROTOCOL</div>
+                    <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5, margin: '12px 0 20px' }}>Withdraw capital ahead of schedule by providing a dynamic discount to the procurement authority.</p>
+                    <div style={{ background: 'rgba(233,193,118,0.04)', border: '1px solid rgba(233,193,118,0.1)', borderRadius: 12, padding: 16, marginBottom: 20 }}>
+                      <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--accent-amber)', marginBottom: 4 }}>AVAILABLE FOR WITHDRAWAL</div>
+                      <div style={{ fontSize: 22, fontWeight: 800 }}>${(totalOutstanding * 0.98).toLocaleString()}</div>
+                      <div style={{ fontSize: 9, color: 'var(--accent-amber)', marginTop: 4, fontWeight: 600 }}>2% Early access fee applied</div>
+                    </div>
+                    <button
+                      className="btn btn-primary"
+                      disabled={totalOutstanding === 0}
+                      style={{ width: '100%', justifyContent: 'center' }}
+                      onClick={() => {
+                        const inv = myInvoices.find((i: any) => i.status !== 'Paid');
+                        if (inv) requestEarlyPayment(inv.id, 2);
                       }}
                     >
-                      <div className="flex justify-between mb-4">
-                        <span style={{ fontSize: 9, fontWeight: 800, color: 'var(--accent-slate)' }}>{thread.id}</span>
-                        <span style={{ fontSize: 9, color: 'var(--text-faint)' }}>{thread.time || 'NOW'}</span>
+                      Authorize withdrawal
+                    </button>
+                    <p style={{ fontSize: 9, color: 'var(--text-faint)', textAlign: 'center', marginTop: 12 }}>Transfer takes approx. 4 optimal billing hours.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ═══ COMMUNICATION HUB ════════════════════════════════════════════ */}
+          {activeTab === 'communication' && (
+            <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)', overflow: 'hidden', height: 600 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', height: '100%' }}>
+                <div style={{ borderRight: '1px solid var(--border-subtle)', display: 'flex', flexDirection: 'column' }}>
+                  <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)', fontSize: 13, fontWeight: 800 }}>Conversation Registry</div>
+                  <div style={{ flex: 1, overflowY: 'auto' }}>
+                    {myPOs.map((po: any) => (
+                      <div
+                        key={po.id}
+                        onClick={() => setActiveMessageThread(po.id)}
+                        style={{
+                          padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)',
+                          cursor: 'pointer', background: activeMessageThread === po.id ? 'rgba(255,255,255,0.04)' : 'transparent',
+                          transition: 'background 0.2s'
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                          <span style={{ fontSize: 12, fontWeight: 800 }}>{po.id}</span>
+                          <span style={{ fontSize: 10, color: 'var(--text-faint)' }}>10:45 AM</span>
+                        </div>
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Latest regarding fulfillment update...</div>
                       </div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)', marginBottom: 4 }}>{thread.title.toUpperCase()}</div>
-                      <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>{thread.type.toUpperCase()} · UPDATED</div>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', background: 'rgba(0,0,0,0.1)' }}>
+                  <div style={{ padding: '14px 24px', borderBottom: '1px solid var(--border-subtle)', background: 'var(--bg-card)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    {activeMessageThread ? (
+                      <>
+                        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                          <div style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-subtle)' }}>
+                            <Lock size={14} className="text-slate" />
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 13, fontWeight: 800 }}>{activeMessageThread} Negotiation Thread</div>
+                            <div style={{ fontSize: 9, color: '#4ade80', fontWeight: 800 }}>ENCRYPTED CHANNEL</div>
+                          </div>
+                        </div>
+                        <button className="btn btn-ghost" style={{ padding: 6 }}><Settings size={14} /></button>
+                      </>
+                    ) : <div style={{ fontSize: 13, color: 'var(--text-faint)' }}>Secure intelligence link standby</div>}
+                  </div>
+
+                  <div style={{ flex: 1, padding: 24, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
+                    {!activeMessageThread && (
+                      <div style={{ textAlign: 'center', padding: '60px 0', opacity: 0.25 }}>
+                        <Lock size={40} className="mx-auto mb-12" />
+                        <p style={{ fontSize: 12, fontWeight: 700 }}>Select a thread to begin secure conversation</p>
+                      </div>
+                    )}
+                    {activeMessageThread && activeThreadMessages.length === 0 && (
+                      <>
+                        {/* Demo messages for UX preview */}
+                        <div>
+                          <div style={{ maxWidth: '72%', padding: '10px 14px', borderRadius: '4px 12px 12px 12px', background: 'rgba(255,255,255,0.04)', border: '1px solid var(--border-subtle)', fontSize: 12, lineHeight: 1.5 }}>
+                            Hello — could you confirm the lead time for item 3 in your proposal? We need delivery before May 15th.
+                          </div>
+                          <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 4, paddingLeft: 2 }}>Procurement team · 10:42 AM</div>
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                          <div style={{ maxWidth: '72%', padding: '10px 14px', borderRadius: '12px 4px 12px 12px', background: 'rgba(177,202,215,0.1)', border: '1px solid rgba(177,202,215,0.12)', fontSize: 12, lineHeight: 1.5, color: 'var(--text-primary)' }}>
+                            Confirmed — item 3 can be delivered by May 10. We'll send a revised schedule by EOD today.
+                          </div>
+                          <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 4, paddingRight: 2 }}>You · 11:05 AM</div>
+                        </div>
+                      </>
+                    )}
+                    {activeThreadMessages.map((msg: any, i: number) => (
+                      <div key={i} style={{ display: 'flex', flexDirection: 'column', alignItems: msg.sender === 'supplier' ? 'flex-end' : 'flex-start' }}>
+                        <div style={{
+                          maxWidth: '72%', padding: '10px 14px', fontSize: 12, lineHeight: 1.5,
+                          borderRadius: msg.sender === 'supplier' ? '12px 4px 12px 12px' : '4px 12px 12px 12px',
+                          background: msg.sender === 'supplier' ? 'rgba(177,202,215,0.1)' : 'rgba(255,255,255,0.04)',
+                          border: `1px solid ${msg.sender === 'supplier' ? 'rgba(177,202,215,0.12)' : 'var(--border-subtle)'}`,
+                        }}>
+                          {msg.message}
+                        </div>
+                        <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 4, padding: '0 2px' }}>{msg.sender === 'supplier' ? 'You' : 'Procurement team'}</div>
+                      </div>
+                    ))}
+                    <div ref={chatEndRef} />
+                  </div>
+
+                  <div style={{ padding: '14px 20px', borderTop: '1px solid var(--border-subtle)', display: 'flex', gap: 10 }}>
+                    <input
+                      type="text"
+                      placeholder={activeMessageThread ? 'Type your message…' : 'Select a thread first'}
+                      value={newMessage}
+                      disabled={!activeMessageThread}
+                      onChange={e => setNewMessage(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleSendMessage()}
+                      style={{ flex: 1, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-subtle)', borderRadius: 10, padding: '8px 14px', fontSize: 12, outline: 'none', color: '#fff', fontWeight: 500, opacity: activeMessageThread ? 1 : 0.4 }}
+                    />
+                    <button className="btn btn-primary" style={{ padding: '0 18px' }} onClick={handleSendMessage} disabled={!activeMessageThread}>
+                      <Send size={14} />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ═══ COMPLIANCE ══════════════════════════════════════════════════ */}
+          {activeTab === 'compliance' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+                {[
+                  { label: 'Valid documents', value: complianceDocs.filter((d: any) => d.status === 'Active').length, color: '#4ade80', icon: <ShieldCheck size={15} />, trend: 'Verified' },
+                  { label: 'Expiring soon', value: expiringDocs.length, color: 'var(--accent-amber)', icon: <Clock size={15} />, trend: 'Action needed' },
+                  { label: 'Expired', value: expiredDocs.length, color: '#f87171', icon: <AlertTriangle size={15} />, trend: 'Immediate action' },
+                  { label: 'Trust rating', value: `${Math.round((complianceDocs.filter((d:any) => d.status === 'Active').length / Math.max(complianceDocs.length, 1)) * 100)}%`, color: 'var(--accent-slate)', icon: <Activity size={15} />, trend: 'Calculated' },
+                ].map((m, i) => (
+                  <div key={i} style={{ padding: 16, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                      <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>{m.label.toUpperCase()}</span>
+                      <span style={{ color: m.color }}>{m.icon}</span>
                     </div>
-                  ))}
-                </div>
-              </div>
-              <div className="chat-main" style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-                <div className="chat-header" style={{ padding: '16px 24px', borderBottom: '1px solid var(--border-subtle)', background: 'rgba(255,255,255,0.01)', display: 'flex', justifyContent: 'space-between' }}>
-                  <div className="flex items-center gap-12">
-                     <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-subtle)' }}>
-                       <User size={18} className="text-slate" />
-                     </div>
-                     <div>
-                       <div style={{ fontSize: 13, fontWeight: 800 }}>PROCUREMENT INTEL TEAM</div>
-                       <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700 }}>VERIFIED COMMAND CENTER · ONLINE</div>
-                     </div>
+                    <div style={{ fontSize: 22, fontWeight: 800, fontFamily: 'Manrope, sans-serif' }}>{m.value}</div>
+                    <div style={{ fontSize: 10, color: m.color, fontWeight: 700, marginTop: 6 }}>{m.trend}</div>
                   </div>
-                </div>
-                <div className="chat-messages" style={{ flex: 1, padding: 32, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
-                   <div className="text-center p-32 opacity-20 mt-40">
-                      <Lock size={48} className="mx-auto mb-16" />
-                      <p style={{ fontSize: 12, fontWeight: 700 }}>SELECT THREAD TO INITIALIZE ENCRYPTED UPLINK</p>
-                   </div>
-                </div>
-                <div className="chat-input-area" style={{ padding: 24, borderTop: '1px solid var(--border-subtle)', display: 'flex', gap: 16 }}>
-                  <input 
-                    type="text" 
-                    placeholder="ENTER PROTOCOL MESSAGE..." 
-                    style={{ flex: 1, background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-subtle)', borderRadius: 10, padding: '0 16px', fontSize: 12, outline: 'none', color: '#fff', fontWeight: 600 }}
-                  />
-                  <button className="btn btn-primary" style={{ padding: '0 20px' }}><Send size={16} /></button>
-                </div>
+                ))}
               </div>
-            </div>
-          </div>
-        )}
 
-        {/* COMPLIANCE TAB */}
-        {activeTab === 'compliance' && (
-          <div className="stack-lg animate-in" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-            <div className="grid grid-4" style={{ gap: 'var(--gap-standard)' }}>
-              {[
-                { label: 'VALID VAULT ITEMS', value: complianceDocs.filter(d => d.status === 'Active').length, icon: <ShieldCheck size={16} />, color: 'var(--accent-slate)', trend: 'Verified' },
-                { label: 'EXPIRY ALERTS', value: complianceDocs.filter(d => d.status === 'Expiring Soon').length, icon: <Clock size={16} />, color: 'var(--accent-amber)', trend: 'Action Required' },
-                { label: 'CRITICAL VOIDS', value: complianceDocs.filter(d => d.status === 'Expired').length, icon: <AlertTriangle size={16} />, color: 'var(--accent-amber)', trend: 'Immediate Delta' },
-                { label: 'TRUST RATING', value: '100.00%', icon: <Activity size={16} />, color: 'var(--accent-slate)', trend: 'Calculated Logic' },
-              ].map((m, i) => (
-                <div key={i} className="metric-card" style={{ padding: '16px', background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <div className="flex justify-between items-center text-xs" style={{ fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>
-                    {m.label}
-                    <div style={{ color: m.color }}>{m.icon}</div>
-                  </div>
-                  <div style={{ fontSize: 22, fontWeight: 800, fontFamily: 'Manrope, sans-serif' }}>{m.value}</div>
-                  <div style={{ fontSize: 10, color: m.color, fontWeight: 700, opacity: 0.8 }}>{m.trend}</div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                <div>
+                  <h3 style={{ margin: '0 0 4px', fontSize: 17, fontFamily: 'Manrope, sans-serif', fontWeight: 800 }}>Document governance</h3>
+                  <p style={{ margin: 0, fontSize: 11, color: 'var(--text-muted)' }}>Managed registry of ISO certificates, licenses, and legal instruments.</p>
                 </div>
-              ))}
-            </div>
+                <button className="btn btn-primary" onClick={() => setModalOpen('uploadCompliance')}>
+                  <Upload size={13} /> Upload document
+                </button>
+              </div>
 
-            <div className="flex justify-between items-center" style={{ marginBottom: 16 }}>
-               <div>
-                  <h3 style={{ margin: 0, fontSize: 18, fontFamily: 'Manrope, sans-serif', fontWeight: 800 }}>Document Governance & Compliance</h3>
-                  <p style={{ margin: 0, fontSize: 11, color: 'var(--text-muted)' }}>Managed registry of ISO certificates, licenses, and legal instrumentation.</p>
-               </div>
-               <button className="btn btn-primary" onClick={() => setModalOpen('uploadCompliance')}>
-                  <Upload size={14} /> INITIALIZE UPLOAD
-               </button>
-            </div>
-            
-            <div className="metric-card" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)', padding: 0, overflow: 'hidden' }}>
-              <div className="table-responsive">
-                <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)', overflow: 'hidden' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                   <thead>
                     <tr style={{ background: 'rgba(255,255,255,0.01)' }}>
-                      <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>DOCUMENT TITLE</th>
-                      <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>CATEGORY</th>
-                      <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>MATURITY DATE</th>
-                      <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>INTEL STATUS</th>
-                      <th style={{ padding: '12px 20px', textAlign: 'right', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>CONTROL</th>
+                      {['Document', 'Category', 'Expiry date', 'Status', ''].map(h => (
+                        <th key={h} style={{ padding: '11px 18px', textAlign: h === '' ? 'right' : 'left', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em', borderBottom: '1px solid var(--border-subtle)' }}>{h}</th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {complianceDocs.map(doc => (
-                      <tr key={doc.id} className="hover-row" style={{ borderBottom: '1px solid var(--border-subtle)', transition: 'background 0.2s' }}>
-                        <td style={{ padding: '14px 20px' }}>
-                          <div className="flex items-center gap-12">
-                             <div style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                                <ShieldCheck size={16} className="text-slate" />
-                             </div>
-                             <span style={{ fontSize: 13, fontWeight: 700 }}>{doc.title}</span>
+                    {complianceDocs.map((doc: any) => (
+                      <tr key={doc.id} className="hover-row" style={{ borderBottom: '1px solid var(--border-subtle)', transition: 'background 0.15s' }}>
+                        <td style={{ padding: '13px 18px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                            <div style={{ width: 30, height: 30, borderRadius: 8, background: 'rgba(255,255,255,0.04)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                              <ShieldCheck size={14} className="text-slate" />
+                            </div>
+                            <span style={{ fontSize: 13, fontWeight: 700 }}>{doc.title}</span>
                           </div>
                         </td>
-                        <td style={{ padding: '14px 20px', fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>{doc.category.toUpperCase()}</td>
-                        <td style={{ padding: '14px 20px', fontSize: 12, color: doc.status === 'Expired' ? 'var(--accent-amber)' : 'var(--text-muted)', fontWeight: doc.status === 'Expired' ? 700 : 400 }}>{doc.expiryDate}</td>
-                        <td style={{ padding: '14px 20px' }}>
-                          <span className="badge" style={{ 
-                            background: doc.status === 'Active' ? 'rgba(177,202,215,0.1)' : 'rgba(233,193,118,0.05)', 
-                            color: doc.status === 'Active' ? 'var(--accent-slate)' : 'var(--accent-amber)',
-                            fontSize: 10,
-                            fontWeight: 800
-                          }}>
-                            {doc.status.toUpperCase()}
-                          </span>
-                        </td>
-                        <td style={{ padding: '14px 20px', textAlign: 'right' }}>
-                           <button className="btn btn-ghost" style={{ padding: 6 }}><Download size={14} /></button>
+                        <td style={{ padding: '13px 18px', fontSize: 11, color: 'var(--text-muted)', fontWeight: 700 }}>{doc.category}</td>
+                        <td style={{ padding: '13px 18px', fontSize: 12, color: doc.status === 'Expired' ? '#f87171' : doc.status === 'Expiring Soon' ? 'var(--accent-amber)' : 'var(--text-muted)', fontWeight: doc.status !== 'Active' ? 700 : 400 }}>{doc.expiryDate}</td>
+                        <td style={{ padding: '13px 18px' }}><StatusPill status={doc.status} /></td>
+                        <td style={{ padding: '13px 18px', textAlign: 'right' }}>
+                          <button className="btn btn-ghost" style={{ padding: 5 }}><Download size={13} /></button>
                         </td>
                       </tr>
                     ))}
@@ -843,727 +796,476 @@ export default function SupplierPortalPage({ standalone = false }: { standalone?
                 </table>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* BIDS TAB */}
-        {activeTab === 'bids' && (
-          <div className="stack-lg animate-in" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-            <div className="grid grid-4" style={{ gap: 'var(--gap-standard)' }}>
-              {[
-                { label: 'GLOBAL OPPORTUNITIES', value: eligibleRFQs.length, icon: <Globe size={18} />, color: 'var(--accent-slate)', trend: 'Live Tenders' },
-                { label: 'ACTIVE SUBMISSIONS', value: myBids.length, icon: <Send size={18} />, color: 'var(--accent-slate)', trend: 'In Review' },
-                { label: 'TENDER LOSS DELTA', value: myBids.filter(b => b.status === 'Rejected').length, icon: <ShieldCheck size={18} />, color: 'var(--accent-amber)', trend: 'Benchmark: 12%' },
-                { label: 'AWARDS SECURED', value: myBids.filter(b => b.status === 'Awarded').length, icon: <Award size={18} />, color: 'var(--accent-slate)', trend: 'Fiscal Capture' },
-              ].map((m, i) => (
-                <div key={i} className="metric-card" style={{ padding: '16px', background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                   <div className="flex justify-between items-center text-xs" style={{ fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>
-                    {m.label}
-                    <div style={{ color: m.color }}>{m.icon}</div>
-                  </div>
-                  <div style={{ fontSize: 22, fontWeight: 800, fontFamily: 'Manrope, sans-serif' }}>{m.value}</div>
-                  <div style={{ fontSize: 10, color: m.color, fontWeight: 700, opacity: 0.8 }}>{m.trend}</div>
-                </div>
-              ))}
-            </div>
-
-            <div className="section-header" style={{ marginBottom: 16 }}>
-               <h3 style={{ margin: 0, fontSize: 18, fontFamily: 'Manrope, sans-serif', fontWeight: 800 }}>Strategic Sourcing & Quotations</h3>
-               <p style={{ margin: 0, fontSize: 11, color: 'var(--text-muted)' }}>Discovery Hub for active procurements and proposal tracking.</p>
-            </div>
-
-            <div className="grid grid-2" style={{ gap: 'var(--gap-standard)' }}>
-              <div className="stack-md" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div className="flex items-center gap-8 mb-4">
-                   <h4 style={{ margin: 0, fontSize: 13, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>TENDER DISCOVERY</h4>
-                </div>
-                {eligibleRFQs.length > 0 ? eligibleRFQs.map(rfq => (
-                  <div key={rfq.id} className="metric-card" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)', padding: '20px', transition: 'border-color 0.2s' }}>
-                    <div className="flex justify-between items-start mb-12">
-                       <span className="badge" style={{ background: 'rgba(177,202,215,0.08)', color: 'var(--accent-slate)', fontSize: 9 }}>{rfq.tenderType?.toUpperCase() || 'RFQ'}</span>
-                       <span style={{ fontSize: 11, color: 'var(--text-faint)', fontFamily: 'Inter, sans-serif' }}>{rfq.id}</span>
+          {/* ═══ QUALITY ═════════════════════════════════════════════════════ */}
+          {activeTab === 'quality' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+                {[
+                  { label: 'Inspection pass rate', value: '98.2%', color: '#4ade80', icon: <CheckCircle2 size={15} /> },
+                  { label: 'Active disputes', value: disputes.filter((d: any) => d.status === 'Open').length, color: '#f87171', icon: <AlertTriangle size={15} /> },
+                  { label: 'Avg. variance', value: '1.4%', color: 'var(--accent-amber)', icon: <TrendingDown size={15} /> },
+                  { label: 'QC gates passed', value: '24', color: 'var(--accent-slate)', icon: <Activity size={15} /> },
+                ].map((m, i) => (
+                  <div key={i} style={{ padding: 16, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                      <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>{m.label.toUpperCase()}</span>
+                      <span style={{ color: m.color }}>{m.icon}</span>
                     </div>
-                    <h4 style={{ margin: '0 0 12px', fontSize: 16, fontFamily: 'Manrope, sans-serif', fontWeight: 700 }}>{rfq.title}</h4>
-                    <p style={{ margin: '0 0 16px', fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>{rfq.notes}</p>
-                    <div className="flex gap-20 mb-20 pt-16" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                       <div>
-                          <div style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-muted)', marginBottom: 4 }}>DEADLINE</div>
-                          <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--accent-amber)' }}>{rfq.bidDeadline}</div>
-                       </div>
-                       <div>
-                          <div style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-muted)', marginBottom: 4 }}>SCOPE</div>
-                          <div style={{ fontSize: 12, fontWeight: 800 }}>{rfq.lineItems.length} GROUPS</div>
-                       </div>
-                    </div>
-                    <button className="btn btn-primary" style={{ width: '100%', fontSize: 11 }} onClick={() => { setSelectedRFQId(rfq.id); setModalOpen('bidSubmission'); }}>INITIALIZE PROPOSAL</button>
+                    <div style={{ fontSize: 22, fontWeight: 800, fontFamily: 'Manrope, sans-serif' }}>{m.value}</div>
                   </div>
-                )) : (
-                  <div className="metric-card" style={{ background: 'var(--bg-card)', border: '1px dashed var(--border-subtle)', borderRadius: 'var(--radius-standard)', padding: '40px', textAlign: 'center', opacity: 0.6 }}>
-                     <Search size={24} className="mx-auto mb-12 text-muted" />
-                     <div style={{ fontSize: 11, fontWeight: 700 }}>No active tenders discovered for your entity profile.</div>
-                  </div>
-                )}
+                ))}
               </div>
 
-              <div className="stack-md" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <div className="flex items-center gap-8 mb-4">
-                   <h4 style={{ margin: 0, fontSize: 13, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>SUBMISSION REGISTRY</h4>
+              <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)', overflow: 'hidden' }}>
+                <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)' }}>
+                  <h3 style={{ margin: 0, fontSize: 15, fontFamily: 'Manrope, sans-serif', fontWeight: 700 }}>Goods receipt & inspection logs</h3>
                 </div>
-                <div className="metric-card" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)', padding: 0, overflow: 'hidden' }}>
-                  <div className="table-responsive">
-                    <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr>
+                      {['GRN ID', 'Received date', 'Passed qty', 'Rejected qty', 'QC status', ''].map(h => (
+                        <th key={h} style={{ padding: '11px 18px', textAlign: h === '' ? 'right' : 'left', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em', borderBottom: '1px solid var(--border-subtle)' }}>{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {grns.filter((g: any) => g.supplierId === myData.id).map((grn: any) => {
+                      const rejectedTotal = grn.lineItems.reduce((acc: number, item: any) => acc + (item.rejectedQty || 0), 0);
+                      const passedTotal = grn.lineItems.reduce((acc: number, item: any) => acc + (item.receivedQty || 0), 0) - rejectedTotal;
+                      return (
+                        <tr key={grn.id} className="hover-row" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+                          <td style={{ padding: '13px 18px', fontWeight: 700, fontSize: 13 }}>{grn.id}</td>
+                          <td style={{ padding: '13px 18px', fontSize: 12, color: 'var(--text-muted)' }}>{grn.dateCreated}</td>
+                          <td style={{ padding: '13px 18px', fontSize: 13, fontWeight: 700, color: '#4ade80' }}>{passedTotal}</td>
+                          <td style={{ padding: '13px 18px', fontSize: 13, fontWeight: 700, color: rejectedTotal > 0 ? '#f87171' : 'var(--text-muted)' }}>{rejectedTotal}</td>
+                          <td style={{ padding: '13px 18px' }}><StatusPill status={rejectedTotal > 0 ? 'QC Variance' : 'Approved'} /></td>
+                          <td style={{ padding: '13px 18px', textAlign: 'right' }}>
+                            {rejectedTotal > 0 && (
+                              <button className="btn btn-ghost" style={{ fontSize: 10, color: '#f87171' }} onClick={() => { setSelectedGRNId(grn.id); setModalOpen('disputeGRN'); }}>Dispute</button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {grns.filter((g: any) => g.supplierId === myData.id).length === 0 && (
+                      <tr><td colSpan={6} style={{ textAlign: 'center', padding: 32, fontSize: 12, color: 'var(--text-muted)', opacity: 0.5 }}>No GRN records found.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* ═══ BIDS ════════════════════════════════════════════════════════ */}
+          {activeTab === 'bids' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12 }}>
+                {[
+                  { label: 'Open opportunities', value: eligibleRFQs.length, color: 'var(--accent-slate)', icon: <Globe size={15} />, trend: 'Live tenders' },
+                  { label: 'Active submissions', value: myBids.length, color: 'var(--accent-slate)', icon: <Send size={15} />, trend: 'In review' },
+                  { label: 'Rejected bids', value: myBids.filter((b:any) => b.status === 'Rejected').length, color: 'var(--accent-amber)', icon: <ShieldCheck size={15} />, trend: 'Benchmark: 12%' },
+                  { label: 'Awards secured', value: myBids.filter((b:any) => b.status === 'Awarded').length, color: '#4ade80', icon: <Award size={15} />, trend: 'Revenue capture' },
+                ].map((m, i) => (
+                  <div key={i} style={{ padding: 16, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                      <span style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>{m.label.toUpperCase()}</span>
+                      <span style={{ color: m.color }}>{m.icon}</span>
+                    </div>
+                    <div style={{ fontSize: 22, fontWeight: 800, fontFamily: 'Manrope, sans-serif' }}>{m.value}</div>
+                    <div style={{ fontSize: 10, color: m.color, fontWeight: 700, marginTop: 6 }}>{m.trend}</div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                <div>
+                  <h4 style={{ margin: '0 0 10px', fontSize: 12, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>LIVE TENDERS</h4>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {eligibleRFQs.length > 0 ? eligibleRFQs.map((rfq:any) => (
+                      <div key={rfq.id} style={{ padding: 18, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)', transition: 'border-color 0.2s' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 10 }}>
+                          <span style={{ fontSize: 9, fontWeight: 800, padding: '2px 8px', borderRadius: 10, background: 'rgba(177,202,215,0.08)', color: 'var(--accent-slate)' }}>{rfq.tenderType?.toUpperCase() || 'RFQ'}</span>
+                          <span style={{ fontSize: 11, color: 'var(--text-faint)', fontFamily: 'monospace' }}>{rfq.id}</span>
+                        </div>
+                        <h4 style={{ margin: '0 0 8px', fontSize: 15, fontFamily: 'Manrope, sans-serif', fontWeight: 700 }}>{rfq.title}</h4>
+                        <p style={{ margin: '0 0 14px', fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>{rfq.notes}</p>
+                        <div style={{ display: 'flex', gap: 16, marginBottom: 14, paddingTop: 12, borderTop: '1px solid var(--border-subtle)' }}>
+                          <div>
+                            <div style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-muted)', marginBottom: 3 }}>DEADLINE</div>
+                            <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--accent-amber)' }}>{rfq.bidDeadline}</div>
+                          </div>
+                          <div>
+                            <div style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-muted)', marginBottom: 3 }}>SCOPE</div>
+                            <div style={{ fontSize: 12, fontWeight: 800 }}>{rfq.lineItems.length} line items</div>
+                          </div>
+                        </div>
+                        <button className="btn btn-primary" style={{ width: '100%', fontSize: 11 }} onClick={() => { setSelectedRFQId(rfq.id); setModalOpen('bidSubmission'); }}>Submit proposal</button>
+                      </div>
+                    )) : (
+                      <div style={{ padding: 36, textAlign: 'center', opacity: 0.5, background: 'var(--bg-card)', border: '1px dashed var(--border-subtle)', borderRadius: 'var(--radius-standard)' }}>
+                        <Search size={22} className="mx-auto mb-10 text-muted" />
+                        <p style={{ fontSize: 11, fontWeight: 700 }}>No active tenders for your profile.</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <h4 style={{ margin: '0 0 10px', fontSize: 12, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>SUBMISSION REGISTRY</h4>
+                  <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)', overflow: 'hidden' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                       <thead>
-                        <tr style={{ background: 'rgba(255,255,255,0.01)' }}>
-                          <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>PROPOSAL</th>
-                          <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>INTEL SCORE</th>
-                          <th style={{ padding: '12px 16px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>STATUS</th>
-                          <th style={{ padding: '12px 16px', textAlign: 'right', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>CONTROL</th>
+                        <tr>
+                          {['Proposal', 'Score', 'Status', ''].map(h => (
+                            <th key={h} style={{ padding: '11px 14px', textAlign: h === '' ? 'right' : 'left', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em', borderBottom: '1px solid var(--border-subtle)' }}>{h.toUpperCase()}</th>
+                          ))}
                         </tr>
                       </thead>
                       <tbody>
-                        {myBids.map(bid => (
+                        {myBids.map((bid:any) => (
                           <tr key={bid.id} className="hover-row" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                            <td style={{ padding: '12px 16px', fontSize: 11, fontWeight: 700, fontFamily: 'Inter, sans-serif' }}>{bid.id}</td>
-                            <td style={{ padding: '12px 16px' }}>
-                               {bid.evaluation ? <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--accent-slate)' }}>{bid.evaluation.totalScore}</span> : <span style={{ opacity: 0.5 }}>—</span>}
+                            <td style={{ padding: '12px 14px', fontSize: 11, fontWeight: 700 }}>{bid.id}</td>
+                            <td style={{ padding: '12px 14px' }}>
+                              {bid.evaluation ? <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--accent-slate)' }}>{bid.evaluation.totalScore}</span> : <span style={{ opacity: 0.4, fontSize: 12 }}>—</span>}
                             </td>
-                            <td style={{ padding: '12px 16px' }}>
-                               <span className="badge" style={{ background: 'rgba(255,255,255,0.03)', fontSize: 9 }}>{bid.status.toUpperCase()}</span>
-                            </td>
-                            <td style={{ padding: '12px 16px', textAlign: 'right' }}>
-                               <button className="btn btn-ghost" style={{ padding: 4 }} onClick={() => setActiveTab('communication')}><MessageSquare size={14} /></button>
+                            <td style={{ padding: '12px 14px' }}><StatusPill status={bid.status} /></td>
+                            <td style={{ padding: '12px 14px', textAlign: 'right' }}>
+                              <button className="btn btn-ghost" style={{ padding: 4 }} onClick={() => setActiveTab('communication' as PortalTab)}><MessageSquare size={13} /></button>
                             </td>
                           </tr>
                         ))}
+                        {myBids.length === 0 && (
+                          <tr><td colSpan={4} style={{ textAlign: 'center', padding: 24, fontSize: 12, color: 'var(--text-muted)', opacity: 0.5 }}>No proposals submitted yet.</td></tr>
+                        )}
                       </tbody>
                     </table>
                   </div>
                 </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {/* PRODUCT LIBRARY TAB */}
-        {activeTab === 'product-library' && (
-          <div className="stack-lg animate-in" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-            {/* Visual Product Showcase */}
-            <div className="metric-card" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)', padding: '24px' }}>
-              <div className="flex justify-between items-center mb-24">
-                <div>
-                   <h3 style={{ margin: 0, fontSize: 18, fontFamily: 'Manrope, sans-serif', fontWeight: 800 }}>Product Portfolio</h3>
-                   <p style={{ margin: 0, fontSize: 11, color: 'var(--text-muted)' }}>Intellectual property and technical specifications registry ({products.length} units listed).</p>
-                </div>
-                <button className="btn btn-primary" onClick={() => setShowAddProduct(true)}>
-                  <Plus size={14} /> INITIALIZE UNIT
-                </button>
-              </div>
-              <div className="grid grid-3" style={{ gap: 'var(--gap-standard)' }}>
-                {products.map(product => (
-                  <div key={product.id} className="product-card-premium" style={{ 
-                    padding: '16px', borderRadius: 'var(--radius-standard)', background: 'rgba(255,255,255,0.02)',
-                    border: '1px solid var(--border-subtle)', transition: 'border-color 0.2s'
-                  }}>
-                    <div style={{ width: '100%', height: 110, borderRadius: 10, background: 'var(--bg-secondary)', marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <Package size={32} style={{ color: 'var(--accent-slate)', opacity: 0.2 }} />
-                    </div>
-                    <div style={{ fontSize: 9, fontWeight: 800, color: 'var(--accent-slate)', marginBottom: 2, letterSpacing: '0.05em' }}>{product.category.toUpperCase()}</div>
-                    <div style={{ fontWeight: 800, fontSize: 13, fontFamily: 'Manrope, sans-serif', marginBottom: 4 }}>{product.name}</div>
-                    <div style={{ fontSize: 10, color: 'var(--text-faint)', marginBottom: 16, fontFamily: 'Inter, sans-serif' }}>{product.sku}</div>
-                    <div className="flex justify-between items-center pt-12" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-                      <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--text-primary)' }}>${product.basePrice.toLocaleString()} <span style={{ fontSize: 10, opacity: 0.5, fontWeight: 400 }}>/{product.unit.toUpperCase()}</span></span>
-                      <button className="btn btn-ghost" style={{ padding: 4 }}><ExternalLink size={14} /></button>
-                    </div>
+          {/* ═══ PRODUCT LIBRARY ═════════════════════════════════════════════ */}
+          {activeTab === 'product-library' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ padding: 20, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
+                  <div>
+                    <h3 style={{ margin: '0 0 4px', fontSize: 17, fontFamily: 'Manrope, sans-serif', fontWeight: 800 }}>Product portfolio</h3>
+                    <p style={{ margin: 0, fontSize: 11, color: 'var(--text-muted)' }}>{products.length} units listed</p>
                   </div>
-                ))}
-              </div>
-            </div>
-
-            <div className="metric-card" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)', padding: 0, overflow: 'hidden' }}>
-              <div className="flex justify-between items-center p-20" style={{ borderBottom: '1px solid var(--border-subtle)', background: 'rgba(255,255,255,0.01)' }}>
-                <h3 style={{ margin: 0, fontSize: 14, fontFamily: 'Manrope, sans-serif', fontWeight: 700 }}>Technical Resource Vault</h3>
-                <div className="search-box-minimal" style={{ background: 'rgba(0,0,0,0.1)', borderRadius: 8, padding: '4px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Search size={12} className="text-faint" />
-                  <input 
-                    type="text" 
-                    placeholder="Filter resources..." 
-                    onChange={(e) => setSearchTerm(e.target.value)} 
-                    style={{ background: 'none', border: 'none', color: '#fff', fontSize: 12, outline: 'none' }}
-                  />
+                  <button className="btn btn-primary" onClick={() => setShowAddProduct(true)}>
+                    <Plus size={13} /> Add product
+                  </button>
                 </div>
-              </div>
-              <div className="table-responsive">
-                <table className="data-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr>
-                      <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>RESOURCE NAME</th>
-                      <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>CLASSIFICATION</th>
-                      <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>MATURITY</th>
-                      <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>INTEL STATUS</th>
-                      <th style={{ padding: '12px 20px', textAlign: 'right', fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>CONTROL</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {complianceDocs
-                      .filter(doc => doc.supplierId === mySupplierId && 
-                        ['Product Catalogue', 'Product Certificate', 'Technical Datasheet', 'ISO Certification'].includes(doc.category) &&
-                        (doc.title.toLowerCase().includes(searchTerm.toLowerCase()) || doc.category.toLowerCase().includes(searchTerm.toLowerCase()))
-                      )
-                      .map(doc => (
-                        <tr key={doc.id} className="hover-row" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
-                          <td style={{ padding: '14px 20px' }}>
-                            <div className="flex items-center gap-10">
-                              <FileText size={16} className="text-slate" />
-                              <span style={{ fontSize: 13, fontWeight: 700 }}>{doc.title}</span>
-                            </div>
-                          </td>
-                          <td style={{ padding: '14px 20px', fontSize: 11, fontWeight: 700, color: 'var(--text-muted)' }}>{doc.category.toUpperCase()}</td>
-                          <td style={{ padding: '14px 20px', fontSize: 12 }}>{doc.expiryDate}</td>
-                          <td style={{ padding: '14px 20px' }}>
-                            <span className="badge" style={{ background: 'rgba(177,202,215,0.08)', color: 'var(--accent-slate)', fontSize: 9 }}>{doc.status.toUpperCase()}</span>
-                          </td>
-                          <td style={{ padding: '14px 20px', textAlign: 'right' }}>
-                            <button className="btn btn-ghost" style={{ padding: 4 }}><Download size={14} /></button>
-                          </td>
-                        </tr>
-                      ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
-        {/* ACCOUNT & PROFILE TAB */}
-        {activeTab === 'account' && (
-          <div className="stack-lg animate-in" style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-            {/* Profile Header */}
-            <div className="metric-card" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)', padding: '32px', display: 'flex', alignItems: 'center', gap: 32 }}>
-              <div 
-                style={{ 
-                  width: 90, 
-                  height: 90, 
-                  borderRadius: 20, 
-                  background: myData.logo ? 'none' : 'var(--gradient-primary)', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'center',
-                  fontSize: 32,
-                  fontWeight: 800,
-                  color: '#000',
-                  overflow: 'hidden',
-                  border: '1px solid var(--border-subtle)'
-                }}
-              >
-                {myData.logo ? (
-                  <img src={myData.logo} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                ) : myData.name[0]}
-              </div>
-              <div style={{ flex: 1 }}>
-                <div className="flex items-center gap-12 mb-8">
-                  <h2 style={{ margin: 0, fontSize: 24, fontFamily: 'Manrope, sans-serif', fontWeight: 800 }}>{myData.name.toUpperCase()}</h2>
-                  <div className="badge" style={{ background: 'rgba(177,202,215,0.1)', color: 'var(--accent-slate)', fontSize: 9, fontWeight: 800 }}>
-                    <ShieldCheck size={12} /> VERIFIED PARTNER
-                  </div>
-                </div>
-                <div className="flex gap-20 text-xs" style={{ color: 'var(--text-muted)', fontWeight: 700 }}>
-                  <div className="flex items-center gap-6"><Globe size={14} /> CLASSIFICATION: GLOBAL</div>
-                  <div className="flex items-center gap-6"><Mail size={14} /> {myData.contactList?.[0]?.email || 'SECURE@PORTAL.COM'}</div>
-                  <div className="flex items-center gap-6"><Award size={14} /> SOVEREIGN PREFERRED</div>
-                </div>
-              </div>
-              <button className="btn btn-primary" onClick={() => setShowEditProfile(true)}><Edit2 size={14} /> EDIT DOSSIER</button>
-            </div>
-
-            <div className="grid grid-2" style={{ gap: 'var(--gap-standard)' }}>
-              {/* Business Dossier */}
-              <div className="metric-card" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)', padding: 0, overflow: 'hidden' }}>
-                <div className="p-20" style={{ borderBottom: '1px solid var(--border-subtle)', background: 'rgba(255,255,255,0.01)' }}>
-                  <h3 style={{ margin: 0, fontSize: 13, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>BUSINESS DOSSIER</h3>
-                </div>
-                <div className="p-24 grid grid-2" style={{ gap: 20 }}>
-                  <div className="form-group-minimal">
-                    <label style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-faint)', marginBottom: 6, display: 'block' }}>TAX REGISTRATION</label>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{myData.taxRegNumber}</div>
-                  </div>
-                  <div className="form-group-minimal">
-                    <label style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-faint)', marginBottom: 6, display: 'block' }}>LEGAL ENTITY TYPE</label>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>JOINT STOCK COMPANY</div>
-                  </div>
-                  <div className="form-group-minimal">
-                    <label style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-faint)', marginBottom: 6, display: 'block' }}>ALIGNED REGION</label>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{myData.location}</div>
-                  </div>
-                  <div className="form-group-minimal">
-                    <label style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-faint)', marginBottom: 6, display: 'block' }}>REGISTERED FACILITY</label>
-                    <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>{myData.address}</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Settlement & Banking */}
-              <div className="metric-card" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)', padding: 0, overflow: 'hidden' }}>
-                <div className="p-20" style={{ borderBottom: '1px solid var(--border-subtle)', background: 'rgba(255,255,255,0.01)' }}>
-                  <h3 style={{ margin: 0, fontSize: 13, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>SETTLEMENT PROTOCOL</h3>
-                </div>
-                <div className="p-24">
-                   <div style={{ background: 'rgba(233,193,118,0.05)', borderRadius: 12, padding: 16, border: '1px solid rgba(233,193,118,0.1)', marginBottom: 20 }}>
-                      <div className="flex items-center gap-12">
-                         <DollarSign size={20} style={{ color: 'var(--accent-amber)' }} />
-                         <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 12, fontWeight: 800 }}>NET 30 SETTLEMENT</div>
-                            <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>Maturity from Invoice Authorization</div>
-                         </div>
-                         <button className="btn btn-ghost" style={{ fontSize: 9, color: 'var(--accent-amber)' }}>REVIEW POLICY</button>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+                  {products.map((product: any) => (
+                    <div key={product.id} style={{ padding: 14, borderRadius: 'var(--radius-standard)', background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-subtle)', transition: 'border-color 0.2s' }}>
+                      <div style={{ width: '100%', height: 90, borderRadius: 10, background: 'var(--bg-secondary)', marginBottom: 10, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        <Package size={28} style={{ color: 'var(--accent-slate)', opacity: 0.2 }} />
                       </div>
-                   </div>
-                   <div className="grid grid-2" style={{ gap: 20 }}>
-                    <div className="form-group-minimal">
-                      <label style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-faint)', marginBottom: 6, display: 'block' }}>RECEIVING INSTITUTION</label>
-                      <div style={{ fontSize: 13, fontWeight: 700 }}>{myData.bankInfo?.bankName || 'GLOBAL MERCHANT BANK'}</div>
+                      <div style={{ fontSize: 9, fontWeight: 800, color: 'var(--accent-slate)', marginBottom: 2, letterSpacing: '0.05em' }}>{product.category}</div>
+                      <div style={{ fontWeight: 800, fontSize: 13, fontFamily: 'Manrope, sans-serif', marginBottom: 3 }}>{product.name}</div>
+                      <div style={{ fontSize: 10, color: 'var(--text-faint)', marginBottom: 12, fontFamily: 'monospace' }}>{product.sku}</div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 10, borderTop: '1px solid var(--border-subtle)' }}>
+                        <span style={{ fontSize: 14, fontWeight: 800 }}>${product.basePrice.toLocaleString()} <span style={{ fontSize: 10, opacity: 0.5, fontWeight: 400 }}>/{product.unit}</span></span>
+                        <button className="btn btn-ghost" style={{ padding: 4 }}><ExternalLink size={13} /></button>
+                      </div>
                     </div>
-                    <div className="form-group-minimal">
-                      <label style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-faint)', marginBottom: 6, display: 'block' }}>ACCOUNT TRAILING</label>
-                      <div style={{ fontSize: 13, fontWeight: 700 }}>**** {myData.bankInfo?.accountNo?.slice(-4) || '8842'}</div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ═══ ACCOUNT ═════════════════════════════════════════════════════ */}
+          {activeTab === 'account' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Profile header */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 24, padding: '28px 28px', background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)' }}>
+                <div style={{ width: 80, height: 80, borderRadius: 20, flexShrink: 0, background: myData.logo ? 'none' : 'var(--gradient-primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 28, fontWeight: 800, color: '#000', overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
+                  {myData.logo ? <img src={myData.logo} alt="Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : (myData.name ? myData.name[0] : 'S')}
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                    <h2 style={{ margin: 0, fontSize: 22, fontFamily: 'Manrope, sans-serif', fontWeight: 800 }}>{myData.name}</h2>
+                    <span style={{ background: 'rgba(74,222,128,0.08)', color: '#4ade80', fontSize: 9, fontWeight: 800, padding: '3px 8px', borderRadius: 20, border: '1px solid rgba(74,222,128,0.15)' }}>✓ VERIFIED</span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 18, fontSize: 11, color: 'var(--text-muted)', fontWeight: 600 }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><Globe size={11} /> Global classification</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}><Mail size={11} /> {myData.contactList?.[0]?.email || myData.email}</span>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 5, color: 'var(--accent-amber)' }}><Award size={11} /> Preferred partner</span>
+                  </div>
+                </div>
+                <button className="btn btn-primary" onClick={() => setShowEditProfile(true)}><Edit2 size={13} /> Edit profile</button>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                {/* Business dossier */}
+                <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)', overflow: 'hidden' }}>
+                  <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', background: 'rgba(255,255,255,0.01)' }}>
+                    <h3 style={{ margin: 0, fontSize: 12, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>BUSINESS DOSSIER</h3>
+                  </div>
+                  <div style={{ padding: 20, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+                    {[
+                      { label: 'Tax registration', value: myData.taxRegNumber },
+                      { label: 'Legal entity type', value: 'Joint Stock Company' },
+                      { label: 'Jurisdiction', value: myData.location },
+                      { label: 'Registered address', value: myData.address },
+                    ].map((f, i) => (
+                      <div key={i}>
+                        <div style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-faint)', marginBottom: 5, letterSpacing: '0.05em' }}>{f.label.toUpperCase()}</div>
+                        <div style={{ fontSize: 13, fontWeight: 700 }}>{f.value || '—'}</div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Settlement */}
+                <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)', overflow: 'hidden' }}>
+                  <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', background: 'rgba(255,255,255,0.01)' }}>
+                    <h3 style={{ margin: 0, fontSize: 12, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>SETTLEMENT PROTOCOL</h3>
+                  </div>
+                  <div style={{ padding: 20 }}>
+                    <div style={{ background: 'rgba(233,193,118,0.04)', borderRadius: 12, padding: 14, border: '1px solid rgba(233,193,118,0.1)', marginBottom: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <DollarSign size={18} style={{ color: 'var(--accent-amber)' }} />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: 12, fontWeight: 800 }}>Net 30 settlement</div>
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)' }}>From invoice authorization date</div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                      <div>
+                        <div style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-faint)', marginBottom: 5, letterSpacing: '0.05em' }}>BANK</div>
+                        <div style={{ fontSize: 13, fontWeight: 700 }}>{myData.bankInfo?.bankName || 'Global Merchant Bank'}</div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-faint)', marginBottom: 5, letterSpacing: '0.05em' }}>ACCOUNT</div>
+                        <div style={{ fontSize: 13, fontWeight: 700 }}>**** {myData.bankInfo?.accountNo?.slice(-4) || '8842'}</div>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            {/* Privacy Hub */}
-            <div className="metric-card" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)', padding: '24px', display: 'flex', alignItems: 'center', gap: 24 }}>
-               <div style={{ width: 50, height: 50, borderRadius: 12, background: 'rgba(255,255,255,0.02)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-slate)', border: '1px solid var(--border-subtle)' }}>
-                  <Lock size={24} />
-               </div>
-               <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 4 }}>PRIVACY & ACCESS CENTER</div>
+              {/* Security */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 20, padding: '20px 24px', background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)' }}>
+                <div style={{ width: 46, height: 46, borderRadius: 12, background: 'rgba(255,255,255,0.02)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border-subtle)', color: 'var(--accent-slate)' }}>
+                  <Lock size={20} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 3 }}>Privacy & access center</div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Encryption protocols active. Last credential rotation: 3 months ago.</div>
-               </div>
-               <button className="btn btn-ghost" style={{ fontSize: 11, fontWeight: 800 }} onClick={() => setShowChangePassword(true)}>
-                  ROTATE CREDENTIALS
-               </button>
-            </div>
+                </div>
+                <button className="btn btn-ghost" style={{ fontSize: 11, fontWeight: 800 }} onClick={() => setShowChangePassword(true)}>Rotate credentials</button>
+              </div>
 
-            {/* Personnel Registry */}
-            <div className="metric-card" style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)', padding: 0, overflow: 'hidden' }}>
-               <div className="p-20 flex justify-between items-center" style={{ borderBottom: '1px solid var(--border-subtle)', background: 'rgba(255,255,255,0.01)' }}>
-                  <h3 style={{ margin: 0, fontSize: 13, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>AUTHORIZED PERSONNEL</h3>
-                  <button className="btn btn-ghost" style={{ fontSize: 10 }}><UserPlus size={12} /> ADD PROXY</button>
-               </div>
-               <div className="p-16">
-                  <div className="grid grid-3" style={{ gap: 'var(--gap-standard)' }}>
-                     {(myData.contactList || [
-                        { id: '1', name: 'John Smith', role: 'Sales Director', email: 'john@portal.com' },
-                        { id: '2', name: 'Alina K.', role: 'Account Manager', email: 'alina@portal.com' },
-                        { id: '3', name: 'Vince T.', role: 'Operations', email: 'vince@portal.com' }
-                     ]).map((contact, i) => (
-                        <div key={i} className="metric-card" style={{ padding: '16px', borderRadius: 12, background: 'rgba(255,255,255,0.02)', display: 'flex', alignItems: 'center', gap: 12, border: '1px solid var(--border-subtle)' }}>
-                           <div style={{ width: 36, height: 36, borderRadius: 10, background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color: 'var(--accent-slate)' }}>
-                              {contact.name[0]}
-                           </div>
-                           <div style={{ flex: 1 }}>
-                              <div style={{ fontSize: 12, fontWeight: 800 }}>{contact.name.toUpperCase()}</div>
-                              <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700 }}>{contact.role.toUpperCase()}</div>
-                           </div>
-                           <button className="btn btn-ghost" style={{ padding: 4 }}><Mail size={12} /></button>
-                        </div>
-                     ))}
-                  </div>
-               </div>
+              {/* Personnel */}
+              <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)', overflow: 'hidden' }}>
+                <div style={{ padding: '14px 20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ margin: 0, fontSize: 12, fontWeight: 800, color: 'var(--text-muted)', letterSpacing: '0.05em' }}>AUTHORIZED PERSONNEL</h3>
+                  <button className="btn btn-ghost" style={{ fontSize: 10 }}><UserPlus size={12} /> Add contact</button>
+                </div>
+                <div style={{ padding: 16, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+                  {(myData.contactList || [
+                    { name: 'John Smith', role: 'Sales Director', email: 'john@portal.com' },
+                    { name: 'Alina K.', role: 'Account Manager', email: 'alina@portal.com' },
+                    { name: 'Vince T.', role: 'Operations', email: 'vince@portal.com' }
+                  ]).map((contact: any, i: number) => (
+                    <div key={i} style={{ padding: 14, borderRadius: 12, background: 'rgba(255,255,255,0.02)', display: 'flex', alignItems: 'center', gap: 12, border: '1px solid var(--border-subtle)' }}>
+                      <div style={{ width: 34, height: 34, borderRadius: 10, background: 'var(--bg-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, fontWeight: 800, color: 'var(--accent-slate)', flexShrink: 0 }}>
+                        {contact.name[0]}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 12, fontWeight: 800, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{contact.name}</div>
+                        <div style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 600 }}>{contact.role}</div>
+                      </div>
+                      <button className="btn btn-ghost" style={{ padding: 4, flexShrink: 0 }}><Mail size={12} /></button>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
-          </div>
+          )}
+        </div>
+
+        {/* ── STANDALONE LOGOUT ──────────────────────────────────────────────── */}
+        {standalone && (
+          <button
+            onClick={() => { supplierLogout(); router.push('/'); }}
+            style={{
+              position: 'fixed', bottom: 28, right: 28, zIndex: 1000,
+              padding: '10px 20px', background: 'rgba(239,68,68,0.05)',
+              border: '1px solid rgba(239,68,68,0.2)', borderRadius: 12,
+              color: '#f87171', fontSize: 11, fontWeight: 800, fontFamily: 'Manrope, sans-serif',
+              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8,
+              transition: 'background 0.15s'
+            }}
+          >
+            <Lock size={14} /> Logout
+          </button>
         )}
 
+        {/* ── MODALS ────────────────────────────────────────────────────────── */}
+        {showAddProduct && <AddProductModal onClose={() => setShowAddProduct(false)} />}
+        {showEditProfile && <EditProfileModal onClose={() => setShowEditProfile(false)} />}
+        {showChangePassword && <ChangePasswordModal onClose={() => setShowChangePassword(false)} />}
       </div>
-
-      <style jsx>{`
-        .tabs-minimal button {
-          border: none;
-          background: none;
-          padding: 18px 24px;
-          color: var(--text-muted);
-          font-weight: 600;
-          font-size: 13px;
-          cursor: pointer;
-          transition: all 0.2s ease;
-          position: relative;
-        }
-        .tabs-minimal button:hover {
-          color: var(--text-primary);
-        }
-        .tabs-minimal button.active {
-          color: var(--accent-slate);
-        }
-        .tabs-minimal button.active::after {
-          content: '';
-          position: absolute;
-          bottom: 0;
-          left: 20%;
-          right: 20%;
-          height: 3px;
-          background: var(--accent-slate);
-          border-radius: 3px 3px 0 0;
-          box-shadow: 0 0 10px rgba(177,202,215,0.4);
-        }
-        .btn-glow:hover {
-          box-shadow: 0 0 15px rgba(99,102,241,0.4);
-        }
-        .luxury-border:hover {
-          border-color: var(--accent-indigo);
-          box-shadow: 0 0 30px rgba(99,102,241,0.1);
-        }
-        .payment-offer-card:hover {
-          transform: translateY(-2px);
-          border-color: var(--accent-indigo) !important;
-        }
-        .chat-thread-item:hover {
-          background: rgba(255,255,255,0.03);
-        }
-        .form-group-minimal label {
-          display: block;
-          font-size: 10px;
-          font-weight: 700;
-          color: var(--text-muted);
-          text-transform: uppercase;
-          margin-bottom: 6px;
-          letter-spacing: 0.5px;
-        }
-        .form-group-minimal label {
-          display: block;
-          font-size: 9px;
-          font-weight: 800;
-          color: var(--text-faint);
-          text-transform: uppercase;
-          margin-bottom: 8px;
-          letter-spacing: 0.05em;
-        }
-        .form-group-minimal input {
-          width: 100%;
-          background: rgba(0,0,0,0.2);
-          border: 1px solid var(--border-subtle);
-          border-radius: 10px;
-          padding: 12px 16px;
-          color: var(--text-primary);
-          font-size: 13px;
-          outline: none;
-          font-weight: 600;
-        }
-        .form-group-minimal input:focus {
-          border-color: var(--accent-slate);
-        }
-      `}</style>
-      {/* Standalone Logout Button */}
-      {standalone && (
-        <button 
-          onClick={() => {
-            supplierLogout();
-            router.push('/');
-          }}
-          className="flex items-center gap-10 hover-row" 
-          style={{ 
-            position: 'fixed', 
-            bottom: 32, 
-            right: 32, 
-            zIndex: 1000,
-            padding: '12px 24px',
-            background: 'rgba(239, 68, 68, 0.05)',
-            border: '1px solid rgba(239, 68, 68, 0.2)',
-            borderRadius: 12,
-            color: '#f87171',
-            fontSize: 11,
-            fontWeight: 800,
-            fontFamily: 'Manrope, sans-serif'
-          }}
-        >
-          <Lock size={16} /> LOGOUT VENDOR TERMINAL
-        </button>
-      )}
-
-      {showAddProduct && <AddProductModal onClose={() => setShowAddProduct(false)} />}
-      {showEditProfile && <EditProfileModal onClose={() => setShowEditProfile(false)} />}
-      {showChangePassword && <ChangePasswordModal onClose={() => setShowChangePassword(false)} />}
-    </div></div>
+    </div>
   );
 }
 
-// ── Add Product Wizard ──
+// ─── Modal: Add Product ────────────────────────────────────────────────────────
 function AddProductModal({ onClose }: { onClose: () => void }) {
   const { addProduct, uploadComplianceDoc, mySupplierId } = useApp() as any;
   const [step, setStep] = useState(1);
-  const [formData, setFormData] = useState({
-    name: '', sku: '', category: 'Piping', description: '',
-    basePrice: 0, unit: 'Piece', currency: 'USD',
-    catalogueName: ''
-  });
+  const [formData, setFormData] = useState({ name: '', sku: '', category: 'Piping', description: '', basePrice: 0, unit: 'Piece', currency: 'USD', catalogueName: '' });
 
   const handleSubmit = () => {
-    // 1. Add Product
-    addProduct({
-      name: formData.name,
-      sku: formData.sku,
-      category: formData.category,
-      description: formData.description,
-      basePrice: Number(formData.basePrice),
-      unit: formData.unit,
-      currency: formData.currency,
-      technicalDocs: formData.catalogueName ? [`DOC-${Date.now()}`] : [],
-      certifications: []
-    });
-
-    // 2. Mock Catalogue Upload
-    if (formData.catalogueName) {
-      uploadComplianceDoc({
-        supplierId: mySupplierId,
-        title: formData.catalogueName,
-        category: 'Product Catalogue',
-        expiryDate: '2027-12-31',
-        fileSize: '2.4 MB'
-      });
-    }
-
+    addProduct({ name: formData.name, sku: formData.sku, category: formData.category, description: formData.description, basePrice: Number(formData.basePrice), unit: formData.unit, currency: formData.currency, technicalDocs: formData.catalogueName ? [`DOC-${Date.now()}`] : [], certifications: [] });
+    if (formData.catalogueName) uploadComplianceDoc({ supplierId: mySupplierId, title: formData.catalogueName, category: 'Product Catalogue', expiryDate: '2027-12-31', fileSize: '2.4 MB' });
     onClose();
   };
 
+  const inputStyle: React.CSSProperties = { width: '100%', padding: '11px 14px', borderRadius: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-subtle)', color: '#fff', fontSize: 13, outline: 'none', fontWeight: 600, boxSizing: 'border-box' };
+
   return (
-    <div className="modal-overlay" onClick={onClose} style={{ backdropFilter: 'blur(8px)', background: 'rgba(0,0,0,0.8)' }}>
-      <div className="modal" style={{ maxWidth: 500, width: '95%', background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
-        <div className="modal-header" style={{ padding: '20px 24px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontFamily: 'Manrope, sans-serif', fontWeight: 800 }}>LIST NEW PRODUCT UNIT</h3>
-          <button className="btn btn-ghost" style={{ padding: 4 }} onClick={onClose}><X size={18} /></button>
-        </div>
-        
-        <div style={{ padding: 32 }}>
-          {/* Progress Indicator */}
-          <div className="flex gap-8 mb-32">
-            {[1, 2, 3].map(s => (
-              <div key={s} style={{ flex: 1, height: 3, borderRadius: 2, background: step >= s ? 'var(--accent-slate)' : 'rgba(255,255,255,0.05)', boxShadow: step >= s ? '0 0 10px rgba(177,202,215,0.3)' : 'none' }} />
-            ))}
-          </div>
-
-          {step === 1 && (
-            <div className="stack-md" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              <div className="form-group-minimal">
-                <label style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-faint)', marginBottom: 8, display: 'block' }}>PRODUCT NOMENCLATURE</label>
-                <input 
-                  placeholder="E.G. HIGH PRESSURE REGULATOR" 
-                  value={formData.name} 
-                  onChange={e => setFormData({...formData, name: e.target.value.toUpperCase()})} 
-                  style={{ width: '100%', padding: '12px 16px', borderRadius: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-subtle)', color: '#fff', fontSize: 13, outline: 'none', fontWeight: 600 }}
-                />
-              </div>
-              <div className="grid grid-2" style={{ gap: 16 }}>
-                <div className="form-group-minimal">
-                  <label style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-faint)', marginBottom: 8, display: 'block' }}>MODEL / SKU</label>
-                  <input 
-                    placeholder="SKU-88-ALPHA" 
-                    value={formData.sku} 
-                    onChange={e => setFormData({...formData, sku: e.target.value.toUpperCase()})} 
-                    style={{ width: '100%', padding: '12px 16px', borderRadius: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-subtle)', color: '#fff', fontSize: 13, outline: 'none', fontWeight: 600 }}
-                  />
-                </div>
-                <div className="form-group-minimal">
-                  <label style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-faint)', marginBottom: 8, display: 'block' }}>CLASSIFICATION</label>
-                  <select 
-                    style={{ width: '100%', padding: '12px 16px', borderRadius: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-subtle)', color: '#fff', fontSize: 13, outline: 'none', fontWeight: 600 }}
-                    value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}
-                  >
-                    <option value="Piping">PIPING</option>
-                    <option value="Valves">VALVES</option>
-                    <option value="Fittings">FITTINGS</option>
-                    <option value="Electrical">ELECTRICAL</option>
-                  </select>
-                </div>
-              </div>
-              <div className="form-group-minimal">
-                <label style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-faint)', marginBottom: 8, display: 'block' }}>TECHNICAL COMPREHENSION</label>
-                <textarea 
-                  rows={3}
-                  style={{ width: '100%', padding: '12px 16px', borderRadius: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-subtle)', color: '#fff', outline: 'none', fontSize: 13, fontWeight: 600 }}
-                  placeholder="SPECIFICATIONS AND PARAMETERS..."
-                  value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})}
-                />
-              </div>
-            </div>
-          )}
-
-          {step === 2 && (
-            <div className="stack-md" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              <div className="grid grid-2" style={{ gap: 16 }}>
-                <div className="form-group-minimal">
-                  <label style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-faint)', marginBottom: 8, display: 'block' }}>BASE FISCAL PRICE</label>
-                  <input 
-                    type="number" 
-                    placeholder="0.00" 
-                    value={formData.basePrice} 
-                    onChange={e => setFormData({...formData, basePrice: Number(e.target.value)})} 
-                    style={{ width: '100%', padding: '12px 16px', borderRadius: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-subtle)', color: '#fff', fontSize: 13, outline: 'none', fontWeight: 600 }}
-                  />
-                </div>
-                <div className="form-group-minimal">
-                  <label style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-faint)', marginBottom: 8, display: 'block' }}>CURRENCY</label>
-                  <input 
-                    value={formData.currency} 
-                    readOnly 
-                    style={{ width: '100%', padding: '12px 16px', borderRadius: 10, background: 'rgba(0,0,0,0.1)', border: '1px solid var(--border-subtle)', color: 'var(--text-muted)', fontSize: 13, outline: 'none', fontWeight: 600 }}
-                  />
-                </div>
-              </div>
-              <div className="form-group-minimal">
-                <label style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-faint)', marginBottom: 8, display: 'block' }}>SETTLEMENT UNIT</label>
-                <input 
-                  placeholder="E.G. METRIC TON, UNIT, METER" 
-                  value={formData.unit} 
-                  onChange={e => setFormData({...formData, unit: e.target.value.toUpperCase()})} 
-                  style={{ width: '100%', padding: '12px 16px', borderRadius: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-subtle)', color: '#fff', fontSize: 13, outline: 'none', fontWeight: 600 }}
-                />
-              </div>
-            </div>
-          )}
-
-          {step === 3 && (
-            <div className="stack-md" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-              <div style={{ padding: '40px 24px', border: '1px dashed var(--border-subtle)', borderRadius: 16, textAlign: 'center', background: 'rgba(255,255,255,0.01)' }}>
-                <Upload size={32} style={{ color: 'var(--accent-slate)', opacity: 0.3, margin: '0 auto 16px' }} />
-                <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 4 }}>TECHNICAL CATALOGUE (PDF)</div>
-                <div style={{ fontSize: 10, color: 'var(--text-faint)', marginBottom: 20 }}>SYSTEM UPLINK AUTHORIZED</div>
-                <input 
-                   placeholder="CATALOGUE_RESOURCES_V1.PDF" 
-                   value={formData.catalogueName} 
-                   onChange={e => setFormData({...formData, catalogueName: e.target.value.toUpperCase()})}
-                   style={{ background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-subtle)', padding: '10px 14px', borderRadius: 8, color: '#fff', fontSize: 11, width: '100%', fontWeight: 700, textAlign: 'center' }}
-                />
-              </div>
-              <div style={{ display: 'flex', gap: 16, padding: 16, background: 'rgba(177,202,215,0.03)', borderRadius: 12, border: '1px solid rgba(177,202,215,0.1)' }}>
-                <ShieldCheck size={20} style={{ color: 'var(--accent-slate)' }} />
-                <div style={{ fontSize: 10, color: 'var(--text-muted)', lineHeight: 1.5, fontWeight: 600 }}>SYSTEM NOTICE: ALL ASSETS ARE SUBJECT TO ENCRYPTION AND PROCUREMENT OVERSIGHT REVIEW PRIOR TO VISIBILITY.</div>
-              </div>
-            </div>
-          )}
-
-          <div className="flex justify-between mt-40">
-            {step > 1 ? (
-              <button className="btn btn-ghost" style={{ fontSize: 11, fontWeight: 800 }} onClick={() => setStep(step - 1)}>PREVIOUS PHASE</button>
-            ) : <div />}
-            
-            {step < 3 ? (
-              <button className="btn btn-primary" style={{ fontSize: 11 }} onClick={() => setStep(step + 1)}>NEXT PHASE</button>
-            ) : (
-              <button className="btn btn-primary" style={{ fontSize: 11 }} onClick={handleSubmit}>PUBLISH TO PORTFOLIO</button>
-            )}
-          </div>
-        </div>
+    <ModalShell title="Add product" onClose={onClose}>
+      <div style={{ display: 'flex', gap: 6, marginBottom: 28 }}>
+        {[1, 2, 3].map(s => <div key={s} style={{ flex: 1, height: 3, borderRadius: 2, background: step >= s ? 'var(--accent-slate)' : 'rgba(255,255,255,0.06)', transition: 'background 0.3s', boxShadow: step >= s ? '0 0 8px rgba(177,202,215,0.25)' : 'none' }} />)}
       </div>
-    </div>
+      {step === 1 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <Field label="Product name"><input placeholder="e.g. High pressure regulator" value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} style={inputStyle} /></Field>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Field label="SKU / model"><input placeholder="SKU-88-ALPHA" value={formData.sku} onChange={e => setFormData({ ...formData, sku: e.target.value })} style={inputStyle} /></Field>
+            <Field label="Category">
+              <select value={formData.category} onChange={e => setFormData({ ...formData, category: e.target.value })} style={{ ...inputStyle, appearance: 'none' }}>
+                {['Piping', 'Valves', 'Fittings', 'Electrical'].map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </Field>
+          </div>
+          <Field label="Description"><textarea rows={3} placeholder="Technical specifications…" value={formData.description} onChange={e => setFormData({ ...formData, description: e.target.value })} style={{ ...inputStyle, resize: 'none' }} /></Field>
+        </div>
+      )}
+      {step === 2 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <Field label="Base price (USD)"><input type="number" placeholder="0.00" value={formData.basePrice} onChange={e => setFormData({ ...formData, basePrice: Number(e.target.value) })} style={inputStyle} /></Field>
+            <Field label="Unit"><input placeholder="e.g. Metric ton, Unit" value={formData.unit} onChange={e => setFormData({ ...formData, unit: e.target.value })} style={inputStyle} /></Field>
+          </div>
+        </div>
+      )}
+      {step === 3 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ padding: '32px 20px', border: '1px dashed var(--border-subtle)', borderRadius: 14, textAlign: 'center', background: 'rgba(255,255,255,0.01)' }}>
+            <Upload size={28} style={{ color: 'var(--accent-slate)', opacity: 0.3, margin: '0 auto 12px', display: 'block' }} />
+            <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 4 }}>Product catalogue (PDF)</div>
+            <div style={{ fontSize: 10, color: 'var(--text-faint)', marginBottom: 16 }}>Enter filename to simulate upload</div>
+            <input placeholder="catalogue_v1.pdf" value={formData.catalogueName} onChange={e => setFormData({ ...formData, catalogueName: e.target.value })} style={{ ...inputStyle, textAlign: 'center', width: '80%' }} />
+          </div>
+        </div>
+      )}
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 28 }}>
+        {step > 1 ? <button className="btn btn-ghost" style={{ fontSize: 12 }} onClick={() => setStep(step - 1)}>Back</button> : <div />}
+        {step < 3 ? <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={() => setStep(step + 1)}>Continue</button> : <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={handleSubmit}>Add to portfolio</button>}
+      </div>
+    </ModalShell>
   );
 }
+
+// ─── Modal: Edit Profile ───────────────────────────────────────────────────────
 function EditProfileModal({ onClose }: { onClose: () => void }) {
   const { myData, updateSupplierProfile } = useApp() as any;
-  const [formData, setFormData] = useState({
-    name: myData?.name || '',
-    email: myData?.email || '',
-    location: myData?.location || '',
-    address: myData?.address || '',
-    logo: myData?.logo || ''
-  });
-
-  const handleSubmit = () => {
-    updateSupplierProfile(myData.id, formData);
-    onClose();
-  };
+  const [formData, setFormData] = useState({ name: myData?.name || '', email: myData?.email || '', location: myData?.location || '', address: myData?.address || '', logo: myData?.logo || '' });
+  const inputStyle: React.CSSProperties = { width: '100%', padding: '11px 14px', borderRadius: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-subtle)', color: '#fff', fontSize: 13, outline: 'none', fontWeight: 600, boxSizing: 'border-box' };
 
   return (
-    <div className="modal-overlay" onClick={onClose} style={{ backdropFilter: 'blur(8px)', background: 'rgba(0,0,0,0.8)' }}>
-      <div className="modal" style={{ maxWidth: 500, width: '95%', background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
-        <div className="modal-header" style={{ padding: '20px 24px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontFamily: 'Manrope, sans-serif', fontWeight: 800 }}>AMEND ENTITY DOSSIER</h3>
-          <button className="btn btn-ghost" style={{ padding: 4 }} onClick={onClose}><X size={18} /></button>
+    <ModalShell title="Edit profile" onClose={onClose}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <Field label="Legal entity name"><input value={formData.name} onChange={e => setFormData({ ...formData, name: e.target.value })} style={inputStyle} /></Field>
+        <Field label="Logo URL"><input placeholder="https://…/logo.png" value={formData.logo} onChange={e => setFormData({ ...formData, logo: e.target.value })} style={inputStyle} /></Field>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <Field label="Contact email"><input value={formData.email} onChange={e => setFormData({ ...formData, email: e.target.value })} style={inputStyle} /></Field>
+          <Field label="Jurisdiction"><input value={formData.location} onChange={e => setFormData({ ...formData, location: e.target.value })} style={inputStyle} /></Field>
         </div>
-        <div style={{ padding: 32 }} className="stack-md">
-          <div className="form-group-minimal">
-            <label>LEGAL ENTITY NAME</label>
-            <input value={formData.name} onChange={e => setFormData({...formData, name: e.target.value.toUpperCase()})} />
-          </div>
-          <div className="form-group-minimal">
-            <label>BRAND ASSET / LOGO IDENTIFIER (URL)</label>
-            <input placeholder="HTTPS://CERTIFIED-RESOURCES.COM/LOGO.PNG" value={formData.logo} onChange={e => setFormData({...formData, logo: e.target.value})} />
-            <p style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 8, fontWeight: 600 }}>PROVIDE HIGH-RESOLUTION TRANSPARENT IDENTIFIER.</p>
-          </div>
-          <div className="grid grid-2" style={{ gap: 16 }}>
-            <div className="form-group-minimal">
-              <label>PRIMARY CONTACT UPLINK</label>
-              <input value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} />
-            </div>
-            <div className="form-group-minimal">
-              <label>HQ JURISDICTION</label>
-              <input value={formData.location} onChange={e => setFormData({...formData, location: e.target.value.toUpperCase()})} />
-            </div>
-          </div>
-          <div className="form-group-minimal">
-            <label>REGISTERED OPERATIONS ADDRESS</label>
-            <textarea 
-              rows={2}
-              style={{ width: '100%', padding: '12px 16px', borderRadius: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-subtle)', color: '#fff', outline: 'none', fontSize: 13, fontWeight: 600 }}
-              value={formData.address} onChange={e => setFormData({...formData, address: e.target.value.toUpperCase()})}
-            />
-          </div>
-          <div className="flex justify-end mt-24">
-            <button className="btn btn-primary" style={{ fontSize: 11 }} onClick={handleSubmit}>COMMIT CHANGES</button>
-          </div>
-        </div>
+        <Field label="Registered address"><textarea rows={2} value={formData.address} onChange={e => setFormData({ ...formData, address: e.target.value })} style={{ ...inputStyle, resize: 'none' }} /></Field>
       </div>
-    </div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 24 }}>
+        <button className="btn btn-primary" style={{ fontSize: 12 }} onClick={() => { updateSupplierProfile(myData.id, formData); onClose(); }}>Save changes</button>
+      </div>
+    </ModalShell>
   );
 }
 
+// ─── Modal: Change Password ────────────────────────────────────────────────────
 function ChangePasswordModal({ onClose }: { onClose: () => void }) {
   const { myData, updateSupplierProfile } = useApp() as any;
   const [currentPass, setCurrentPass] = useState('');
   const [newPass, setNewPass] = useState('');
   const [confirmPass, setConfirmPass] = useState('');
   const [error, setError] = useState('');
+  const inputStyle: React.CSSProperties = { width: '100%', padding: '11px 14px', borderRadius: 10, background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-subtle)', color: '#fff', fontSize: 13, outline: 'none', fontWeight: 600, boxSizing: 'border-box' };
 
   const handleUpdate = () => {
-    if (currentPass !== myData.passwordHash) {
-      setError('AUTHENTICATION FAILED: CURRENT PASSCODE INCORRECT');
-      return;
-    }
-    if (newPass !== confirmPass) {
-      setError('PROTOCOL ERROR: PASSCODES DO NOT ALIGN');
-      return;
-    }
-    if (newPass.length < 6) {
-      setError('SECURITY POLICY: PASSCODE MUST EXCEED 6 CHARACTERS');
-      return;
-    }
-
+    if (currentPass !== myData.passwordHash) { setError('Current password is incorrect.'); return; }
+    if (newPass !== confirmPass) { setError('New passwords do not match.'); return; }
+    if (newPass.length < 6) { setError('Password must be at least 6 characters.'); return; }
     updateSupplierProfile(myData.id, { passwordHash: newPass });
     onClose();
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose} style={{ backdropFilter: 'blur(8px)', background: 'rgba(0,0,0,0.8)' }}>
-      <div className="modal" style={{ maxWidth: 450, width: '95%', background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
-        <div className="modal-header" style={{ padding: '20px 24px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 style={{ margin: 0, fontSize: 16, fontFamily: 'Manrope, sans-serif', fontWeight: 800 }}>CREDENTIAL ROTATION</h3>
-          <button className="btn btn-ghost" style={{ padding: 4 }} onClick={onClose}><X size={18} /></button>
+    <ModalShell title="Change password" onClose={onClose}>
+      {error && <div style={{ padding: '10px 14px', fontSize: 11, color: 'var(--accent-amber)', background: 'rgba(233,193,118,0.06)', border: '1px solid rgba(233,193,118,0.12)', borderRadius: 8, marginBottom: 16, fontWeight: 700 }}>{error}</div>}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <Field label="Current password"><input type="password" value={currentPass} onChange={e => { setCurrentPass(e.target.value); setError(''); }} style={inputStyle} /></Field>
+        <div style={{ height: 1, background: 'var(--border-subtle)', margin: '4px 0' }} />
+        <Field label="New password"><input type="password" value={newPass} onChange={e => { setNewPass(e.target.value); setError(''); }} style={inputStyle} /></Field>
+        <Field label="Confirm new password"><input type="password" value={confirmPass} onChange={e => { setConfirmPass(e.target.value); setError(''); }} style={inputStyle} /></Field>
+      </div>
+      <button className="btn btn-primary" style={{ width: '100%', marginTop: 24, fontSize: 12 }} onClick={handleUpdate}>Update password</button>
+    </ModalShell>
+  );
+}
+
+// ─── Shared helpers ────────────────────────────────────────────────────────────
+function ModalShell({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)' }}
+      onClick={onClose}
+    >
+      <div
+        style={{ width: '95%', maxWidth: 500, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)', overflow: 'hidden', boxShadow: '0 40px 80px rgba(0,0,0,0.5)' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.01)' }}>
+          <h3 style={{ margin: 0, fontSize: 15, fontFamily: 'Manrope, sans-serif', fontWeight: 800 }}>{title}</h3>
+          <button className="btn btn-ghost" style={{ padding: 4 }} onClick={onClose}><X size={16} /></button>
         </div>
-        <div style={{ padding: 32 }} className="stack-md">
-          {error && <div style={{ padding: 12, fontSize: 10, textAlign: 'center', color: 'var(--accent-amber)', background: 'rgba(233,193,118,0.05)', border: '1px solid rgba(233,193,118,0.1)', borderRadius: 8, marginBottom: 16, fontWeight: 800 }}>{error}</div>}
-          <div className="form-group-minimal">
-            <label>CURRENT AUTHORIZATION PASSCODE</label>
-            <input type="password" value={currentPass} onChange={e => { setCurrentPass(e.target.value); setError(''); }} />
-          </div>
-          <div className="form-group-minimal" style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 24, marginTop: 12 }}>
-            <label>NEW SECURITY PASSCODE</label>
-            <input type="password" value={newPass} onChange={e => { setNewPass(e.target.value); setError(''); }} />
-          </div>
-          <div className="form-group-minimal">
-            <label>CONFIRM NEW PASSCODE</label>
-            <input type="password" value={confirmPass} onChange={e => { setConfirmPass(e.target.value); setError(''); }} />
-          </div>
-          <button className="btn btn-primary" style={{ width: '100%', marginTop: 24, fontSize: 11 }} onClick={handleUpdate}>AUTHORIZE ROTATION</button>
-        </div>
+        <div style={{ padding: 28 }}>{children}</div>
       </div>
     </div>
   );
 }
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <label style={{ display: 'block', fontSize: 9, fontWeight: 800, color: 'var(--text-faint)', marginBottom: 7, letterSpacing: '0.06em' }}>{label.toUpperCase()}</label>
+      {children}
+    </div>
+  );
+}
+
+const CalendarIcon = ({ size, color }: { size?: number, color?: string }) => (
+  <svg width={size || 16} height={size || 16} viewBox="0 0 24 24" fill="none" stroke={color || "currentColor"} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+    <line x1="16" y1="2" x2="16" y2="6" />
+    <line x1="8" y1="2" x2="8" y2="6" />
+    <line x1="3" y1="10" x2="21" y2="10" />
+  </svg>
+);
