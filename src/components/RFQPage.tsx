@@ -226,7 +226,12 @@ function RFQDetail({ rfqId }: { rfqId: string }) {
                <button className="btn btn-secondary mt-12" onClick={() => setActiveTab('inbox')}>Go to Bid Inbox</button>
              </div>
           ) : (
-            <ComparisonMatrix rfqs={rfqs} quotations={rfqQuotations} selection={matrixSelection} onClose={() => {}} />
+            <ComparisonMatrix 
+              rfqs={rfqs} 
+              quotations={rfqQuotations} 
+              selection={matrixSelection} 
+              onClose={() => { setMatrixSelection([]); setActiveTab('inbox'); }} 
+            />
           )}
         </div>
       )}

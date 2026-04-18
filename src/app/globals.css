@@ -7,25 +7,25 @@
 
 @layer base {
   :root {
-    /* ── Core Backgrounds (The Void) ───────────────────────── */
+    /* ── Core Backgrounds (The Sovereign Void) ──────────────── */
     --bg-primary:      #0b0e14;
     --bg-secondary:    #111319;
     --bg-tertiary:     #191c22;
-    --bg-card:         rgba(25, 28, 34, 0.65);
-    --bg-glass:        rgba(17, 19, 25, 0.70);
-    --bg-elevated:     rgba(31, 35, 43, 0.90);
+    --bg-card:         rgba(29, 32, 38, 0.45);
+    --bg-glass:        rgba(17, 19, 25, 0.60);
+    --bg-elevated:     rgba(45, 48, 54, 0.85);
 
-    /* ── Text (Sovereign Clarity) ─────────────────────────── */
+    /* ── Text (Sovereign Dual-Type) ────────────────────────── */
     --text-primary:    #e1e2eb;
     --text-secondary:  #c2c7cb;
     --text-muted:      #8c9195;
     --text-faint:      #42484b;
 
-    /* ── Border (Ghost Borders) ───────────────────────────── */
+    /* ── Border (Ghost Borders & Tonal Layering) ───────────── */
     --border-color:    rgba(140, 145, 149, 0.12);
-    --border-subtle:   rgba(140, 145, 149, 0.06);
-    --border-glow:     rgba(177, 202, 215, 0.25);
-    --border-active:   rgba(177, 202, 215, 0.40);
+    --border-subtle:   rgba(140, 145, 149, 0.05);
+    --border-glow:     rgba(177, 202, 215, 0.22);
+    --border-active:   rgba(177, 202, 215, 0.35);
 
     /* ── Accent Colors (Intellectual Slate & Gold Signal) ── */
     --accent-slate:    #b1cad7;
@@ -33,14 +33,14 @@
     --accent-blue:     #9bb0bc;
     --accent-cyan:     #b4cad6;
     --accent-teal:     #7e949f;
-    --accent-emerald:  #10b981;
+    --accent-emerald:  #b1cad7; /* Following sovereign constraint */
     --accent-amber:    #e9c176;
     --accent-orange:   #d4a24c;
     --accent-rose:     #ffb4ab;
     --accent-pink:     #ec4899;
 
-    /* ── Semantic ─────────────────────────────────────────── */
-    --color-success:   #b1cad7; /* Following stealth palette */
+    /* ── Semantic (Sovereign Palette) ─────────────────────── */
+    --color-success:   #b1cad7;
     --color-warning:   #e9c176;
     --color-danger:    #ffb4ab;
     --color-info:      #b4cad6;
@@ -52,20 +52,17 @@
     --gradient-hero:      linear-gradient(135deg, #b1cad7 0%, #7c94a0 50%, #4a626d 100%);
     --gradient-surface:   linear-gradient(135deg, rgba(140,145,149,0.04) 0%, rgba(177,202,215,0.02) 100%);
 
-    /* ── Shadows & Glows ──────────────────────────────────── */
-    --shadow-sm:       0 1px 3px rgba(0,0,0,0.6), 0 1px 2px rgba(0,0,0,0.7);
-    --shadow-md:       0 4px 16px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.5);
-    --shadow-lg:       0 8px 32px rgba(0,0,0,0.7), 0 4px 16px rgba(0,0,0,0.6);
-    --shadow-card:     0 4px 24px rgba(0,0,0,0.5), 0 1px 4px rgba(0,0,0,0.6);
-    --shadow-glow:     0 0 24px rgba(177,202,215,0.12), 0 0 8px rgba(177,202,215,0.08);
-    --shadow-glow-lg:  0 0 40px rgba(177,202,215,0.15), 0 0 16px rgba(177,202,215,0.1);
-    --shadow-teal:     0 0 20px rgba(20,184,166,0.18);
-
-    /* ── Transitions ──────────────────────────────────────── */
-    --transition-fast:   150ms cubic-bezier(0.4, 0, 0.2, 1);
-    --transition-base:   250ms cubic-bezier(0.4, 0, 0.2, 1);
-    --transition-slow:   400ms cubic-bezier(0.4, 0, 0.2, 1);
-    --transition-spring: 300ms cubic-bezier(0.34, 1.56, 0.64, 1);
+    /* ── Shadows & Depth (No-Line Principle) ───────────────── */
+    --shadow-sm:       0 1px 2px rgba(0,0,0,0.8);
+    --shadow-md:       0 8px 16px rgba(0,0,0,0.5);
+    --shadow-lg:       0 12px 32px rgba(0,0,0,0.7);
+    --shadow-card:     0 4px 20px rgba(0,0,0,0.4);
+    --shadow-glow:     0 0 30px rgba(177,202,215,0.1);
+    
+    /* ── Density (Between Compact & Standard) ───────────────── */
+    --padding-page:    1.25rem;
+    --gap-standard:    1rem;
+    --radius-standard: 12px;
   }
 }
 
@@ -81,9 +78,9 @@
   body {
     background: var(--bg-primary);
     color: var(--text-primary);
-    font-family: 'Inter', 'DM Sans', system-ui, -apple-system, sans-serif;
-    font-size: 14px;
-    line-height: 1.6;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-size: 13.5px;
+    line-height: 1.5;
     min-height: 100vh;
     overflow-x: hidden;
     /* Subtle animated grain + noise background */

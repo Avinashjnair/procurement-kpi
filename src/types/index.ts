@@ -111,6 +111,7 @@ export interface Supplier {
   preferredStatusCriteria?: { criterion: string; met: boolean }[];
   passwordHash?: string;
   active?: boolean;
+  logo?: string;
 }
 
 export interface ProductLibraryItem {

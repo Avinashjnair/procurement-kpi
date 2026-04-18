@@ -165,6 +165,7 @@ interface AppContextType extends AppState {
   addSupplierContact: (supplierId: string, contact: { name: string; role: string; email: string }) => void;
   supplierLogin: (supplierId: string, passwordHash: string) => boolean;
   supplierLogout: () => void;
+  addProduct: (product: Omit<ProductLibraryItem, 'id'>) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -801,6 +802,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     }));
   }, []);
 
+  const addProduct = useCallback((product: Omit<ProductLibraryItem, 'id'>) => {
+    setState(p => ({
+      ...p,
+      products: [...p.products, { ...product, id: `PRD-${Date.now()}` }]
+    }));
+  }, []);
+
   return (
     <AppContext.Provider value={{
       ...state,
@@ -828,7 +836,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       acknowledgePO, updateShipment, requestAmendment, updateDeliveredQty,
       submitInvoice, disputeGRN, uploadComplianceDoc,
       sendPOMessage, updateSupplierProfile, requestEarlyPayment, addSupplierContact,
-      supplierLogin, supplierLogout
+      supplierLogin, supplierLogout, addProduct
     }}>
       {children}
     </AppContext.Provider>
