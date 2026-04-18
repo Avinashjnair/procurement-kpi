@@ -1,5 +1,5 @@
 'use client';
-import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from 'react';
 import {
   items as initialItems, suppliers as initialSuppliers,
   purchaseOrders as initialPOs, documents as initialDocs,
@@ -20,7 +20,7 @@ import type {
   Asset, MaintenanceRecord, AssetStatus, PaymentRecord, PaymentRecordStatus,
   BudgetEnvelope, Contract, Invoice, AuditLogEntry, MatchStatus, ApprovalStep, BlanketPO,
   AppNotification, NotificationRule, NegotiationMessage, POAmendmentRequest,
-  ComplianceDocument, GRNDispute, POMessage,
+  ComplianceDocument, GRNDispute, POMessage, ProductLibraryItem,
 } from '@/types';
 import { calcEvalScore } from '@/types';
 
@@ -64,6 +64,8 @@ interface AppState {
   complianceDocs: ComplianceDocument[];
   disputes: GRNDispute[];
   poMessages: POMessage[];
+  currentSupplier: Supplier | null;
+  products: ProductLibraryItem[];
 }
 
 interface AppContextType extends AppState {
@@ -107,6 +109,7 @@ interface AppContextType extends AppState {
   updateRFQ: (id: string, updates: Partial<RFQ>) => void;
   sendRFQ: (id: string) => void;
   closeRFQ: (id: string) => void;
+  publishRFQ: (id: string) => void;
   awardRFQ: (rfqId: string, quotationId: string) => void;
   addQuotation: (q: Quotation) => void;
   updateQuotation: (id: string, updates: Partial<Quotation>) => void;
@@ -160,6 +163,8 @@ interface AppContextType extends AppState {
   updateSupplierProfile: (id: string, updates: Partial<Supplier>) => void;
   requestEarlyPayment: (invoiceId: string, discountPct: number) => void;
   addSupplierContact: (supplierId: string, contact: { name: string; role: string; email: string }) => void;
+  supplierLogin: (supplierId: string, passwordHash: string) => boolean;
+  supplierLogout: () => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -212,7 +217,51 @@ export function AppProvider({ children }: { children: ReactNode }) {
     complianceDocs: initialComplianceDocs,
     disputes: initialDisputes,
     poMessages: [],
+    currentSupplier: null,
+    products: [
+      { id: 'PRD-1', name: 'Seamless Carbon Pipe', sku: 'PIPE-SM-001', category: 'Piping', description: 'High-pressure seamless carbon steel pipe for industrial use.', unit: 'Meter', basePrice: 85.50, currency: 'USD', technicalDocs: ['CDOC-005'], certifications: ['ASME B16.5'] },
+      { id: 'PRD-2', name: 'Industrial Gate Valve', sku: 'VALV-GT-04', category: 'Valves', description: 'API 600 compliant heavy-duty gate valve.', unit: 'Piece', basePrice: 320.00, currency: 'USD', technicalDocs: ['CDOC-006'], certifications: ['API 600', 'ISO 9001'] },
+      { id: 'PRD-3', name: 'Stainless Steel Flange', sku: 'FLG-SS-08', category: 'Fittings', description: 'Corrosion resistant 316L stainless steel flange.', unit: 'Piece', basePrice: 195.00, currency: 'USD', technicalDocs: [], certifications: ['ASME B16.5'] }
+    ],
   });
+
+  // ── Session Persistence ───────────────────────────────────
+  useEffect(() => {
+    const savedUser = localStorage.getItem('procureiq_user');
+    const savedSupplier = localStorage.getItem('procureiq_supplier');
+    
+    if (savedUser) {
+      try {
+        const user = JSON.parse(savedUser);
+        setState(p => ({ ...p, currentUser: user, activePage: user.role === 'finance' ? 'finance' : 'dashboard' }));
+      } catch (e) { console.error('Failed to parse saved user'); }
+    }
+    
+    if (savedSupplier) {
+      try {
+        const supplier = JSON.parse(savedSupplier);
+        setState(p => ({ ...p, currentSupplier: supplier, isSupplierPortal: true, activePage: 'dashboard' }));
+      } catch (e) { console.error('Failed to parse saved supplier'); }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (state.currentUser) {
+      localStorage.setItem('procureiq_user', JSON.stringify(state.currentUser));
+      localStorage.removeItem('procureiq_supplier');
+    } else {
+      localStorage.removeItem('procureiq_user');
+    }
+  }, [state.currentUser]);
+
+  useEffect(() => {
+    if (state.currentSupplier) {
+      localStorage.setItem('procureiq_supplier', JSON.stringify(state.currentSupplier));
+      localStorage.removeItem('procureiq_user');
+    } else {
+      localStorage.removeItem('procureiq_supplier');
+    }
+  }, [state.currentSupplier]);
 
   // ── Roadmap Extensions ───────────────────────────────────
 
@@ -388,6 +437,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [state.users]);
 
   const logout = useCallback(() => setState(p => ({ ...p, currentUser: null, activePage: 'dashboard' })), []);
+
+  const supplierLogin = useCallback((supplierId: string, passwordHash: string): boolean => {
+    const supplier = state.suppliers.find(s => s.id === supplierId && s.passwordHash === passwordHash && s.active);
+    if (supplier) {
+      setState(p => ({ ...p, currentSupplier: supplier }));
+      return true;
+    }
+    return false;
+  }, [state.suppliers]);
+
+  const supplierLogout = useCallback(() => setState(p => ({ ...p, currentSupplier: null })), []);
 
   // Items
   const addItem             = useCallback((item: Item) => setState(p => ({ ...p, items: [...p.items, item] })), []);
@@ -599,6 +659,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const updateRFQ = useCallback((id: string, updates: Partial<RFQ>) => setState(p => ({ ...p, rfqs: p.rfqs.map(r => r.id === id ? { ...r, ...updates } : r) })), []);
   const sendRFQ   = useCallback((id: string) => setState(p => ({ ...p, rfqs: p.rfqs.map(r => r.id === id ? { ...r, status: 'Sent', dateSent: new Date().toISOString().split('T')[0] } : r) })), []);
   const closeRFQ  = useCallback((id: string) => setState(p => ({ ...p, rfqs: p.rfqs.map(r => r.id === id ? { ...r, status: 'Closed' } : r) })), []);
+  const publishRFQ = useCallback((id: string) => setState(p => ({ ...p, rfqs: p.rfqs.map(r => r.id === id ? { ...r, status: 'Published' } : r) })), []);
   const awardRFQ  = useCallback((rfqId: string, quotationId: string) => {
     setState(p => {
       const quotation = p.quotations.find(q => q.id === quotationId);
@@ -640,7 +701,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
   const submitEvaluation = useCallback((quotationId: string, evalData: Omit<QuotationEvaluation, 'totalScore' | 'evaluatedBy' | 'evaluatedAt'>) => {
     setState(p => {
-      const totalScore = calcEvalScore(evalData);
+      const quotation = p.quotations.find(q => q.id === quotationId);
+      const rfq = p.rfqs.find(r => r.id === quotation?.rfqId);
+      const totalScore = calcEvalScore(evalData, rfq?.evaluationWeights);
       const fullEval: QuotationEvaluation = { ...evalData, totalScore, evaluatedBy: p.currentUser?.id || 'USR-001', evaluatedAt: new Date().toISOString().split('T')[0] };
       return { ...p, quotations: p.quotations.map(q => q.id === quotationId ? { ...q, evaluation: fullEval, status: 'Evaluated' } : q) };
     });
@@ -749,7 +812,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addPurchaseOrder, updatePOStatus, updatePOPayment, approvePO, rejectPO, cancelPO, duplicatePO,
       recordPayment, approvePaymentRecord,
       addDocument, uploadNewDocVersion,
-      addRFQ, updateRFQ, sendRFQ, closeRFQ, awardRFQ,
+      addRFQ, updateRFQ, sendRFQ, closeRFQ, awardRFQ, publishRFQ,
       addQuotation, updateQuotation, submitEvaluation,
       addGRN, submitGRN, approveGRN, rejectGRN,
       adjustStock,
@@ -764,7 +827,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setSupplierPortal, addNegotiationMessage, updateQuotationFeedback,
       acknowledgePO, updateShipment, requestAmendment, updateDeliveredQty,
       submitInvoice, disputeGRN, uploadComplianceDoc,
-      sendPOMessage, updateSupplierProfile, requestEarlyPayment, addSupplierContact
+      sendPOMessage, updateSupplierProfile, requestEarlyPayment, addSupplierContact,
+      supplierLogin, supplierLogout
     }}>
       {children}
     </AppContext.Provider>

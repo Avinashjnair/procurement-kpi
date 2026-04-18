@@ -109,6 +109,22 @@ export interface Supplier {
   contactList?: { id: string; name: string; role: string; email: string }[];
   bankInfo?: { bankName: string; accountNo: string; iban: string; swiftCode: string };
   preferredStatusCriteria?: { criterion: string; met: boolean }[];
+  passwordHash?: string;
+  active?: boolean;
+}
+
+export interface ProductLibraryItem {
+  id: string;
+  name: string;
+  sku: string;
+  category: string;
+  description: string;
+  unit: string;
+  basePrice: number;
+  currency: string;
+  image?: string;
+  technicalDocs: string[]; // IDs of ComplianceDocuments or local filenames
+  certifications: string[];
 }
 
 export interface POMessage {
@@ -198,7 +214,8 @@ export type PaymentRecordStatus = 'Pending Approval' | 'Approved' | 'Rejected';
 
 // ── Purchase Orders ──────────────────────────────────────────
 
-export type POStatus = 'Draft' | 'Pending' | 'Approved' | 'Shipped' | 'Partially Delivered' | 'Delivered' | 'Cancelled';
+export type POStatus = 'Draft' | 'Pending' | 'Approved' | 'Shipped' | 'Partially Delivered' | 'Delivered' | 'Cancelled' | 'Awaiting Settlement';
+export type PortalTab = 'dashboard' | 'pos' | 'bids' | 'performance' | 'financials' | 'quality' | 'communication' | 'compliance' | 'account' | 'product-library';
 export type PaymentStatus = 'Unpaid' | 'Partial' | 'Paid';
 
 export interface ServicePOLineDetails {
@@ -264,7 +281,8 @@ export interface POAmendmentRequest {
 
 // ── RFQ ─────────────────────────────────────────────────────
 
-export type RFQStatus = 'Draft' | 'Sent' | 'Closed' | 'Awarded' | 'Cancelled';
+export type RFQStatus = 'Draft' | 'Sent' | 'Closed' | 'Awarded' | 'Cancelled' | 'Published';
+export type TenderType = 'open' | 'selective' | 'single-source' | 'framework';
 
 export interface RFQLineItem {
   id: string;
@@ -292,6 +310,11 @@ export interface RFQ {
   awardedQuotationId?: string;
   awardedSupplierId?: string;
   awardedSupplierName?: string;
+  // Tendering Engine Extensions
+  tenderType: TenderType;
+  evaluationWeights: Record<string, number>; // Normalized 0-1.0
+  bidDeadline: string;
+  clarificationDeadline: string;
 }
 
 // ── Quotations ───────────────────────────────────────────────
@@ -364,15 +387,19 @@ export const EVAL_WEIGHTS = {
   compliance:     0.05,
 };
 
-export function calcEvalScore(e: Omit<QuotationEvaluation, 'totalScore' | 'evaluatedBy' | 'evaluatedAt'>): number {
+export function calcEvalScore(
+  e: Omit<QuotationEvaluation, 'totalScore' | 'evaluatedBy' | 'evaluatedAt'>,
+  weights?: Record<string, number>
+): number {
+  const w = weights || EVAL_WEIGHTS;
   return Math.round((
-    e.price          * EVAL_WEIGHTS.price          +
-    e.leadTime       * EVAL_WEIGHTS.leadTime        +
-    e.pastHistory    * EVAL_WEIGHTS.pastHistory     +
-    e.paymentTerms   * EVAL_WEIGHTS.paymentTerms    +
-    e.serviceQuality * EVAL_WEIGHTS.serviceQuality  +
-    e.responsiveness * EVAL_WEIGHTS.responsiveness  +
-    e.compliance     * EVAL_WEIGHTS.compliance
+    e.price          * (w.price || 0)          +
+    e.leadTime       * (w.leadTime || 0)       +
+    e.pastHistory    * (w.pastHistory || 0)    +
+    e.paymentTerms   * (w.paymentTerms || 0)   +
+    e.serviceQuality * (w.serviceQuality || 0) +
+    e.responsiveness * (w.responsiveness || 0) +
+    e.compliance     * (w.compliance || 0)
   ) * 10) / 10;
 }
 
@@ -552,8 +579,8 @@ export interface BlanketPO {
 
 // ── Invoices & Matching ──────────────────────────────────────
 
-export type InvoiceStatus = 'Pending' | 'Matched' | 'Variance' | 'Paid' | 'Cancelled';
-export type MatchStatus = 'Full Match' | 'Variance' | 'Missing GRN' | 'Missing PO' | 'Pending';
+export type InvoiceStatus = 'Pending' | 'Matched' | 'Variance' | 'Paid' | 'Cancelled' | 'Processing';
+export type MatchStatus = 'Full Match' | 'Variance' | 'Missing GRN' | 'Missing PO' | 'Pending' | string;
 
 export interface InvoiceLineItem {
   poLineIndex: number;
@@ -586,7 +613,7 @@ export interface ComplianceDocument {
   id: string;
   supplierId: string;
   title: string;
-  category: 'Trade License' | 'VAT Certificate' | 'ISO Certification' | 'Insurance' | 'Other';
+  category: 'Trade License' | 'VAT Certificate' | 'ISO Certification' | 'Insurance' | 'Product Catalogue' | 'Product Certificate' | 'Technical Datasheet' | 'Other';
   expiryDate: string;
   status: 'Active' | 'Expiring Soon' | 'Expired';
   fileName: string;

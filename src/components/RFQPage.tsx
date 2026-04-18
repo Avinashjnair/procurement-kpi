@@ -2,11 +2,12 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '@/context/AppContext';
 import { can } from '@/types';
-import type { RFQ, RFQLineItem, RFQStatus } from '@/types';
+import type { RFQ, RFQLineItem, RFQStatus, TenderType } from '@/types';
 import { Search, Plus, Send, ArrowLeft, Eye, X, CheckCircle2, Award, Lock } from 'lucide-react';
 
 const STATUS_META: Record<RFQStatus, { color: string; bg: string }> = {
   Draft:     { color: '#94a3b8', bg: 'rgba(148,163,184,0.1)' },
+  Published: { color: '#6366f1', bg: 'rgba(99,102,241,0.1)' },
   Sent:      { color: '#06b6d4', bg: 'rgba(6,182,212,0.1)' },
   Closed:    { color: '#f59e0b', bg: 'rgba(245,158,11,0.1)' },
   Awarded:   { color: '#10b981', bg: 'rgba(16,185,129,0.1)' },
@@ -14,7 +15,7 @@ const STATUS_META: Record<RFQStatus, { color: string; bg: string }> = {
 };
 
 function StatusPill({ status }: { status: RFQStatus }) {
-  const s = STATUS_META[status];
+  const s = STATUS_META[status] || { color: '#94a3b8', bg: 'rgba(148,163,184,0.1)' };
   return (
     <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: s.bg, color: s.color }}>
       {status}
@@ -22,16 +23,102 @@ function StatusPill({ status }: { status: RFQStatus }) {
   );
 }
 
+// ── Comparison Matrix Component ──
+function ComparisonMatrix({ rfqs, quotations, selection, onClose }: { rfqs: any[], quotations: any[], selection: string[], onClose: () => void }) {
+  const selectedQuotes = quotations.filter(q => selection.includes(q.id));
+  const rfq = rfqs.find(r => r.id === selectedQuotes[0]?.rfqId);
+  
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal" style={{ maxWidth: 1000, width: '95%', maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+        <div className="modal-header">
+          <h3 className="modal-title">Bid Comparison Matrix</h3>
+          <button className="modal-close" onClick={onClose}><X size={18} /></button>
+        </div>
+        
+        <div className="data-table-wrapper">
+          <table className="data-table matrix-table">
+            <thead>
+              <tr>
+                <th style={{ minWidth: 200 }}>Criteria</th>
+                {selectedQuotes.map(q => (
+                  <th key={q.id} style={{ textAlign: 'center', minWidth: 150 }}>
+                    <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{q.supplierName}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{q.id}</div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style={{ fontWeight: 600 }}>Total Bid Amount</td>
+                {selectedQuotes.map(q => <td key={q.id} style={{ textAlign: 'center', fontWeight: 700, color: 'var(--accent-indigo)', fontSize: 16 }}>${q.totalAmount.toLocaleString()}</td>)}
+              </tr>
+              <tr>
+                <td style={{ fontWeight: 600 }}>Lead Time (Max)</td>
+                {selectedQuotes.map(q => <td key={q.id} style={{ textAlign: 'center' }}>{Math.max(...q.lineItems.map((l: any) => l.leadTimeDays))} Days</td>)}
+              </tr>
+              <tr>
+                <td style={{ fontWeight: 600 }}>Payment Terms</td>
+                {selectedQuotes.map(q => <td key={q.id} style={{ textAlign: 'center' }}>{q.paymentTerms}</td>)}
+              </tr>
+              <tr style={{ background: 'rgba(99,102,241,0.05)' }}>
+                <td style={{ fontWeight: 700 }}>Overall Eval Score</td>
+                {selectedQuotes.map(q => (
+                  <td key={q.id} style={{ textAlign: 'center' }}>
+                    <div style={{ fontSize: 20, fontWeight: 800, color: (q.evaluation?.totalScore || 0) >= 8 ? '#10b981' : '#f59e0b' }}>
+                      {q.evaluation?.totalScore || 'N/A'}/10
+                    </div>
+                  </td>
+                ))}
+              </tr>
+              {/* Detailed Technical Breakdown */}
+              <tr>
+                <td colSpan={selectedQuotes.length + 1} style={{ background: 'var(--bg-secondary)', fontSize: 11, fontWeight: 700, padding: '8px 12px' }}>TECHNICAL EVALUATION BREAKDOWN</td>
+              </tr>
+              {['pastHistory', 'serviceQuality', 'responsiveness', 'compliance'].map(key => (
+                <tr key={key}>
+                  <td style={{ fontSize: 13, paddingLeft: 20 }}>{WEIGHT_LABELS[key]} ({((rfq?.evaluationWeights?.[key] || DEFAULT_EVAL_WEIGHTS[key as keyof typeof DEFAULT_EVAL_WEIGHTS]) * 100).toFixed(0)}%)</td>
+                  {selectedQuotes.map(q => <td key={q.id} style={{ textAlign: 'center' }}>{q.evaluation?.[key] || '—'}/10</td>)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── RFQ Detail / View ──
 function RFQDetail({ rfqId }: { rfqId: string }) {
-  const { rfqs, quotations, suppliers, items, currentUser, sendRFQ, closeRFQ, awardRFQ, setSelectedRFQId, setActivePage } = useApp();
+  const { rfqs, quotations, suppliers, items, currentUser, sendRFQ, closeRFQ, awardRFQ, publishRFQ, setSelectedRFQId, setActivePage, negotiationMessages, addNegotiationMessage } = useApp();
+  const [activeTab, setActiveTab] = useState<'overview' | 'inbox' | 'matrix' | 'nego'>('overview');
+  const [selectedQuoteId, setSelectedQuoteId] = useState<string | null>(null);
+  const [matrixSelection, setMatrixSelection] = useState<string[]>([]);
+  const [negoInput, setNegoInput] = useState('');
+
   const rfq = rfqs.find(r => r.id === rfqId);
   if (!rfq) return null;
 
   const rfqQuotations = quotations.filter(q => q.rfqId === rfqId);
+  const selectedQuote = rfqQuotations.find(q => q.id === selectedQuoteId);
+
+  const handleSendNego = () => {
+    if (!negoInput.trim() || !selectedQuoteId) return;
+    addNegotiationMessage({
+      quotationId: selectedQuoteId,
+      senderId: currentUser?.id || 'USR-001',
+      senderName: currentUser?.name || 'Buyer',
+      role: 'buyer',
+      text: negoInput,
+      type: 'info'
+    });
+    setNegoInput('');
+  };
 
   return (
-    <div>
+    <div className="stack-lg">
       <button className="detail-back" onClick={() => setSelectedRFQId(null)}>
         <ArrowLeft size={16} /> Back to RFQs
       </button>
@@ -42,123 +129,146 @@ function RFQDetail({ rfqId }: { rfqId: string }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
             <h2>{rfq.title}</h2>
             <StatusPill status={rfq.status} />
+            <span style={{ fontSize: 11, fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: 'rgba(99,102,241,0.1)', color: 'var(--accent-indigo)', textTransform: 'uppercase' }}>{rfq.tenderType} Tender</span>
           </div>
           <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-            {rfq.id} · Created by {rfq.createdByName} · {rfq.dateCreated}
-            {rfq.projectReference && ` · ${rfq.projectReference}`}
+            {rfq.id} · Created by {rfq.createdByName} · Deadlines: Bid ({rfq.bidDeadline}) / Q&A ({rfq.clarificationDeadline})
           </p>
         </div>
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          {rfq.status === 'Draft' && can(currentUser, 'edit_rfq') && (
+        <div style={{ display: 'flex', gap: 8 }}>
+          {rfq.status === 'Draft' && rfq.tenderType === 'open' && (
+            <button className="btn btn-primary btn-sm" onClick={() => publishRFQ(rfq.id)}>
+              <Send size={13} /> Publish Tender
+            </button>
+          )}
+          {rfq.status === 'Draft' && rfq.tenderType !== 'open' && (
             <button className="btn btn-primary btn-sm" onClick={() => sendRFQ(rfq.id)}>
-              <Send size={13} /> Send to Suppliers
+              <Send size={13} /> Send Invitations
             </button>
           )}
-          {rfq.status === 'Sent' && can(currentUser, 'close_rfq') && (
-            <button className="btn btn-secondary btn-sm" onClick={() => closeRFQ(rfq.id)}>
-              Close RFQ
-            </button>
-          )}
-          {(rfq.status === 'Sent' || rfq.status === 'Closed') && rfqQuotations.length > 0 && can(currentUser, 'view_quotations') && (
-            <button className="btn btn-secondary btn-sm" onClick={() => setActivePage('quotations')}>
-              <Eye size={13} /> Compare Quotes ({rfqQuotations.length})
-            </button>
-          )}
+          {rfq.status === 'Sent' && <button className="btn btn-secondary btn-sm" onClick={() => closeRFQ(rfq.id)}>Close RFQ</button>}
         </div>
       </div>
 
-      {/* Invited suppliers */}
-      <div className="card" style={{ marginBottom: 20 }}>
-        <div className="card-header"><div className="card-title">Invited Suppliers</div></div>
-        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-          {rfq.invitedSupplierIds.map(sid => {
-            const sup = suppliers.find(s => s.id === sid);
-            const hasQuote = rfqQuotations.some(q => q.supplierId === sid);
-            return (
-              <div key={sid} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 14px', borderRadius: 10, border: `1px solid ${hasQuote ? 'rgba(16,185,129,0.3)' : 'var(--border-color)'}`, background: hasQuote ? 'rgba(16,185,129,0.05)' : 'var(--bg-primary)' }}>
-                <div style={{ width: 30, height: 30, borderRadius: 8, background: 'rgba(99,102,241,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#6366f1' }}>
-                  {sup?.name.charAt(0)}
-                </div>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>{sup?.name}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{hasQuote ? '✓ Quote received' : rfq.status === 'Draft' ? 'Not yet sent' : 'Awaiting quote'}</div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+      {/* Tabs */}
+      <div className="tabs" style={{ marginBottom: 0 }}>
+        <button className={`tab-btn ${activeTab === 'overview' ? 'active' : ''}`} onClick={() => setActiveTab('overview')}>Overview</button>
+        <button className={`tab-btn ${activeTab === 'inbox' ? 'active' : ''}`} onClick={() => setActiveTab('inbox')}>Bid Inbox ({rfqQuotations.length})</button>
+        <button className={`tab-btn ${activeTab === 'matrix' ? 'active' : ''}`} onClick={() => setActiveTab('matrix')}>Comparison Matrix</button>
+        <button className={`tab-btn ${activeTab === 'nego' ? 'active' : ''}`} onClick={() => setActiveTab('nego')}>Negotiations</button>
       </div>
 
-      {/* Line items */}
-      <div className="card" style={{ marginBottom: 20 }}>
-        <div className="card-header"><div className="card-title">Requested Items</div></div>
-        <div className="data-table-wrapper">
-          <table className="data-table">
-            <thead><tr><th>#</th><th>Item</th><th>Description</th><th>Category</th><th>Quantity</th><th>Unit</th></tr></thead>
-            <tbody>
-              {rfq.lineItems.map((line, i) => (
-                <tr key={line.id}>
-                  <td style={{ color: 'var(--text-muted)' }}>{i + 1}</td>
-                  <td style={{ fontWeight: 600, color: '#f1f5f9' }}>{line.itemName}</td>
-                  <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{line.description}</td>
-                  <td><span className="badge approved">{line.category}</span></td>
-                  <td style={{ fontWeight: 600 }}>{line.quantity.toLocaleString()}</td>
-                  <td>{line.unit}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Quotations received */}
-      {rfqQuotations.length > 0 && (
-        <div className="card">
-          <div className="card-header">
-            <div className="card-title">Quotations Received ({rfqQuotations.length})</div>
-            {can(currentUser, 'evaluate_quotation') && (
-              <button className="btn btn-primary btn-sm" onClick={() => setActivePage('quotations')}>
-                Open Comparison →
-              </button>
-            )}
+      {activeTab === 'overview' && (
+        <div className="stack-md">
+           <div className="card">
+            <div className="card-header"><div className="card-title">Scope of Supply</div></div>
+            <div className="data-table-wrapper">
+              <table className="data-table">
+                <thead><tr><th>#</th><th>Item</th><th>Description</th><th>Qty</th></tr></thead>
+                <tbody>
+                  {rfq.lineItems.map((line, i) => (
+                    <tr key={line.id}><td>{i + 1}</td><td style={{ fontWeight: 600 }}>{line.itemName}</td><td style={{ fontSize: 12 }}>{line.description}</td><td style={{ fontWeight: 700 }}>{line.quantity} {line.unit}</td></tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
+          <div className="card">
+            <div className="card-header"><div className="card-title">Strategic Weights</div></div>
+            <div className="grid-3" style={{ padding: 16, gap: 16 }}>
+              {Object.entries(rfq.evaluationWeights || DEFAULT_EVAL_WEIGHTS).map(([k, v]) => (
+                <div key={k} style={{ padding: '8px 12px', borderRadius: 8, background: 'var(--bg-secondary)', border: '1px solid var(--border-color)' }}>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 4 }}>{WEIGHT_LABELS[k] || k}</div>
+                  <div style={{ fontSize: 16, fontWeight: 700 }}>{(Number(v) * 100).toFixed(0)}%</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'inbox' && (
+        <div className="card">
           <div className="data-table-wrapper">
             <table className="data-table">
-              <thead><tr><th>Quote #</th><th>Supplier</th><th>Total</th><th>Lead Time</th><th>Payment</th><th>Score</th><th>Status</th></tr></thead>
+              <thead><tr><th>Select</th><th>Supplier</th><th>Amount</th><th>Score</th><th>Status</th><th>Actions</th></tr></thead>
               <tbody>
-                {rfqQuotations
-                  .sort((a, b) => (b.evaluation?.totalScore || 0) - (a.evaluation?.totalScore || 0))
-                  .map(q => (
-                    <tr key={q.id} style={{ background: q.status === 'Awarded' ? 'rgba(16,185,129,0.04)' : undefined }}>
-                      <td style={{ fontWeight: 600, color: '#f1f5f9' }}>{q.id}</td>
-                      <td>
-                        {q.status === 'Awarded' && <Award size={13} style={{ color: '#10b981', marginRight: 5 }} />}
-                        {q.supplierName}
-                      </td>
-                      <td className="font-mono" style={{ fontWeight: 600 }}>${q.totalAmount.toLocaleString()}</td>
-                      <td>{q.lineItems.length > 0 ? `${Math.max(...q.lineItems.map(l => l.leadTimeDays))}d max` : '—'}</td>
-                      <td>{q.paymentTerms}</td>
-                      <td>
-                        {q.evaluation
-                          ? <span style={{ fontWeight: 700, color: q.evaluation.totalScore >= 8 ? '#10b981' : q.evaluation.totalScore >= 6 ? '#f59e0b' : '#f43f5e', fontSize: 14 }}>{q.evaluation.totalScore}/10</span>
-                          : <span style={{ color: 'var(--text-muted)', fontSize: 12 }}>Not evaluated</span>
-                        }
-                      </td>
-                      <td><span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 600, background: `${STATUS_META[q.status as RFQStatus]?.bg || 'rgba(99,102,241,0.1)'}`, color: STATUS_META[q.status as RFQStatus]?.color || '#6366f1' }}>{q.status}</span></td>
-                    </tr>
-                  ))}
+                {rfqQuotations.map(q => (
+                  <tr key={q.id}>
+                    <td><input type="checkbox" checked={matrixSelection.includes(q.id)} onChange={() => setMatrixSelection(p => p.includes(q.id) ? p.filter(x => x !== q.id) : [...p, q.id])} /></td>
+                    <td style={{ fontWeight: 600 }}>{q.supplierName}</td>
+                    <td className="font-mono" style={{ fontWeight: 600 }}>${q.totalAmount.toLocaleString()}</td>
+                    <td>
+                      <div style={{ width: 80, height: 8, background: 'rgba(255,255,255,0.05)', borderRadius: 4, overflow: 'hidden', marginTop: 4 }}>
+                        <div style={{ width: `${(q.evaluation?.totalScore || 0) * 10}%`, height: '100%', background: (q.evaluation?.totalScore || 0) >= 8 ? '#10b981' : '#f59e0b' }} />
+                      </div>
+                      <span style={{ fontSize: 12, fontWeight: 700 }}>{q.evaluation?.totalScore || 'Pending Evaluation'}</span>
+                    </td>
+                    <td><StatusPill status={q.status as any} /></td>
+                    <td>
+                      <button className="btn btn-ghost btn-sm" onClick={() => { setSelectedQuoteId(q.id); setActiveTab('nego'); }}>Talk</button>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
         </div>
       )}
 
-      {rfq.awardedSupplierName && (
-        <div style={{ marginTop: 16, padding: '14px 18px', borderRadius: 12, background: 'rgba(16,185,129,0.06)', border: '1px solid rgba(16,185,129,0.2)', display: 'flex', alignItems: 'center', gap: 12 }}>
-          <CheckCircle2 size={18} style={{ color: '#10b981', flexShrink: 0 }} />
-          <div>
-            <div style={{ fontWeight: 700, color: '#10b981', fontSize: 14 }}>Awarded to {rfq.awardedSupplierName}</div>
-            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>Quotation {rfq.awardedQuotationId}</div>
+      {activeTab === 'matrix' && (
+        <div className="card" style={{ padding: '40px 20px', textAlign: 'center' }}>
+          {matrixSelection.length < 2 ? (
+             <div className="empty-state">
+               <Eye size={40} />
+               <h3>Compare Bids</h3>
+               <p>Select at least 2 quotes from the Bid Inbox to view the comparison matrix.</p>
+               <button className="btn btn-secondary mt-12" onClick={() => setActiveTab('inbox')}>Go to Bid Inbox</button>
+             </div>
+          ) : (
+            <ComparisonMatrix rfqs={rfqs} quotations={rfqQuotations} selection={matrixSelection} onClose={() => {}} />
+          )}
+        </div>
+      )}
+
+      {activeTab === 'nego' && (
+        <div className="grid-2-1" style={{ gap: 20 }}>
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', height: 500 }}>
+            <div className="card-header border-bottom">
+              <div className="card-title">
+                {selectedQuoteId ? `Negotiation with ${selectedQuote?.supplierName}` : "Select a vendor to negotiate"}
+              </div>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', padding: 16 }} className="stack-md">
+              {negotiationMessages.filter(m => m.quotationId === selectedQuoteId).map(m => (
+                <div key={m.id} style={{ alignSelf: m.senderId === currentUser?.id ? 'flex-end' : 'flex-start', maxWidth: '80%', padding: '10px 14px', borderRadius: 12, background: m.senderId === currentUser?.id ? 'var(--accent-indigo)' : 'rgba(255,255,255,0.05)', color: m.senderId === currentUser?.id ? '#fff' : '#f1f5f9' }}>
+                   <div style={{ fontSize: 10, opacity: 0.7, marginBottom: 4 }}>{m.senderName} · {m.timestamp.split('T')[1].slice(0,5)}</div>
+                   <div style={{ fontSize: 13 }}>{m.text}</div>
+                </div>
+              ))}
+              {!selectedQuoteId && <div className="empty-state" style={{ height: '100%', justifyContent: 'center' }}>Select a vendor from the Bid Inbox to start private negotiations.</div>}
+            </div>
+            {selectedQuoteId && (
+              <div className="p-12 border-top" style={{ display: 'flex', gap: 8 }}>
+                <input className="form-input" placeholder="Type a message..." value={negoInput} onChange={e => setNegoInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleSendNego()} />
+                <button className="btn btn-primary" onClick={handleSendNego}><Send size={16} /></button>
+              </div>
+            )}
+          </div>
+          
+          <div className="card">
+             <div className="card-header border-bottom"><div className="card-title">Vendors</div></div>
+             <div className="stack-xs" style={{ padding: 8 }}>
+                {rfqQuotations.map(q => (
+                  <button key={q.id} onClick={() => setSelectedQuoteId(q.id)} style={{ width: '100%', textAlign: 'left', padding: '10px 12px', borderRadius: 8, background: selectedQuoteId === q.id ? 'rgba(99,102,241,0.1)' : 'transparent', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10 }}>
+                     <div style={{ width: 8, height: 8, borderRadius: '50%', background: q.status === 'Awarded' ? '#10b981' : '#94a3b8' }} />
+                     <div>
+                       <div style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>{q.supplierName}</div>
+                       <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>${q.totalAmount.toLocaleString()}</div>
+                     </div>
+                  </button>
+                ))}
+             </div>
           </div>
         </div>
       )}
@@ -166,15 +276,39 @@ function RFQDetail({ rfqId }: { rfqId: string }) {
   );
 }
 
+// ── Evaluation Weights Defaults ──
+const DEFAULT_EVAL_WEIGHTS = {
+  price: 0.3, leadTime: 0.2, pastHistory: 0.15, paymentTerms: 0.12, serviceQuality: 0.12, responsiveness: 0.06, compliance: 0.05
+};
+
+const WEIGHT_LABELS: Record<string, string> = {
+  price: 'Price / Commercial',
+  leadTime: 'Lead Time / Delivery',
+  pastHistory: 'Supplier History',
+  paymentTerms: 'Payment Terms',
+  serviceQuality: 'Quality & Service',
+  responsiveness: 'Responsiveness',
+  compliance: 'Safety & Compliance'
+};
+
 // ── New RFQ Modal ──
 function NewRFQModal({ onClose }: { onClose: () => void }) {
   const { addRFQ, rfqs, items, suppliers, currentUser } = useApp();
   const [title, setTitle] = useState('');
-  const [deadline, setDeadline] = useState('');
+  const [tenderType, setTenderType] = useState<TenderType>('selective');
+  const [bidDeadline, setBidDeadline] = useState('');
+  const [clarificationDeadline, setClarificationDeadline] = useState('');
   const [projRef, setProjRef] = useState('');
   const [notes, setNotes] = useState('');
   const [selectedSuppliers, setSelectedSuppliers] = useState<string[]>([]);
   const [lineItems, setLineItems] = useState<Partial<RFQLineItem>[]>([{}]);
+  
+  // Weights state (normalized automatically on submit)
+  const [weights, setWeights] = useState<Record<string, number>>({
+    price: 30, leadTime: 20, pastHistory: 15, paymentTerms: 10, serviceQuality: 10, responsiveness: 10, compliance: 5
+  });
+
+  const updateWeight = (key: string, val: number) => setWeights(p => ({ ...p, [key]: val }));
 
   const toggleSup = (id: string) => setSelectedSuppliers(p => p.includes(id) ? p.filter(s => s !== id) : [...p, id]);
 
@@ -185,96 +319,141 @@ function NewRFQModal({ onClose }: { onClose: () => void }) {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !deadline || selectedSuppliers.length === 0) return;
+    if (!title || !bidDeadline) return;
+    if (tenderType === 'selective' && selectedSuppliers.length === 0) return;
+    
     const validLines = lineItems.filter(l => l.itemId && l.quantity) as RFQLineItem[];
     if (!validLines.length) return;
+
+    // Normalize weights to sum to 1.0
+    const sum = Object.values(weights).reduce((a, b) => a + b, 0);
+    const normalizedWeights: Record<string, number> = {};
+    Object.keys(weights).forEach(k => normalizedWeights[k] = weights[k] / sum);
+
     const newId = `RFQ-${String(rfqs.length + 1).padStart(3, '0')}`;
     addRFQ({
       id: newId, title, status: 'Draft',
       createdBy: currentUser?.id || 'USR-001', createdByName: currentUser?.name || 'Unknown',
       dateCreated: new Date().toISOString().split('T')[0], dateSent: null,
-      deadlineDate: deadline, projectReference: projRef || undefined, notes: notes || undefined,
+      deadlineDate: bidDeadline, // Keep for backward compat
+      bidDeadline, 
+      clarificationDeadline: clarificationDeadline || bidDeadline,
+      projectReference: projRef || undefined, notes: notes || undefined,
       lineItems: validLines.map((l, i) => ({ ...l, id: `RLI-${newId}-${i}`, category: items.find(item => item.id === l.itemId)?.category || '' })),
-      invitedSupplierIds: selectedSuppliers,
+      invitedSupplierIds: tenderType === 'open' ? [] : selectedSuppliers,
+      tenderType,
+      evaluationWeights: normalizedWeights
     });
     onClose();
   };
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" style={{ maxWidth: 700, width: '92%', maxHeight: '85vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
+      <div className="modal" style={{ maxWidth: 800, width: '92%', maxHeight: '90vh', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
         <div className="modal-header">
-          <h3 className="modal-title">New Request for Quotation</h3>
+          <h3 className="modal-title">New Strategic Tender / RFQ</h3>
           <button className="modal-close" onClick={onClose}><X size={18} /></button>
         </div>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} className="stack-lg">
           <div className="form-row">
             <div className="form-group" style={{ flex: 2 }}>
-              <label className="form-label">RFQ Title *</label>
-              <input type="text" className="form-input" value={title} onChange={e => setTitle(e.target.value)} required placeholder="e.g., Carbon Steel Pipes — Phase 4" />
+              <label className="form-label">Tender Title *</label>
+              <input type="text" className="form-input" value={title} onChange={e => setTitle(e.target.value)} required placeholder="e.g., Annual Steel Supply 2026" />
             </div>
             <div className="form-group">
-              <label className="form-label">Deadline *</label>
-              <input type="date" className="form-input" value={deadline} onChange={e => setDeadline(e.target.value)} required />
+              <label className="form-label">Tender Type</label>
+              <select className="form-select" value={tenderType} onChange={e => setTenderType(e.target.value as TenderType)}>
+                <option value="selective">Selective (Invite Only)</option>
+                <option value="open">Open (Public Discovery)</option>
+                <option value="single-source">Single Source</option>
+                <option value="framework">Framework Agreement</option>
+              </select>
             </div>
           </div>
+
           <div className="form-row">
             <div className="form-group">
-              <label className="form-label">Project Reference</label>
-              <input type="text" className="form-input" value={projRef} onChange={e => setProjRef(e.target.value)} placeholder="e.g., PRJ-2026-XXXX" />
+              <label className="form-label">Bid Submission Deadline *</label>
+              <input type="date" className="form-input" value={bidDeadline} onChange={e => setBidDeadline(e.target.value)} required />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Clarification Deadline</label>
+              <input type="date" className="form-input" value={clarificationDeadline} onChange={e => setClarificationDeadline(e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Project Ref</label>
+              <input type="text" className="form-input" value={projRef} onChange={e => setProjRef(e.target.value)} />
+            </div>
+          </div>
+
+          {/* Evaluation Weights Section */}
+          <div className="card-soft" style={{ padding: 16 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-indigo)', textTransform: 'uppercase', letterSpacing: '0.8px', marginBottom: 12 }}>Evaluation Criteria Weights (Total: {Object.values(weights).reduce((a,b)=>a+b, 0)}%)</div>
+            <div className="grid-2" style={{ gap: '12px 24px' }}>
+              {Object.keys(weights).map(k => (
+                <div key={k} className="form-group" style={{ marginBottom: 0 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <label className="form-label" style={{ fontSize: 12, marginBottom: 0 }}>{WEIGHT_LABELS[k]}</label>
+                    <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)' }}>{weights[k]}%</span>
+                  </div>
+                  <input type="range" min="0" max="100" step="5" value={weights[k]} onChange={e => updateWeight(k, parseInt(e.target.value))} style={{ width: '100%', accentColor: 'var(--accent-indigo)' }} />
+                </div>
+              ))}
             </div>
           </div>
 
           {/* Line items */}
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-indigo)', textTransform: 'uppercase', letterSpacing: '0.8px', margin: '4px 0 10px' }}>Items Requested</div>
-          {lineItems.map((line, i) => (
-            <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8, marginBottom: 8, alignItems: 'flex-end' }}>
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                <label className="form-label">{i === 0 ? 'Item' : ''}</label>
-                <select className="form-select" value={line.itemId || ''} onChange={e => {
-                  const item = items.find(it => it.id === e.target.value);
-                  updateLine(i, 'itemId', e.target.value);
-                  updateLine(i, 'itemName', item?.name || '');
-                  updateLine(i, 'unit', item?.unit || '');
-                  updateLine(i, 'description', item?.description || '');
-                }}>
-                  <option value="">Select item…</option>
-                  {items.filter(it => !it.archived).map(it => <option key={it.id} value={it.id}>{it.name}</option>)}
-                </select>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-indigo)', textTransform: 'uppercase', letterSpacing: '0.8px', margin: '12px 0 10px' }}>Scope of Supply</div>
+            {lineItems.map((line, i) => (
+              <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8, marginBottom: 8, alignItems: 'flex-end' }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <select className="form-select" value={line.itemId || ''} onChange={e => {
+                    const item = items.find(it => it.id === e.target.value);
+                    updateLine(i, 'itemId', e.target.value);
+                    updateLine(i, 'itemName', item?.name || '');
+                    updateLine(i, 'unit', item?.unit || '');
+                    updateLine(i, 'description', item?.description || '');
+                  }}>
+                    <option value="">Select item…</option>
+                    {items.filter(it => !it.archived).map(it => <option key={it.id} value={it.id}>{it.name}</option>)}
+                  </select>
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <input type="number" className="form-input" placeholder="Qty" value={line.quantity || ''} onChange={e => updateLine(i, 'quantity', parseInt(e.target.value))} min="1" />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <input type="text" className="form-input" value={line.unit || ''} onChange={e => updateLine(i, 'unit', e.target.value)} placeholder="Unit" />
+                </div>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => removeLine(i)} style={{ color: 'var(--accent-rose)', marginBottom: 0 }}>
+                  <X size={14} />
+                </button>
               </div>
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                {i === 0 && <label className="form-label">Quantity</label>}
-                <input type="number" className="form-input" placeholder="Qty" value={line.quantity || ''} onChange={e => updateLine(i, 'quantity', parseInt(e.target.value))} min="1" />
-              </div>
-              <div className="form-group" style={{ marginBottom: 0 }}>
-                {i === 0 && <label className="form-label">Unit</label>}
-                <input type="text" className="form-input" value={line.unit || ''} onChange={e => updateLine(i, 'unit', e.target.value)} placeholder="pcs / m / ton" />
-              </div>
-              <button type="button" className="btn btn-ghost btn-sm" onClick={() => removeLine(i)} style={{ color: 'var(--accent-rose)', marginBottom: 0 }}>
-                <X size={14} />
-              </button>
-            </div>
-          ))}
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setLineItems(p => [...p, {}])} style={{ marginBottom: 16 }}>
-            <Plus size={13} /> Add Line
-          </button>
+            ))}
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setLineItems(p => [...p, {}])}>
+              <Plus size={13} /> Add Scope Item
+            </button>
+          </div>
 
           {/* Invite suppliers */}
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-indigo)', textTransform: 'uppercase', letterSpacing: '0.8px', margin: '8px 0 10px' }}>Invite Suppliers *</div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 16 }}>
-            {suppliers.map(s => {
-              const sel = selectedSuppliers.includes(s.id);
-              return (
-                <button key={s.id} type="button" onClick={() => toggleSup(s.id)}
-                  style={{ padding: '7px 14px', borderRadius: 10, fontSize: 13, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', border: `1px solid ${sel ? 'rgba(99,102,241,0.5)' : 'var(--border-color)'}`, background: sel ? 'rgba(99,102,241,0.1)' : 'var(--bg-card)', color: sel ? 'var(--accent-indigo)' : 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  {sel && <CheckCircle2 size={12} />}
-                  {s.name}
-                  {s.preferred && <span style={{ fontSize: 10, color: '#f59e0b' }}>★</span>}
-                </button>
-              );
-            })}
-          </div>
+          {tenderType !== 'open' && (
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-indigo)', textTransform: 'uppercase', letterSpacing: '0.8px', margin: '8px 0 10px' }}>Targeted Suppliers *</div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                {suppliers.map(s => {
+                  const sel = selectedSuppliers.includes(s.id);
+                  return (
+                    <button key={s.id} type="button" onClick={() => toggleSup(s.id)}
+                      style={{ padding: '7px 12px', borderRadius: 8, fontSize: 12, fontWeight: 500, cursor: 'pointer', fontFamily: 'inherit', border: `1px solid ${sel ? 'rgba(99,102,241,0.5)' : 'var(--border-color)'}`, background: sel ? 'rgba(99,102,241,0.1)' : 'var(--bg-card)', color: sel ? 'var(--accent-indigo)' : 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      {sel && <CheckCircle2 size={12} />}
+                      {s.name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="form-group">
             <label className="form-label">Notes / Instructions</label>
@@ -283,7 +462,7 @@ function NewRFQModal({ onClose }: { onClose: () => void }) {
 
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16 }}>
             <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
-            <button type="submit" className="btn btn-primary"><Plus size={14} /> Create RFQ</button>
+            <button type="submit" className="btn btn-primary"><Plus size={14} /> Create Tender</button>
           </div>
         </form>
       </div>
@@ -322,17 +501,22 @@ export default function RFQPage() {
         <p>Raise requests for quotation and manage the sourcing process</p>
       </div>
 
-      {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 12, marginBottom: 20 }}>
+      {/* Quick Access Bubbles - Premium Design */}
+      <div className="grid grid-4" style={{ gap: 16, marginBottom: 24 }}>
         {[
-          { label: 'Total RFQs', value: stats.total, color: 'var(--accent-indigo)' },
-          { label: 'Drafts', value: stats.draft, color: '#94a3b8' },
-          { label: 'Sent / Active', value: stats.sent, color: '#06b6d4' },
-          { label: 'Awarded', value: stats.awarded, color: '#10b981' },
-        ].map(s => (
-          <div key={s.label} className="metric-card" style={{ padding: '14px 16px' }}>
-            <div style={{ fontSize: 22, fontWeight: 700, color: s.color }}>{s.value}</div>
-            <div style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 500 }}>{s.label}</div>
+          { label: 'Active RFQs', value: stats.sent, icon: <Send size={20} />, color: 'var(--accent-indigo)', bg: 'rgba(99,102,241,0.08)' },
+          { label: 'Bids Received', value: quotations.length, icon: <ArrowLeft size={20} />, color: 'var(--accent-slate)', bg: 'rgba(177,202,215,0.08)' },
+          { label: 'Tenders Awarded', value: stats.awarded, icon: <Award size={20} />, color: 'var(--accent-emerald)', bg: 'rgba(16,185,129,0.08)' },
+          { label: 'Draft Tenders', value: stats.draft, icon: <X size={20} />, color: 'var(--accent-rose)', bg: 'rgba(239,68,68,0.08)' },
+        ].map((bubble, i) => (
+          <div key={i} className="card glass luxury-border flex items-center gap-16" style={{ padding: '16px 20px', borderLeft: `4px solid ${bubble.color}` }}>
+            <div style={{ width: 44, height: 44, borderRadius: 12, background: bubble.bg, color: bubble.color, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {bubble.icon}
+            </div>
+            <div>
+              <div style={{ fontSize: 10, fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 2 }}>{bubble.label}</div>
+              <div style={{ fontSize: 22, fontWeight: 900, color: 'var(--text-primary)' }}>{bubble.value}</div>
+            </div>
           </div>
         ))}
       </div>

@@ -1397,8 +1397,176 @@ function NegotiationModal() {
   );
 }
 
-// ────────────────────────────────────────────────
-// ────────────────────────────────────────────────
+// ── Bid Submission Modal (Tendering Engine) ──────────────────
+function BidSubmissionModal() {
+  const { rfqs, selectedRFQId, addQuotation, setModalOpen, currentSupplier, selectedSupplierId } = useApp();
+  const [step, setStep] = useState(1);
+  const [linePrices, setLinePrices] = useState<Record<string, number>>({});
+  const [leadTimes, setLeadTimes] = useState<Record<string, number>>({});
+  
+  // Evaluation Details
+  const [paymentTerms, setPaymentTerms] = useState('Net 30');
+  const [validityDays, setValidityDays] = useState(30);
+  const [techSpecCompliance, setTechSpecCompliance] = useState('Fully Compliant');
+  const [notes, setNotes] = useState('');
+
+  const rfq = rfqs.find(r => r.id === selectedRFQId);
+  const mySupplierId = currentSupplier?.id || selectedSupplierId || 'SUP-001';
+
+  if (!rfq) return <div>RFQ not found.</div>;
+
+  const handleNext = () => setStep(2);
+  const handleBack = () => setStep(1);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const quotationItems = rfq.lineItems.map(item => ({
+      rfqLineItemId: item.id,
+      itemId: item.itemId,
+      itemName: item.itemName,
+      quantity: item.quantity,
+      unit: item.unit,
+      unitPrice: linePrices[item.id] || 0,
+      totalPrice: (linePrices[item.id] || 0) * item.quantity,
+      leadTimeDays: leadTimes[item.id] || 14,
+    }));
+
+    const totalAmount = quotationItems.reduce((sum, item) => sum + item.totalPrice, 0);
+
+    const newQuotation: import('@/types').Quotation = {
+      id: `QTN-${Date.now()}`,
+      rfqId: rfq.id,
+      supplierId: mySupplierId,
+      supplierName: currentSupplier?.name || 'Authorized Supplier',
+      dateReceived: new Date().toISOString().split('T')[0],
+      validUntil: new Date(Date.now() + validityDays * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      totalAmount,
+      currency: 'USD',
+      status: 'Received',
+      lineItems: quotationItems,
+      paymentTerms,
+      deliveryTerms: 'DDP - Delivered Duty Paid',
+      notes,
+    };
+
+    addQuotation(newQuotation);
+    setModalOpen(null);
+  };
+
+  return (
+    <div className="bid-submission-wizard">
+      <div className="steps-header" style={{ display: 'flex', gap: 20, marginBottom: 24, borderBottom: '1px solid var(--border-subtle)', paddingBottom: 12 }}>
+        <div style={{ fontWeight: 700, color: step === 1 ? 'var(--accent-indigo)' : 'var(--text-muted)' }}>1. Financial Proposal</div>
+        <div style={{ fontWeight: 700, color: step === 2 ? 'var(--accent-indigo)' : 'var(--text-muted)' }}>2. Technical & Compliance</div>
+      </div>
+
+      <form onSubmit={handleSubmit}>
+        {step === 1 && (
+          <div className="stack-md">
+            <div className="alert alert-info">Enter unit prices and lead times for each requested item.</div>
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th>Qty</th>
+                  <th>Unit Price ($)</th>
+                  <th>Lead Time (Days)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rfq.lineItems.map(item => (
+                  <tr key={item.id}>
+                    <td>{item.itemName}<div className="text-xs text-muted">ID: {item.itemId}</div></td>
+                    <td>{item.quantity} {item.unit}</td>
+                    <td>
+                      <input 
+                        type="number" 
+                        className="form-input" 
+                        style={{ width: 100, margin: 0 }} 
+                        placeholder="0.00"
+                        value={linePrices[item.id] || ''}
+                        onChange={e => setLinePrices({ ...linePrices, [item.id]: parseFloat(e.target.value) })}
+                        required
+                      />
+                    </td>
+                    <td>
+                      <input 
+                        type="number" 
+                        className="form-input" 
+                        style={{ width: 80, margin: 0 }} 
+                        placeholder="14"
+                        value={leadTimes[item.id] || ''}
+                        onChange={e => setLeadTimes({ ...leadTimes, [item.id]: parseInt(e.target.value) })}
+                        required
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="flex justify-end pt-12">
+              <button type="button" className="btn btn-primary" onClick={handleNext}>Next: Technical Details →</button>
+            </div>
+          </div>
+        )}
+
+        {step === 2 && (
+          <div className="stack-lg">
+             <div className="grid grid-2">
+               <div className="form-group">
+                 <label className="label">Payment Terms Offered</label>
+                 <select className="form-select" value={paymentTerms} onChange={e => setPaymentTerms(e.target.value)}>
+                   <option>Immediate</option>
+                   <option>Net 30</option>
+                   <option>Net 60</option>
+                   <option>50% Advance, 50% on Delivery</option>
+                 </select>
+               </div>
+               <div className="form-group">
+                 <label className="label">Validity (Days)</label>
+                 <input type="number" className="form-input" value={validityDays} onChange={e => setValidityDays(parseInt(e.target.value))} />
+               </div>
+             </div>
+
+             <div className="form-group">
+               <label className="label">Technical Compliance Level</label>
+               <div style={{ display: 'flex', gap: 10 }}>
+                 {['Fully Compliant', 'Compliant with Deviations', 'Alternative Proposal'].map(level => (
+                   <button 
+                     key={level}
+                     type="button"
+                     className={`btn btn-xs ${techSpecCompliance === level ? 'btn-primary' : 'btn-outline'}`}
+                     onClick={() => setTechSpecCompliance(level)}
+                   >
+                     {level}
+                   </button>
+                 ))}
+               </div>
+             </div>
+
+             <div className="form-group">
+               <label className="label">Specific Qualifications / Notes</label>
+               <textarea 
+                  className="form-input" 
+                  rows={4} 
+                  placeholder="Mention any specific deviation or value-add features..."
+                  value={notes}
+                  onChange={e => setNotes(e.target.value)}
+                />
+             </div>
+
+             <div className="flex justify-between pt-12" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+               <button type="button" className="btn btn-ghost" onClick={handleBack}>← Back</button>
+               <button type="submit" className="btn btn-primary shadow-neon">Submit Official Proposal</button>
+             </div>
+          </div>
+        )}
+      </form>
+    </div>
+  );
+}
+
 // Shipment Confirmation Modal
 // ────────────────────────────────────────────────
 function ShipmentConfirmationModal() {
@@ -1677,10 +1845,10 @@ function DisputeGRNModal() {
 }
 
 // ── Compliance Upload Modal ───────────────────────────────────
-function ComplianceUploadModal() {
+function ComplianceUploadModal({ forceCategory }: { forceCategory?: string }) {
   const { uploadComplianceDoc, setModalOpen, currentUser } = useApp();
   const [title, setTitle] = useState('');
-  const [category, setCategory] = useState<any>('Trade License');
+  const [category, setCategory] = useState<any>(forceCategory || 'Trade License');
   const [expiryDate, setExpiryDate] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -1704,11 +1872,14 @@ function ComplianceUploadModal() {
       <div className="grid-2">
         <div className="input-group">
           <label className="label">Category</label>
-          <select className="input" value={category} onChange={e => setCategory(e.target.value)}>
+          <select className="input" value={category} onChange={e => setCategory(e.target.value)} disabled={!!forceCategory}>
             <option>Trade License</option>
             <option>VAT Certificate</option>
             <option>ISO Certification</option>
             <option>Insurance</option>
+            <option>Product Catalogue</option>
+            <option>Product Certificate</option>
+            <option>Technical Datasheet</option>
             <option>Other</option>
           </select>
         </div>
@@ -1851,24 +2022,32 @@ export default function Modals() {
     submitInvoice: 'Submit Invoice',
     disputeGRN: 'Dispute GRN Rejection',
     uploadCompliance: 'Upload Compliance Document',
+    uploadCatalogue: 'Upload Product Catalogue',
+    uploadProductCert: 'Upload Product Certificate',
+    uploadISOCert: 'Update ISO Certification',
     earlyPayment: 'Request Early Settlement',
     addContact: 'Add Authorized Contact',
+    bidSubmission: 'Initialize Official Bid Submission',
   };
 
   return (
     <div className="modal-overlay" onClick={() => setModalOpen(null)}>
-      <div className="modal" onClick={e => e.stopPropagation()}>
+      <div className="modal" onClick={e => e.stopPropagation()} style={{ 
+        width: (modalOpen === 'bidSubmission' || modalOpen === 'negotiation') ? 800 : 500,
+        maxWidth: '95vw'
+      }}>
         <div className="modal-header">
           <h3 className="modal-title">{titles[modalOpen] || 'Modal'}</h3>
           <button className="modal-close" onClick={() => setModalOpen(null)}><X size={18} /></button>
         </div>
-        <div className="modal-content" style={{ maxHeight: '80vh', overflowY: 'auto', padding: '0 20px 20px' }}>
+        <div className="modal-content" style={{ maxHeight: '85vh', overflowY: 'auto', padding: '0 24px 24px' }}>
           {modalOpen === 'newPO' && <NewPOModal />}
           {modalOpen === 'newItem' && <NewItemModal />}
           {modalOpen === 'uploadDoc' && <UploadDocModal />}
           {modalOpen === 'newAsset' && <NewAssetModal />}
           {modalOpen === 'logMaintenance' && <LogMaintenanceModal />}
           {modalOpen === 'newQuotation' && <NewQuotationModal />}
+          {modalOpen === 'bidSubmission' && <BidSubmissionModal />}
           {modalOpen === 'negotiation' && <NegotiationModal />}
           {modalOpen === 'confirmShipment' && <ShipmentConfirmationModal />}
           {modalOpen === 'requestAmendment' && <POAmendmentModal />}
@@ -1876,6 +2055,9 @@ export default function Modals() {
           {modalOpen === 'submitInvoice' && <SubmitInvoiceModal />}
           {modalOpen === 'disputeGRN' && <DisputeGRNModal />}
           {modalOpen === 'uploadCompliance' && <ComplianceUploadModal />}
+          {modalOpen === 'uploadCatalogue' && <ComplianceUploadModal forceCategory="Product Catalogue" />}
+          {modalOpen === 'uploadProductCert' && <ComplianceUploadModal forceCategory="Product Certificate" />}
+          {modalOpen === 'uploadISOCert' && <ComplianceUploadModal forceCategory="ISO Certification" />}
           {modalOpen === 'earlyPayment' && <EarlyPaymentModal />}
           {modalOpen === 'addContact' && <AddContactModal />}
         </div>

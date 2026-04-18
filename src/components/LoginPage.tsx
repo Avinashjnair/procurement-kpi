@@ -1,7 +1,8 @@
 'use client';
 import React, { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
-import { Lock, Mail, Eye, EyeOff, ChevronRight, ShieldCheck } from 'lucide-react';
+import { Lock, Mail, Eye, EyeOff, ChevronRight, ShieldCheck, Globe } from 'lucide-react';
 
 const DEMO_ACCOUNTS = [
   { email: 'aisha@procureiq.ae', password: 'manager123',  label: 'Manager — Full Access',            role: 'manager',  initials: 'AA', color: '#b1cad7' },
@@ -22,8 +23,11 @@ const ROLE_DESCRIPTIONS: Record<string, string> = {
 };
 
 export default function LoginPage() {
-  const { login } = useApp();
+  const router = useRouter();
+  const { login, supplierLogin } = useApp();
+  const [loginType, setLoginType] = useState<'internal' | 'supplier'>('internal');
   const [email,    setEmail]    = useState('');
+  const [supplierId, setSupplierId] = useState('');
   const [password, setPassword] = useState('');
   const [showPw,   setShowPw]   = useState(false);
   const [error,    setError]    = useState('');
@@ -33,14 +37,34 @@ export default function LoginPage() {
     e.preventDefault();
     setError(''); setLoading(true);
     await new Promise(r => setTimeout(r, 600));
-    const ok = login(email, password);
-    setLoading(false);
-    if (!ok) setError('Invalid email or password. Try a demo account below.');
+    
+    if (loginType === 'internal') {
+      const ok = login(email, password);
+      setLoading(false);
+      if (!ok) setError('Invalid email or password. Try a demo account below.');
+    } else {
+      const ok = supplierLogin(supplierId, password);
+      setLoading(false);
+      if (ok) {
+        // Redirection to standalone portal using router to preserve state
+        router.push('/portal');
+      } else {
+        setError('Invalid Supplier ID or password. Use SUP-001 / supplier123 for demo.');
+      }
+    }
   };
 
   const fillDemo = (acc: typeof DEMO_ACCOUNTS[0]) => {
+    setLoginType('internal');
     setEmail(acc.email);
     setPassword(acc.password);
+    setError('');
+  };
+
+  const fillSupplierDemo = () => {
+    setLoginType('supplier');
+    setSupplierId('SUP-001');
+    setPassword('supplier123');
     setError('');
   };
 
@@ -63,18 +87,49 @@ export default function LoginPage() {
 
         {/* Card */}
         <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 20, padding: '36px 32px', boxShadow: 'var(--shadow-card)', backdropFilter: 'blur(20px)' }}>
-          <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 22px' }}>Intelligence Terminal Login</h2>
+          
+          {/* Tabs */}
+          <div style={{ display: 'flex', background: 'rgba(0,0,0,0.2)', padding: 4, borderRadius: 12, marginBottom: 28 }}>
+            <button 
+              onClick={() => setLoginType('internal')}
+              style={{ flex: 1, padding: '8px 12px', borderRadius: 10, border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', background: loginType === 'internal' ? 'rgba(255,255,255,0.1)' : 'transparent', color: loginType === 'internal' ? '#fff' : 'var(--text-muted)' }}
+            >
+              Staff Login
+            </button>
+            <button 
+              onClick={() => setLoginType('supplier')}
+              style={{ flex: 1, padding: '8px 12px', borderRadius: 10, border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer', transition: 'all 0.2s', background: loginType === 'supplier' ? 'rgba(255,255,255,0.1)' : 'transparent', color: loginType === 'supplier' ? '#fff' : 'var(--text-muted)' }}
+            >
+              Vendor Portal
+            </button>
+          </div>
+
+          <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 22px' }}>
+            {loginType === 'internal' ? 'Intelligence Terminal' : 'Supplier Gateway'} Login
+          </h2>
 
           <form onSubmit={handleSubmit}>
-            <div className="form-group">
-              <label className="form-label">Email address</label>
-              <div style={{ position: 'relative' }}>
-                <Mail size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                <input type="email" className="form-input" placeholder="you@procureiq.ae"
-                  value={email} onChange={e => setEmail(e.target.value)}
-                  required style={{ paddingLeft: 36 }} />
+            {loginType === 'internal' ? (
+              <div className="form-group">
+                <label className="form-label">Email address</label>
+                <div style={{ position: 'relative' }}>
+                  <Mail size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                  <input type="email" className="form-input" placeholder="you@procureiq.ae"
+                    value={email} onChange={e => setEmail(e.target.value)}
+                    required style={{ paddingLeft: 36 }} />
+                </div>
               </div>
-            </div>
+            ) : (
+              <div className="form-group">
+                <label className="form-label">Supplier ID</label>
+                <div style={{ position: 'relative' }}>
+                  <Mail size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                  <input type="text" className="form-input" placeholder="e.g. SUP-001"
+                    value={supplierId} onChange={e => setSupplierId(e.target.value)}
+                    required style={{ paddingLeft: 36 }} />
+                </div>
+              </div>
+            )}
 
             <div className="form-group">
               <label className="form-label">Password</label>
@@ -103,11 +158,11 @@ export default function LoginPage() {
               {loading ? (
                 <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <span style={{ width: 14, height: 14, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.8s linear infinite', display: 'inline-block' }} />
-                  Signing in…
+                  Verification in progress…
                 </span>
               ) : (
                 <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  Sign in <ChevronRight size={16} />
+                  Authenticate <ChevronRight size={16} />
                 </span>
               )}
             </button>
@@ -139,6 +194,22 @@ export default function LoginPage() {
                 <ChevronRight size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
               </button>
             ))}
+
+            <button onClick={fillSupplierDemo}
+              style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 12, border: '1px solid rgba(59,130,246,0.3)', background: 'rgba(59,130,246,0.05)', cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s', width: '100%', fontFamily: 'inherit' }}>
+              <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(59,130,246,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#60a5fa', flexShrink: 0 }}>
+                SM
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>SteelMax Industries (Vendor)</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>Access the standalone supplier self-service portal</div>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 6, background: 'rgba(59,130,246,0.1)', color: '#60a5fa', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                <Globe size={10} />
+                Portal
+              </div>
+              <ChevronRight size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+            </button>
           </div>
         </div>
       </div>
