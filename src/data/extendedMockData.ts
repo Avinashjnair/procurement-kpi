@@ -96,13 +96,26 @@ export const rfqs: RFQ[] = [
   },
   {
     id: 'RFQ-004',
+    title: 'Steel Structures — Phase 4 Foundation',
+    status: 'Sent',
+    createdBy: 'USR-003', createdByName: 'James Okafor',
+    dateCreated: '2026-04-12', dateSent: '2026-04-13',
+    deadlineDate: '2026-05-15',
+    projectReference: 'PRJ-2026-0044',
+    lineItems: [
+      { id: 'RLI-006', itemId: 'ITM-001', itemName: 'Carbon Steel Pipe (6")', description: 'A106 Grade B, Schedule 40, 6"', quantity: 200, unit: 'meter', category: 'Piping' },
+    ],
+    invitedSupplierIds: ['SUP-001', 'SUP-005'],
+  },
+  {
+    id: 'RFQ-005',
     title: 'HDPE Pipe Supply — Water Treatment Extension',
     status: 'Draft',
     createdBy: 'USR-005', createdByName: 'Carlos Reyes',
     dateCreated: '2026-04-10', dateSent: null,
     deadlineDate: '2026-04-30',
     lineItems: [
-      { id: 'RLI-006', itemId: 'ITM-005', itemName: 'HDPE Pipe (12")', description: 'SDR 11, PE100, 12"', quantity: 2000, unit: 'meter', category: 'Piping' },
+      { id: 'RLI-007', itemId: 'ITM-005', itemName: 'HDPE Pipe (12")', description: 'SDR 11, PE100, 12"', quantity: 2000, unit: 'meter', category: 'Piping' },
     ],
     invitedSupplierIds: ['SUP-002'],
   },

@@ -34,12 +34,12 @@ function getAgingBucket(dueDate: string, paid: boolean): string {
 }
 
 const AGING_META: Record<string, { label: string; color: string; bg: string }> = {
-  paid:    { label: 'Paid',         color: '#10b981', bg: 'rgba(16,185,129,0.1)' },
-  current: { label: 'Current',      color: '#6366f1', bg: 'rgba(99,102,241,0.1)' },
-  '1-30':  { label: '1–30 days',    color: '#06b6d4', bg: 'rgba(6,182,212,0.1)'  },
-  '31-60': { label: '31–60 days',   color: '#f59e0b', bg: 'rgba(245,158,11,0.1)' },
-  '61-90': { label: '61–90 days',   color: '#f97316', bg: 'rgba(249,115,22,0.1)' },
-  '90+':   { label: '90+ days',     color: '#f43f5e', bg: 'rgba(244,63,94,0.1)'  },
+  paid:    { label: 'Paid',         color: 'var(--accent-slate)', bg: 'rgba(177,202,215,0.08)' },
+  current: { label: 'Current',      color: 'var(--accent-cyan)', bg: 'rgba(180,202,214,0.08)' },
+  '1-30':  { label: '1–30 days',    color: 'var(--text-secondary)', bg: 'rgba(140,145,149,0.08)'  },
+  '31-60': { label: '31–60 days',   color: 'var(--accent-amber)', bg: 'rgba(233,193,118,0.08)' },
+  '61-90': { label: '61–90 days',   color: 'var(--accent-orange)', bg: 'rgba(212,162,76,0.08)' },
+  '90+':   { label: '90+ days',     color: 'var(--accent-rose)', bg: 'rgba(255,180,171,0.08)'  },
 };
 
 // ── Record Payment Modal ─────────────────────────────────────
@@ -97,7 +97,7 @@ function RecordPaymentModal({ poId, onClose }: { poId: string; onClose: () => vo
           </div>
           <div>
             <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>Paid to Date</div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#10b981' }}>${po.amountPaid.toLocaleString()}</div>
+            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--accent-slate)' }}>${po.amountPaid.toLocaleString()}</div>
           </div>
           <div>
             <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>Outstanding</div>
@@ -207,8 +207,8 @@ function PaymentHistory({ poId, onClose }: { poId: string; onClose: () => void }
                   <span style={{ fontSize: 14, fontWeight: 600, color: '#f1f5f9' }}>${rec.amount.toLocaleString()}</span>
                   <span style={{
                     padding: '2px 8px', borderRadius: 20, fontSize: 11, fontWeight: 600,
-                    background: rec.status === 'Approved' ? 'rgba(16,185,129,0.1)' : rec.status === 'Rejected' ? 'rgba(244,63,94,0.1)' : 'rgba(245,158,11,0.1)',
-                    color: rec.status === 'Approved' ? '#10b981' : rec.status === 'Rejected' ? '#f43f5e' : '#f59e0b',
+                    background: rec.status === 'Approved' ? 'rgba(177,202,215,0.08)' : rec.status === 'Rejected' ? 'rgba(255,180,171,0.08)' : 'rgba(233,193,118,0.08)',
+                    color: rec.status === 'Approved' ? 'var(--accent-slate)' : rec.status === 'Rejected' ? 'var(--accent-rose)' : 'var(--accent-amber)',
                   }}>
                     {rec.status}
                   </span>

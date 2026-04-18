@@ -13,7 +13,7 @@ import {
 } from 'recharts';
 import { dashboardMetrics, spendByCategory, monthlySpend, poCycleData } from '@/data/mockData';
 
-const PIE_COLORS = ['#6366f1', '#06b6d4', '#10b981', '#f59e0b', '#a78bfa'];
+const PIE_COLORS = ['#b1cad7', '#7c94a0', '#e9c176', '#a5b4fc', '#42484b'];
 
 type DateRange = '30' | '90' | '180' | 'all';
 
@@ -46,8 +46,8 @@ function SpendGauge({ pct }: { pct: number }) {
         <PieChart>
           <Pie data={data} cx="50%" cy="50%" innerRadius={62} outerRadius={82}
             startAngle={90} endAngle={-270} dataKey="value" strokeWidth={0}>
-            <Cell fill="#6366f1" />
-            <Cell fill="rgba(99,102,241,0.08)" />
+            <Cell fill="var(--accent-slate)" />
+            <Cell fill="rgba(140,145,149,0.08)" />
           </Pie>
         </PieChart>
       </ResponsiveContainer>
@@ -118,8 +118,8 @@ function DrillDownModal({
                         <td>{item.kpis.deliveryTerms === 'N/A' ? 'Services' : 'Goods'}</td>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                            <div style={{ flex: 1, height: 4, width: 60, background: 'rgba(99,102,241,0.1)', borderRadius: 2 }}>
-                              <div style={{ height: '100%', width: `${item.kpis.deliveryPerformance}%`, background: item.kpis.deliveryPerformance > 90 ? '#10b981' : '#f59e0b', borderRadius: 2 }} />
+                            <div style={{ flex: 1, height: 4, width: 60, background: 'rgba(140,145,149,0.1)', borderRadius: 2 }}>
+                              <div style={{ height: '100%', width: `${item.kpis.deliveryPerformance}%`, background: item.kpis.deliveryPerformance > 90 ? '#b1cad7' : '#e9c176', borderRadius: 2 }} />
                             </div>
                             <span style={{ fontSize: 11 }}>{item.kpis.deliveryPerformance}%</span>
                           </div>
@@ -238,8 +238,8 @@ export default function DashboardPage() {
               style={{
                 padding: '5px 14px', borderRadius: 7, border: 'none', cursor: 'pointer',
                 fontSize: 12, fontWeight: 600, fontFamily: 'inherit',
-                background: dateRange === r ? 'rgba(99,102,241,0.18)' : 'transparent',
-                color: dateRange === r ? 'var(--accent-indigo)' : 'var(--text-muted)',
+                background: dateRange === r ? 'rgba(140,145,149,0.1)' : 'transparent',
+                color: dateRange === r ? 'var(--text-primary)' : 'var(--text-muted)',
                 transition: 'all 0.15s',
               }}>
               {r === 'all' ? 'All' : `${r}d`}
@@ -432,18 +432,18 @@ export default function DashboardPage() {
             <AreaChart data={filteredMonthly}>
               <defs>
                 <linearGradient id="spendGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#6366f1" stopOpacity={0.3} />
-                  <stop offset="100%" stopColor="#6366f1" stopOpacity={0} />
+                  <stop offset="0%" stopColor="#b1cad7" stopOpacity={0.2} />
+                  <stop offset="100%" stopColor="#b1cad7" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="month" tick={{ fill: '#64748b', fontSize: 11 }} />
               <YAxis tick={{ fill: '#64748b', fontSize: 11 }} tickFormatter={v => `$${v / 1000}K`} />
               <Tooltip content={<CustomTooltip />} />
-              <Area type="monotone" dataKey="amount" stroke="#6366f1" strokeWidth={2.5}
+              <Area type="monotone" dataKey="amount" stroke="#b1cad7" strokeWidth={2}
                 fill="url(#spendGrad)"
-                dot={{ r: 4, fill: '#6366f1', strokeWidth: 2, stroke: '#0a0e1a' }}
-                activeDot={{ r: 6 }} />
+                dot={{ r: 3, fill: '#b1cad7', strokeWidth: 1.5, stroke: 'var(--bg-primary)' }}
+                activeDot={{ r: 5 }} />
             </AreaChart>
           </ResponsiveContainer>
         </div>
@@ -490,9 +490,9 @@ export default function DashboardPage() {
               <XAxis dataKey="month" tick={{ fill: '#64748b', fontSize: 11 }} />
               <YAxis tick={{ fill: '#64748b', fontSize: 11 }} unit="d" />
               <Tooltip content={<CycleTooltip />} />
-              <Line type="monotone" dataKey="avgDays" stroke="#06b6d4" strokeWidth={2.5}
-                dot={{ r: 4, fill: '#06b6d4', strokeWidth: 2, stroke: '#0a0e1a' }}
-                activeDot={{ r: 6 }} />
+              <Line type="monotone" dataKey="avgDays" stroke="#7c94a0" strokeWidth={2}
+                dot={{ r: 3, fill: '#7c94a0', strokeWidth: 1.5, stroke: 'var(--bg-primary)' }}
+                activeDot={{ r: 5 }} />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -538,7 +538,7 @@ export default function DashboardPage() {
               <XAxis type="number" domain={[0, 100]} tick={{ fill: '#64748b', fontSize: 11 }} />
               <YAxis type="category" dataKey="name" tick={{ fill: '#94a3b8', fontSize: 12 }} width={80} />
               <Tooltip contentStyle={{ background: '#111827', border: '1px solid rgba(99,102,241,0.15)', borderRadius: 10, fontSize: 12 }} labelStyle={{ color: '#f1f5f9' }} />
-              <Bar dataKey="delivery" fill="#6366f1" radius={[0, 6, 6, 0]} barSize={18} name="Delivery %" />
+              <Bar dataKey="delivery" fill="#b1cad7" radius={[0, 6, 6, 0]} barSize={18} name="Delivery %" />
             </BarChart>
           </ResponsiveContainer>
         </div>

@@ -14,8 +14,8 @@ export default function SupplierPortalPage() {
     suppliers, setModalOpen 
   } = useApp();
   
-  // For demo: pretend we are "Steel Masters" (S-001)
-  const mySupplierId = 'S-001';
+  // For demo: pretend we are "SteelMax Industries" (SUP-001)
+  const mySupplierId = 'SUP-001';
   const myData = suppliers.find(s => s.id === mySupplierId);
   
   const [activeTab, setActiveTab] = useState<'pos' | 'bids' | 'compliance'>('pos');
@@ -43,7 +43,7 @@ export default function SupplierPortalPage() {
     <div className="page-content animate-in">
       <div className="page-header" style={{ marginBottom: 32 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <div className="supplier-logo" style={{ width: 64, height: 64, background: 'rgba(99,102,241,0.1)', borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#6366f1' }}>
+          <div className="supplier-logo" style={{ width: 64, height: 64, background: 'rgba(177,202,215,0.06)', border: '1px solid var(--border-subtle)', borderRadius: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent-slate)' }}>
             <Building2 size={32} />
           </div>
           <div>
@@ -60,7 +60,7 @@ export default function SupplierPortalPage() {
 
       <div className="dashboard-grid" style={{ marginBottom: 32 }}>
         <div className="stat-card glass">
-          <div className="stat-icon" style={{ background: 'rgba(99,102,241,0.1)', color: '#6366f1' }}>
+          <div className="stat-icon" style={{ background: 'rgba(177,202,215,0.08)', color: 'var(--accent-slate)' }}>
             <FileText size={20} />
           </div>
           <div className="stat-content">
@@ -72,7 +72,7 @@ export default function SupplierPortalPage() {
         </div>
 
         <div className="stat-card glass">
-          <div className="stat-icon" style={{ background: 'rgba(16,185,129,0.1)', color: '#10b981' }}>
+          <div className="stat-icon" style={{ background: 'rgba(126,148,159,0.08)', color: 'var(--accent-teal)' }}>
             <CheckCircle2 size={20} />
           </div>
           <div className="stat-content">
@@ -85,7 +85,7 @@ export default function SupplierPortalPage() {
         </div>
 
         <div className="stat-card glass">
-          <div className="stat-icon" style={{ background: 'rgba(245,158,11,0.1)', color: '#f59e0b' }}>
+          <div className="stat-icon" style={{ background: 'rgba(233,193,118,0.08)', color: 'var(--accent-amber)' }}>
             <Clock size={20} />
           </div>
           <div className="stat-content">
@@ -97,15 +97,15 @@ export default function SupplierPortalPage() {
         </div>
 
         <div className="stat-card glass">
-          <div className="stat-icon" style={{ background: 'rgba(99,102,241,0.1)', color: '#6366f1' }}>
+          <div className="stat-icon" style={{ background: 'rgba(177,202,215,0.08)', color: 'var(--accent-slate)' }}>
             <DollarSign size={20} />
           </div>
           <div className="stat-content">
             <span className="stat-label">Wallet Balance</span>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-              <span className="stat-value">$12.4K</span>
+              <span className="stat-value">$142.5K</span>
             </div>
-            <span className="stat-trend neutral">Pending Payments</span>
+            <span className="stat-trend neutral">Lifetime Spend</span>
           </div>
         </div>
       </div>
@@ -270,7 +270,7 @@ export default function SupplierPortalPage() {
         }
         .tender-title {
           font-weight: 600;
-          color: #f1f5f9;
+          color: var(--text-primary);
           font-size: 14px;
         }
         .tender-meta {

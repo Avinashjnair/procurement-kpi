@@ -32,9 +32,9 @@ const navItems: { id: string; label: string; icon: any; permission: string; sect
 ];
 
 const ROLE_COLORS: Record<string, string> = {
-  manager:  '#6366f1',
-  engineer: '#06b6d4',
-  finance:  '#10b981',
+  manager:  '#b1cad7',
+  engineer: '#7c94a0',
+  finance:  '#e9c176',
 };
 
 const ROLE_LABELS: Record<string, string> = {
@@ -87,8 +87,8 @@ export default function Sidebar() {
       <aside className={`sidebar ${mobileOpen ? 'mobile-open' : ''}`}>
         <div className="sidebar-header">
           <div className="sidebar-logo">
-            <div className="sidebar-logo-icon">📊</div>
-            <div><h1>ProcureIQ</h1><span>KPI Tracker</span></div>
+            <div className="sidebar-logo-icon" style={{ background: 'var(--gradient-primary)' }}>📊</div>
+            <div><h1>ProcureIQ</h1><span>Stealth OS</span></div>
           </div>
         </div>
 
@@ -117,7 +117,7 @@ export default function Sidebar() {
                 const Icon = item.icon;
                 const isFinance  = item.id === 'finance';
                 const isReports  = item.id === 'reports';
-                const accent = isFinance ? '#10b981' : isReports ? '#8b5cf6' : undefined;
+                const accent = isFinance ? 'var(--accent-amber)' : isReports ? 'var(--accent-slate)' : undefined;
                 return (
                   <button key={item.id}
                     className={`nav-item ${activePage === item.id ? 'active' : ''}`}
@@ -126,7 +126,7 @@ export default function Sidebar() {
                     <Icon style={accent && activePage !== item.id ? { color: accent } : undefined} />
                     {item.label}
                     {item.id === 'notifications' && notifCount > 0 && (
-                      <span style={{ marginLeft: 'auto', minWidth: 18, height: 18, borderRadius: 9, background: '#f43f5e', color: '#fff', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>{notifCount}</span>
+                      <span style={{ marginLeft: 'auto', minWidth: 18, height: 18, borderRadius: 9, background: 'var(--accent-rose)', color: '#000', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>{notifCount}</span>
                     )}
                   </button>
                 );
