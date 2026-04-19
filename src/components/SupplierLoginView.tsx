@@ -1,29 +1,49 @@
 'use client';
 import React, { useState } from 'react';
 import { useApp } from '@/context/AppContext';
-import { Box, Lock, User, ArrowRight, ShieldCheck, Globe } from 'lucide-react';
+import { Box, Lock, User, ArrowRight, ShieldCheck, Globe, UserPlus } from 'lucide-react';
+import VendorRegistrationForm from './VendorRegistrationForm';
 
 export default function SupplierLoginView() {
-  const { supplierLogin } = useApp();
+  const { supplierLogin, suppliers } = useApp();
   const [supplierId, setSupplierId] = useState('');
   const [password, setPassword] = useState('');
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [showRegistration, setShowRegistration] = useState(false);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    setError(false);
+    setError(null);
     
     // Artificial delay for premium feel
     setTimeout(() => {
+      // Check if supplier exists but is pending
+      const targetSupplier = suppliers.find(s => s.id === supplierId);
+      if (targetSupplier && targetSupplier.status === 'Pending Approval') {
+        setError('Your registration is currently under review by the procurement team. Please check back later.');
+        setLoading(false);
+        return;
+      }
+
       const success = supplierLogin(supplierId, password);
       if (!success) {
-        setError(true);
+        setError('Invalid Supplier ID or Password. Please try again or contact support.');
         setLoading(false);
       }
     }, 800);
   };
+
+  if (showRegistration) {
+    return (
+      <div className="min-height-screen flex items-center justify-center p-6 bg-[#0b0e14] relative overflow-hidden" style={{ minHeight: '100vh' }}>
+        <div className="absolute top-[-10%] left-[-5%] w-[40vw] h-[40vw] bg-blue-500/10 blur-[120px] rounded-full" />
+        <div className="absolute bottom-[-10%] right-[-5%] w-[40vw] h-[40vw] bg-indigo-500/10 blur-[120px] rounded-full" />
+        <VendorRegistrationForm onCancel={() => setShowRegistration(false)} />
+      </div>
+    );
+  }
 
   return (
     <div className="min-height-screen flex items-center justify-center p-6 bg-[#0b0e14] relative overflow-hidden" style={{ minHeight: '100vh' }}>
@@ -77,8 +97,8 @@ export default function SupplierLoginView() {
             </div>
 
             {error && (
-              <div className="p-3 bg-red-500/10 border border-red-500/20 text-red-400 text-xs rounded-lg animate-shake">
-                Invalid Supplier ID or Password. Please try again or contact support.
+              <div className="p-3 bg-red-400/10 border border-red-500/20 text-red-400 text-[11px] leading-relaxed rounded-xl animate-shake">
+                {error}
               </div>
             )}
 
@@ -100,6 +120,19 @@ export default function SupplierLoginView() {
               )}
             </button>
           </form>
+
+          <div className="mt-6 flex items-center gap-3">
+            <div className="h-px flex-1 bg-white/5"></div>
+            <span className="text-[10px] font-bold text-gray-600 uppercase tracking-widest">New Partner?</span>
+            <div className="h-px flex-1 bg-white/5"></div>
+          </div>
+
+          <button
+            onClick={() => setShowRegistration(true)}
+            className="w-full mt-6 py-3.5 rounded-xl border border-blue-500/20 bg-blue-500/5 text-blue-400 font-bold text-xs tracking-wider uppercase flex items-center justify-center gap-2 hover:bg-blue-500/10 hover:border-blue-500/40 transition-all"
+          >
+            <UserPlus size={16} /> Register as Supplier
+          </button>
 
           <div className="mt-8 pt-6 border-t border-white/5 flex flex-col gap-4 text-center">
             <div className="flex items-center justify-center gap-2 text-xs text-gray-500">

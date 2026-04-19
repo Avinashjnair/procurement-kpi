@@ -92,6 +92,25 @@ export interface SupplierKPIs {
   rejectionRate: number;
 }
 
+export interface AnnualFinancials {
+  year: string;
+  turnover: number;
+  currentAssets: number;
+  currentLiabilities: number;
+  docId?: string;
+}
+
+export type SupplierStatus = 'Active' | 'Pending Approval' | 'Rejected' | 'Inactive';
+
+export interface ProjectHistory {
+  description: string;
+  orderValue: number;
+  scope: string;
+  supplyDescription: string;
+  year: string;
+  country: string;
+}
+
 export interface Supplier {
   id: string;
   name: string;
@@ -112,6 +131,10 @@ export interface Supplier {
   passwordHash?: string;
   active?: boolean;
   logo?: string;
+  status: SupplierStatus;
+  financials?: AnnualFinancials[];
+  projectExperienceDocs?: string[];
+  projectHistory?: ProjectHistory[];
 }
 
 export interface ProductLibraryItem {

@@ -25,9 +25,11 @@ import InvoicesPage from '@/components/InvoicesPage';
 import NotificationsPage from '@/components/NotificationsPage';
 import SupplierPortalPage from '@/components/SupplierPortalPage';
 import MobileGRNEntry from '@/components/MobileGRNEntry';
+import GlobalHeader from '@/components/GlobalHeader';
+import SearchResultsPage from '@/components/SearchResultsPage';
 
 function AppContent() {
-  const { activePage, darkMode, currentUser } = useApp();
+  const { activePage, darkMode, currentUser, globalSearchQuery } = useApp();
 
   React.useEffect(() => {
     if (!darkMode) {
@@ -40,6 +42,8 @@ function AppContent() {
   if (!currentUser) return <LoginPage />;
 
   const renderPage = () => {
+    if (globalSearchQuery) return <SearchResultsPage />;
+
     switch (activePage) {
       case 'dashboard':       return <DashboardPage />;
       case 'portal':          return <SupplierPortalPage />;
@@ -68,7 +72,10 @@ function AppContent() {
   return (
     <div className="app-layout">
       <Sidebar />
-      <main className="main-content">{renderPage()}</main>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        <GlobalHeader />
+        <main className="main-content">{renderPage()}</main>
+      </div>
       <FAB />
       <Modals />
     </div>

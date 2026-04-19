@@ -47,9 +47,9 @@ export default function Sidebar() {
   const {
     activePage, setActivePage, setModalOpen, darkMode, toggleDarkMode,
     currentUser, logout, notifications, markNotificationRead, markAllNotificationsRead,
-    isSupplierPortal, setSupplierPortal
+    isSupplierPortal, setSupplierPortal,
+    isMobileSidebarOpen, setMobileSidebarOpen
   } = useApp();
-  const [mobileOpen, setMobileOpen] = React.useState(false);
   const [notifOpen,  setNotifOpen]  = React.useState(false);
   const [shortcutOpen, setShortcutOpen] = React.useState(false);
 
@@ -80,11 +80,7 @@ export default function Sidebar() {
 
   return (
     <>
-      <button className="mobile-menu-toggle" onClick={() => setMobileOpen(!mobileOpen)} aria-label="Toggle menu">
-        {mobileOpen ? <X size={20} /> : <Menu size={20} />}
-      </button>
-
-      <aside className={`sidebar ${mobileOpen ? 'mobile-open' : ''}`}>
+      <aside className={`sidebar ${isMobileSidebarOpen ? 'mobile-open' : ''}`}>
         <div className="sidebar-header">
           <div className="sidebar-logo">
             <div className="sidebar-logo-icon" style={{ background: 'var(--gradient-primary)' }}>📊</div>
@@ -121,7 +117,7 @@ export default function Sidebar() {
                 return (
                   <button key={item.id}
                     className={`nav-item ${activePage === item.id ? 'active' : ''}`}
-                    onClick={() => { setActivePage(item.id); setMobileOpen(false); }}
+                    onClick={() => { setActivePage(item.id); setMobileSidebarOpen(false); }}
                     style={accent && activePage !== item.id ? { color: accent } : undefined}>
                     <Icon style={accent && activePage !== item.id ? { color: accent } : undefined} />
                     {item.label}
@@ -154,7 +150,7 @@ export default function Sidebar() {
                   <div className="notif-section">
                     <div className="notif-section-title danger">Action Required</div>
                     {unreadNotifications.map(n => (
-                      <div key={n.id} className="notif-row" onClick={() => { markNotificationRead(n.id); setActivePage('notifications'); setNotifOpen(false); }}>
+                      <div key={n.id} className="notif-row" onClick={() => { markNotificationRead(n.id); setActivePage('notifications'); setNotifOpen(false); setMobileSidebarOpen(false); }}>
                         <div className="notif-details">
                           <div className="notif-title">{n.title}</div>
                           <div className="notif-meta">{n.source} • {new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>

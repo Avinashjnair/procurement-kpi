@@ -66,6 +66,8 @@ interface AppState {
   poMessages: POMessage[];
   currentSupplier: Supplier | null;
   products: ProductLibraryItem[];
+  globalSearchQuery: string;
+  isMobileSidebarOpen: boolean;
 }
 
 interface AppContextType extends AppState {
@@ -166,6 +168,8 @@ interface AppContextType extends AppState {
   supplierLogin: (supplierId: string, passwordHash: string) => boolean;
   supplierLogout: () => void;
   addProduct: (product: Omit<ProductLibraryItem, 'id'>) => void;
+  setGlobalSearchQuery: (q: string) => void;
+  setMobileSidebarOpen: (open: boolean) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -219,12 +223,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     disputes: initialDisputes,
     poMessages: [],
     currentSupplier: null,
-    products: [
-      { id: 'PRD-1', name: 'Seamless Carbon Pipe', sku: 'PIPE-SM-001', category: 'Piping', description: 'High-pressure seamless carbon steel pipe for industrial use.', unit: 'Meter', basePrice: 85.50, currency: 'USD', technicalDocs: ['CDOC-005'], certifications: ['ASME B16.5'] },
-      { id: 'PRD-2', name: 'Industrial Gate Valve', sku: 'VALV-GT-04', category: 'Valves', description: 'API 600 compliant heavy-duty gate valve.', unit: 'Piece', basePrice: 320.00, currency: 'USD', technicalDocs: ['CDOC-006'], certifications: ['API 600', 'ISO 9001'] },
-      { id: 'PRD-3', name: 'Stainless Steel Flange', sku: 'FLG-SS-08', category: 'Fittings', description: 'Corrosion resistant 316L stainless steel flange.', unit: 'Piece', basePrice: 195.00, currency: 'USD', technicalDocs: [], certifications: ['ASME B16.5'] }
-    ],
-  });
+      products: [
+        { id: 'PRD-1', name: 'Seamless Carbon Pipe', sku: 'PIPE-SM-001', category: 'Piping', description: 'High-pressure seamless carbon steel pipe for industrial use.', unit: 'Meter', basePrice: 85.50, currency: 'USD', technicalDocs: ['CDOC-005'], certifications: ['ASME B16.5'] },
+        { id: 'PRD-2', name: 'Industrial Gate Valve', sku: 'VALV-GT-04', category: 'Valves', description: 'API 600 compliant heavy-duty gate valve.', unit: 'Piece', basePrice: 320.00, currency: 'USD', technicalDocs: ['CDOC-006'], certifications: ['API 600', 'ISO 9001'] },
+        { id: 'PRD-3', name: 'Stainless Steel Flange', sku: 'FLG-SS-08', category: 'Fittings', description: 'Corrosion resistant 316L stainless steel flange.', unit: 'Piece', basePrice: 195.00, currency: 'USD', technicalDocs: [], certifications: ['ASME B16.5'] }
+      ],
+      globalSearchQuery: '',
+      isMobileSidebarOpen: false,
+    });
 
   // ── Session Persistence ───────────────────────────────────
   useEffect(() => {
@@ -426,6 +432,9 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const setModalOpen          = useCallback((modal: string | null) => setState(p => ({ ...p, modalOpen: modal, fabOpen: false })), []);
   const toggleDarkMode        = useCallback(() => setState(p => ({ ...p, darkMode: !p.darkMode })), []);
 
+  const setGlobalSearchQuery = (q: string) => setState(p => ({ ...p, globalSearchQuery: q }));
+  const setMobileSidebarOpen = (open: boolean) => setState(p => ({ ...p, isMobileSidebarOpen: open }));
+
   const login = useCallback((email: string, password: string): boolean => {
     const user = state.users.find(u => u.email === email && u.passwordHash === password && u.active);
     if (user) {
@@ -440,7 +449,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => setState(p => ({ ...p, currentUser: null, activePage: 'dashboard' })), []);
 
   const supplierLogin = useCallback((supplierId: string, passwordHash: string): boolean => {
-    const supplier = state.suppliers.find(s => s.id === supplierId && s.passwordHash === passwordHash && s.active);
+    const supplier = state.suppliers.find(s => s.id === supplierId && s.passwordHash === passwordHash && s.status === 'Active');
     if (supplier) {
       setState(p => ({ ...p, currentSupplier: supplier }));
       return true;
@@ -836,7 +845,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       acknowledgePO, updateShipment, requestAmendment, updateDeliveredQty,
       submitInvoice, disputeGRN, uploadComplianceDoc,
       sendPOMessage, updateSupplierProfile, requestEarlyPayment, addSupplierContact,
-      supplierLogin, supplierLogout, addProduct
+      supplierLogin, supplierLogout, addProduct, setGlobalSearchQuery, setMobileSidebarOpen
     }}>
       {children}
     </AppContext.Provider>

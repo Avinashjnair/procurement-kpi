@@ -22,9 +22,11 @@ const ROLE_DESCRIPTIONS: Record<string, string> = {
   finance:  'Record payments, upload receipts & AP aging',
 };
 
+import VendorRegistrationForm from './VendorRegistrationForm';
+
 export default function LoginPage() {
   const router = useRouter();
-  const { login, supplierLogin } = useApp();
+  const { login, supplierLogin, suppliers } = useApp();
   const [loginType, setLoginType] = useState<'internal' | 'supplier'>('internal');
   const [email,    setEmail]    = useState('');
   const [supplierId, setSupplierId] = useState('');
@@ -32,6 +34,7 @@ export default function LoginPage() {
   const [showPw,   setShowPw]   = useState(false);
   const [error,    setError]    = useState('');
   const [loading,  setLoading]  = useState(false);
+  const [showRegistration, setShowRegistration] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,16 +46,35 @@ export default function LoginPage() {
       setLoading(false);
       if (!ok) setError('Invalid email or password. Try a demo account below.');
     } else {
+      // Check if supplier is pending
+      const targetSupplier = suppliers.find(s => s.id === supplierId);
+      if (targetSupplier && targetSupplier.status === 'Pending Approval') {
+        setError('Your registration is currently under review by the procurement team. Please check back later.');
+        setLoading(false);
+        return;
+      }
+
       const ok = supplierLogin(supplierId, password);
       setLoading(false);
       if (ok) {
-        // Redirection to standalone portal using router to preserve state
         router.push('/portal');
       } else {
         setError('Invalid Supplier ID or password. Use SUP-001 / supplier123 for demo.');
       }
     }
   };
+
+  if (showRegistration) {
+    return (
+      <div style={{
+        minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: '#0b0e14',
+        padding: 20,
+      }}>
+        <VendorRegistrationForm onCancel={() => setShowRegistration(false)} />
+      </div>
+    );
+  }
 
   const fillDemo = (acc: typeof DEMO_ACCOUNTS[0]) => {
     setLoginType('internal');
@@ -167,6 +189,18 @@ export default function LoginPage() {
               )}
             </button>
           </form>
+
+          {loginType === 'supplier' && (
+            <div style={{ marginTop: 24, textAlign: 'center', paddingTop: 20, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>New Partner? Join ProcureIQ ecosystem</p>
+              <button 
+                onClick={() => setShowRegistration(true)}
+                style={{ width: '100%', padding: '10px', borderRadius: 10, background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)', color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+              >
+                Register as Supplier
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Demo accounts */}
