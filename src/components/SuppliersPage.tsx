@@ -459,6 +459,7 @@ function AddSupplierModal({ onClose }: { onClose: () => void }) {
       address: form.address,
       taxRegNumber: form.taxRegNumber,
       preferred: form.preferred,
+      status: 'Pending Approval',
       notes: [],
       kpis: {
         priceVariation: parseFloat(form.priceVariation) || 0,
