@@ -53,7 +53,7 @@ export default function LoginPage() {
       if (res.success) {
         router.push('/portal');
       } else {
-        setError(res.error || 'Invalid Supplier ID or password. Use SUP-001 / supplier123 for demo.');
+        setError(res.error || ('Invalid Supplier ID or password.' + (process.env.NODE_ENV !== 'production' ? ' Use SUP-001 / supplier123 for demo.' : '')));
       }
     }
   };
@@ -197,49 +197,51 @@ export default function LoginPage() {
           )}
         </div>
 
-        {/* Demo accounts */}
-        <div style={{ marginTop: 20 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-            <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
-            <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 500 }}>Demo accounts</span>
-            <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {DEMO_ACCOUNTS.map(acc => (
-              <button key={acc.email} onClick={() => fillDemo(acc)}
-                style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)', cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s', width: '100%', fontFamily: 'inherit' }}>
-                <div style={{ width: 38, height: 38, borderRadius: 10, background: `${acc.color}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: acc.color, flexShrink: 0 }}>
-                  {acc.initials}
+        {/* Demo accounts - only render in development or testing environments */}
+        {process.env.NODE_ENV !== 'production' && (
+          <div style={{ marginTop: 20 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
+              <span style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 500 }}>Demo accounts</span>
+              <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {DEMO_ACCOUNTS.map(acc => (
+                <button key={acc.email} onClick={() => fillDemo(acc)}
+                  style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)', cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s', width: '100%', fontFamily: 'inherit' }}>
+                  <div style={{ width: 38, height: 38, borderRadius: 10, background: `${acc.color}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: acc.color, flexShrink: 0 }}>
+                    {acc.initials}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{acc.label}</div>
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{ROLE_DESCRIPTIONS[acc.role]}</div>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 6, background: 'rgba(140,145,149,0.08)', color: acc.color, fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                    <ShieldCheck size={10} />
+                    {ROLE_LABELS[acc.role]}
+                  </div>
+                  <ChevronRight size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                </button>
+              ))}
+
+              <button onClick={fillSupplierDemo}
+                style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 12, border: '1px solid rgba(59,130,246,0.3)', background: 'rgba(59,130,246,0.05)', cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s', width: '100%', fontFamily: 'inherit' }}>
+                <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(59,130,246,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#60a5fa', flexShrink: 0 }}>
+                  SM
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>{acc.label}</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>{ROLE_DESCRIPTIONS[acc.role]}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>SteelMax Industries (Vendor)</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>Access the standalone supplier self-service portal</div>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 6, background: 'rgba(140,145,149,0.08)', color: acc.color, fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
-                  <ShieldCheck size={10} />
-                  {ROLE_LABELS[acc.role]}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 6, background: 'rgba(59,130,246,0.1)', color: '#60a5fa', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
+                  <Globe size={10} />
+                  Portal
                 </div>
                 <ChevronRight size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
               </button>
-            ))}
-
-            <button onClick={fillSupplierDemo}
-              style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 12, border: '1px solid rgba(59,130,246,0.3)', background: 'rgba(59,130,246,0.05)', cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s', width: '100%', fontFamily: 'inherit' }}>
-              <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(59,130,246,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#60a5fa', flexShrink: 0 }}>
-                SM
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>SteelMax Industries (Vendor)</div>
-                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>Access the standalone supplier self-service portal</div>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 6, background: 'rgba(59,130,246,0.1)', color: '#60a5fa', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
-                <Globe size={10} />
-                Portal
-              </div>
-              <ChevronRight size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-            </button>
+            </div>
           </div>
-        </div>
+        )}
       </div>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
     </div>
