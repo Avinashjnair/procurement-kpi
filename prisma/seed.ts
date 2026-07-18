@@ -93,6 +93,31 @@ async function seedDatabase(dbFilePath: string) {
     }
     console.log(`- Seeded ${suppliers.length} suppliers`);
 
+    // Seed Config/Static Data (FX rates and Asset Categories) even in minimal seed
+    const initialFXRates = [
+      { id: 'fx-usd', currency: 'USD', rate: 3.67 },
+      { id: 'fx-eur', currency: 'EUR', rate: 3.95 },
+      { id: 'fx-gbp', currency: 'GBP', rate: 4.65 },
+      { id: 'fx-aed', currency: 'AED', rate: 1.0 },
+    ];
+    for (const r of initialFXRates) {
+      await prisma.fXRate.create({ data: r });
+    }
+    
+    const initialAssetCategories = [
+      { id: 'ac-1', name: 'Machinery', code: 'MACH', depreciationRate: 10 },
+      { id: 'ac-2', name: 'IT Hardware', code: 'IT', depreciationRate: 33 },
+      { id: 'ac-3', name: 'Office Furniture', code: 'FURN', depreciationRate: 15 },
+    ];
+    for (const ac of initialAssetCategories) {
+      await prisma.assetCategory.create({ data: ac });
+    }
+
+    if (process.env.SEED_ONLY_LOGINS === 'true') {
+      console.log('Skipping operational and transactional tables (seeded logins + config only).');
+      return;
+    }
+
     // 4. Seed Items
     for (const item of items) {
       await prisma.item.create({

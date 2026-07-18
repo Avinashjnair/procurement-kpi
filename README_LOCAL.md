@@ -35,6 +35,18 @@ Verify that the `databases/` folder has been generated in your project root with
 * `company_steelmax.db` (Aisha Al-Mansoori / SteelMax Tenant)
 * `company_eurochem.db` (EuroChem Tenant)
 
+### Optional: Seed Logins Only (Clean Database)
+If you want to start with a completely clean database (seeding only user/supplier logins and configuration data, while skipping all sample transactions like items, POs, and invoices), run:
+
+* **On Windows (PowerShell):**
+  ```powershell
+  $env:SEED_ONLY_LOGINS="true"; npm.cmd run db:setup; Remove-Item Env:\SEED_ONLY_LOGINS
+  ```
+* **On Linux / macOS / Git Bash:**
+  ```bash
+  SEED_ONLY_LOGINS=true npm run db:setup
+  ```
+
 ---
 
 ## Step 3: Run the Development Server
