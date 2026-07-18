@@ -75,6 +75,19 @@ export function can(user: User | null, permission: string): boolean {
 
 // ── Master Data ──────────────────────────────────────────────
 
+// Company / Tenant Profile (stored in DB, one row per tenant)
+export interface CompanyProfile {
+  id: string;
+  name: string;
+  address: string;
+  email: string;
+  phone: string;
+  taxRegNumber: string;
+  logoUrl: string;
+  currency: string;
+  country: string;
+}
+
 export interface SupplierNote {
   id: string;
   text: string;

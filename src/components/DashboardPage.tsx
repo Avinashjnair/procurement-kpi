@@ -11,7 +11,7 @@ import {
   ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar,
   LineChart, Line,
 } from 'recharts';
-import { dashboardMetrics, spendByCategory, monthlySpend, poCycleData } from '@/data/mockData';
+
 
 const PIE_COLORS = ['#b1cad7', '#7c94a0', '#e9c176', '#a5b4fc', '#42484b'];
 
@@ -237,24 +237,23 @@ export default function DashboardPage() {
     const emergencyPORatio = purchaseOrders.length ? Math.round((emergencyCount / purchaseOrders.length) * 100) : 0;
 
     return {
-      totalSpend: totalSpend || dashboardMetrics.totalSpend,
-      totalPOs: purchaseOrders.length || dashboardMetrics.totalPOs,
-      pendingPOs: purchaseOrders.filter(po => ['Pending', 'Approved', 'Shipped'].includes(po.deliveryStatus)).length || dashboardMetrics.pendingPOs,
-      avgDeliveryPerformance: avgDeliveryPerformance || dashboardMetrics.avgDeliveryPerformance,
-      unpaidAmount: unpaidAmount || dashboardMetrics.unpaidAmount,
-      totalSuppliers: suppliers.length || dashboardMetrics.totalSuppliers,
-      costReduction: costReduction || dashboardMetrics.costReduction,
-      avgPOCycleTime: dashboardMetrics.avgPOCycleTime, // Mock baseline
-      emergencyPORatio: emergencyPORatio || dashboardMetrics.emergencyPORatio,
-      spendUnderManagement: spendUnderManagement || dashboardMetrics.spendUnderManagement,
-      preferredSuppliers: suppliers.filter(s => s.preferred).length || dashboardMetrics.preferredSuppliers,
-      serviceSpend: serviceSpend || dashboardMetrics.serviceSpend,
+      totalSpend: totalSpend,
+      totalPOs: purchaseOrders.length,
+      pendingPOs: purchaseOrders.filter(po => ['Pending', 'Approved', 'Shipped'].includes(po.deliveryStatus)).length,
+      avgDeliveryPerformance: avgDeliveryPerformance,
+      unpaidAmount: unpaidAmount,
+      totalSuppliers: suppliers.length,
+      costReduction: costReduction,
+      avgPOCycleTime: 0, // Requires delivery timestamps — future feature
+      emergencyPORatio: emergencyPORatio,
+      spendUnderManagement: spendUnderManagement,
+      preferredSuppliers: suppliers.filter(s => s.preferred).length,
+      serviceSpend: serviceSpend,
     };
   }, [purchaseOrders, suppliers]);
 
   // Compute monthly spend trend dynamically
   const computedMonthlySpend = useMemo(() => {
-    if (!purchaseOrders.length) return monthlySpend;
     const monthlyMap: Record<string, number> = {};
     purchaseOrders.forEach(po => {
       if (po.deliveryStatus === 'Cancelled') return;
@@ -264,10 +263,9 @@ export default function DashboardPage() {
       monthlyMap[monthLabel] = (monthlyMap[monthLabel] || 0) + po.totalAmount;
     });
     const monthOrder = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const entries = Object.entries(monthlyMap)
+    return Object.entries(monthlyMap)
       .map(([month, amount]) => ({ month, amount }))
       .sort((a, b) => monthOrder.indexOf(a.month) - monthOrder.indexOf(b.month));
-    return entries.length ? entries : monthlySpend;
   }, [purchaseOrders]);
 
   // Filter monthly spend data by range
@@ -279,7 +277,6 @@ export default function DashboardPage() {
 
   // Compute category spend dynamically
   const computedSpendByCategory = useMemo(() => {
-    if (!purchaseOrders.length) return spendByCategory;
     const categories: Record<string, number> = {};
     purchaseOrders.forEach(po => {
       if (po.deliveryStatus === 'Cancelled') return;
@@ -289,8 +286,27 @@ export default function DashboardPage() {
         categories[cat] = (categories[cat] || 0) + (item.quantity * item.price);
       });
     });
-    const entries = Object.entries(categories).map(([category, amount]) => ({ category, amount }));
-    return entries.length ? entries : spendByCategory;
+    return Object.entries(categories).map(([category, amount]) => ({ category, amount }));
+  }, [purchaseOrders]);
+
+  // Compute PO cycle time trend dynamically (issue date → ETA, grouped by month)
+  const computedCycleData = useMemo(() => {
+    const monthlyMap: Record<string, { total: number; count: number }> = {};
+    purchaseOrders.forEach(po => {
+      if (!po.dateOfIssue || !po.eta) return;
+      const issue = new Date(po.dateOfIssue);
+      const eta = new Date(po.eta);
+      if (isNaN(issue.getTime()) || isNaN(eta.getTime())) return;
+      const cycledays = Math.max(0, Math.round((eta.getTime() - issue.getTime()) / 86400000));
+      const monthLabel = issue.toLocaleString('default', { month: 'short', year: '2-digit' });
+      if (!monthlyMap[monthLabel]) monthlyMap[monthLabel] = { total: 0, count: 0 };
+      monthlyMap[monthLabel].total += cycledays;
+      monthlyMap[monthLabel].count += 1;
+    });
+    return Object.entries(monthlyMap).map(([month, { total, count }]) => ({
+      month,
+      avgDays: Math.round(total / count),
+    }));
   }, [purchaseOrders]);
 
   const pendingPOs = purchaseOrders.filter(po =>
@@ -569,7 +585,7 @@ export default function DashboardPage() {
             </div>
           </div>
           <ResponsiveContainer width="100%" height={240}>
-            <LineChart data={poCycleData}>
+            <LineChart data={computedCycleData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="month" tick={{ fill: '#64748b', fontSize: 11 }} />
               <YAxis tick={{ fill: '#64748b', fontSize: 11 }} unit="d" />

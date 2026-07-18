@@ -40,6 +40,7 @@ export async function GET(req: Request) {
       poAmendmentRequests,
       dbAssetCategories,
       dbFxRates,
+      companyProfile,
     ] = await Promise.all([
       db.user.findMany(),
       db.supplier.findMany(),
@@ -67,6 +68,7 @@ export async function GET(req: Request) {
       db.pOAmendmentRequest.findMany({ orderBy: { createdAt: 'desc' } }),
       db.assetCategory.findMany(),
       db.fXRate.findMany(),
+      db.companyProfile.findFirst(),
     ]);
 
     // Map asset categories to string array
@@ -109,6 +111,7 @@ export async function GET(req: Request) {
       poAmendmentRequests,
       assetCategories,
       fxRates,
+      companyProfile,
     });
   } catch (error) {
     console.error('Failed to fetch tenant initial data:', error);

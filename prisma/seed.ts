@@ -51,6 +51,7 @@ async function seedDatabase(dbFilePath: string) {
     await prisma.user.deleteMany({});
     await prisma.fXRate.deleteMany({});
     await prisma.productLibraryItem.deleteMany({});
+    await prisma.companyProfile.deleteMany({});
 
     // 2. Hash user passwords and insert users
     const hashedUsers = users.map(u => ({
@@ -105,13 +106,29 @@ async function seedDatabase(dbFilePath: string) {
     }
     
     const initialAssetCategories = [
-      { id: 'ac-1', name: 'Machinery', code: 'MACH', depreciationRate: 10 },
-      { id: 'ac-2', name: 'IT Hardware', code: 'IT', depreciationRate: 33 },
-      { id: 'ac-3', name: 'Office Furniture', code: 'FURN', depreciationRate: 15 },
+      { id: 'ac-1', name: 'Machinery' },
+      { id: 'ac-2', name: 'IT Hardware' },
+      { id: 'ac-3', name: 'Office Furniture' },
     ];
     for (const ac of initialAssetCategories) {
       await prisma.assetCategory.create({ data: ac });
     }
+
+    // Seed Company Profile — one per tenant database
+    await prisma.companyProfile.create({
+      data: {
+        id: 'company-profile-1',
+        name: 'SteelMax Industries LLC',
+        address: 'P.O. Box 12345, Industrial Zone 3, Dubai, UAE',
+        email: 'procurement@steelmax.ae',
+        phone: '+971 4 555 1234',
+        taxRegNumber: 'TRN-100234567800003',
+        logoUrl: '',
+        currency: 'USD',
+        country: 'UAE',
+      },
+    });
+    console.log('- Seeded company profile');
 
     if (process.env.SEED_ONLY_LOGINS === 'true') {
       console.log('Skipping operational and transactional tables (seeded logins + config only).');
@@ -417,8 +434,10 @@ async function seedDatabase(dbFilePath: string) {
     // 16. Seed Assets & Categories
     const categoriesSet = new Set(assetCategories);
     for (const catName of categoriesSet) {
-      await prisma.assetCategory.create({
-        data: { name: catName },
+      await prisma.assetCategory.upsert({
+        where: { name: catName },
+        update: {},
+        create: { name: catName },
       });
     }
 
@@ -448,17 +467,6 @@ async function seedDatabase(dbFilePath: string) {
     }
     console.log(`- Seeded ${assets.length} assets`);
 
-    // 17. Seed FX Rates
-    const defaultRates = [
-      { currency: 'USD', rate: 3.67 },
-      { currency: 'EUR', rate: 3.95 },
-      { currency: 'GBP', rate: 4.65 },
-      { currency: 'AED', rate: 1.0 },
-    ];
-    for (const rate of defaultRates) {
-      await prisma.fXRate.create({ data: rate });
-    }
-    console.log(`- Seeded FX Rates`);
 
     // 18. Seed App Documents
     for (const doc of documents) {

@@ -454,3 +454,17 @@ model ProductLibraryItem {
   certifications Json     // string[]
   createdAt      DateTime @default(now())
 }
+
+// ── Company / Tenant Profile ─────────────────────────────────
+
+model CompanyProfile {
+  id            String @id @default(cuid())
+  name          String
+  address       String
+  email         String
+  phone         String
+  taxRegNumber  String @default("")
+  logoUrl       String @default("")
+  currency      String @default("USD")
+  country       String @default("UAE")
+}

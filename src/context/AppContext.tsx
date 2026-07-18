@@ -5,7 +5,7 @@ import type {
   Asset, MaintenanceRecord, AssetStatus, PaymentRecord, PaymentRecordStatus,
   BudgetEnvelope, Contract, Invoice, AuditLogEntry, MatchStatus, ApprovalStep, BlanketPO,
   AppNotification, NotificationRule, NegotiationMessage, POAmendmentRequest,
-  ComplianceDocument, GRNDispute, POMessage, ProductLibraryItem, Supplier, SupplierKPIs, Item, PricePoint, POStatus, PaymentStatus, PurchaseOrder, AppDocument
+  ComplianceDocument, GRNDispute, POMessage, ProductLibraryItem, Supplier, SupplierKPIs, Item, PricePoint, POStatus, PaymentStatus, PurchaseOrder, AppDocument, CompanyProfile
 } from '@/types';
 import { calcEvalScore } from '@/types';
 
@@ -52,6 +52,7 @@ interface AppState {
   products: ProductLibraryItem[];
   globalSearchQuery: string;
   isMobileSidebarOpen: boolean;
+  companyProfile: CompanyProfile | null;
 }
 
 interface AppContextType extends AppState {
@@ -201,6 +202,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
     products: [],
     globalSearchQuery: '',
     isMobileSidebarOpen: false,
+    companyProfile: null,
   });
 
   // Get common API headers
@@ -250,6 +252,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
           notificationRules: data.notificationRules || [],
           assetCategories: data.assetCategories || [],
           fxRates: data.fxRates || p.fxRates,
+          companyProfile: data.companyProfile || null,
         }));
       } else {
         console.error('Failed to load initial tenant data:', await res.text());

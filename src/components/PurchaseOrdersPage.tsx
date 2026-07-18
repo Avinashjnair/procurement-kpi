@@ -10,7 +10,6 @@ import type { POStatus } from '@/types';
 import { exportCsv } from '@/utils/exportCsv';
 import { exportPOAsPDF } from '@/utils/poPdfExport';
 import { exportPOAsExcel } from '@/utils/poExcelExport';
-import { companyInfo } from '@/data/mockData';
 
 const ALL_STATUSES: POStatus[] = ['Draft', 'Pending', 'Approved', 'Shipped', 'Delivered', 'Cancelled'];
 
@@ -135,7 +134,7 @@ function PaymentModal({ poId, totalAmount, amountPaid, onClose }: {
 
 // ── PO Detail page ──
 function PODetail({ poId }: { poId: string }) {
-  const { purchaseOrders, items, suppliers, setSelectedPOId, updatePOStatus, duplicatePO, processApprovalStep, currentUser } = useApp();
+  const { purchaseOrders, items, suppliers, setSelectedPOId, updatePOStatus, duplicatePO, processApprovalStep, currentUser, companyProfile } = useApp();
   const [cancelModal, setCancelModal] = useState(false);
   const [paymentModal, setPaymentModal] = useState(false);
   const [exportLoading, setExportLoading] = useState<string | null>(null);
@@ -156,7 +155,7 @@ function PODetail({ poId }: { poId: string }) {
   const handleExportPDF = async () => {
     try {
       setExportLoading('Generating PDF...');
-      await exportPOAsPDF(po, supplier);
+      await exportPOAsPDF(po, supplier, undefined, companyProfile);
     } catch (err) {
       console.error(err);
       alert('Failed to generate PDF');
@@ -168,7 +167,7 @@ function PODetail({ poId }: { poId: string }) {
   const handleExportExcel = async () => {
     try {
       setExportLoading('Generating Excel...');
-      await exportPOAsExcel(po, supplier);
+      await exportPOAsExcel(po, supplier, undefined, companyProfile);
     } catch (err) {
       console.error(err);
       alert('Failed to generate Excel');
