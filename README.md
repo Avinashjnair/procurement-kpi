@@ -1,36 +1,45 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ProcureIQ — Multi-Tenant Procurement & Vendor Portal
 
-## Getting Started
+ProcureIQ is a modern, responsive, and secure B2B procurement platform. It streamlines the ordering lifecycle by connecting internal buying operations (staff) with external suppliers (vendors) through real-time dashboards and interactive self-service portals.
 
-First, run the development server:
+---
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+## 🏗️ Architecture & Flow Overview
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+ProcureIQ uses a **dynamic database-per-tenant architecture** utilizing SQLite. Each client company (e.g., Crystal Engineering, SteelMax Industries) resides on its own physical SQLite file (e.g. `company_crystal.db`), providing absolute isolation and enterprise-grade data security.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Dual-Portal System
+* **Internal Staff Portal**: Used by the buyer's organization. Role-based privileges separate duties:
+  * **Engineer**: Tracks stock levels and initiates Purchase Requisitions.
+  * **Manager**: Approves Purchase Orders, starts RFQs, and monitors spend metrics.
+  * **Finance**: Audits invoices, executes 3-way matching (PO vs. GRN vs. Invoice), and handles payments.
+* **External Vendor Portal**: A secure portal accessed by external suppliers (e.g. Raj Metal Suppliers) to view pending Purchase Orders, submit bids/RFQs, track shipments, and upload invoices.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+---
 
-## Learn More
+## 📖 Setup & Deployment Manuals
 
-To learn more about Next.js, take a look at the following resources:
+For step-by-step guides on getting the project running, refer to the dedicated guides:
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+* **Local Machine Setup**: Follow [README_LOCAL.md](file:///d:/New%20folder/procurement-kpi/README_LOCAL.md) to install dependencies, push database schemas, seed data, and run verification test cases on your local system.
+* **Production Cloud Deployment**: Follow [README_PRODUCTION.md](file:///d:/New%20folder/procurement-kpi/README_PRODUCTION.md) to configure self-hosted instances on Amazon Web Services (AWS EC2/ECS) or migrate schemas to serverless hosting (Vercel) using cloud relational databases (AWS RDS/Postgres).
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+---
 
-## Deploy on Vercel
+## ⚡ Quick Start (Local Run)
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+1. **Install Packages**:
+   ```bash
+   npm install
+   ```
+2. **Build and Seed Databases**:
+   ```bash
+   npm run db:setup
+   ```
+3. **Start Development Server**:
+   ```bash
+   npm run dev
+   # On Windows PowerShell if policy issues arise:
+   npm.cmd run dev
+   ```
+   Open your browser and navigate to **`http://localhost:3000`**

@@ -1,0 +1,456 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ── Auth / User Roles ────────────────────────────────────────
+
+model User {
+  id             String   @id @default(cuid())
+  name           String
+  email          String   @unique
+  passwordHash   String
+  role           String   // 'manager' | 'engineer' | 'finance'
+  department     String
+  avatarInitials String
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+}
+
+// ── Master Data ──────────────────────────────────────────────
+
+model Supplier {
+  id                      String   @id
+  name                    String
+  contactPerson           String
+  email                   String
+  phone                   String
+  location                String
+  address                 String
+  taxRegNumber            String
+  kpis                    Json     // SupplierKPIs
+  preferred               Boolean  @default(false)
+  notes                   Json?    // SupplierNote[]
+  kpiHistory              Json?    // monthly performance array
+  contactList             Json?    // contacts array
+  bankInfo                Json?    // bank name, account, iban, swift
+  preferredStatusCriteria Json?    // criteria list
+  passwordHash            String?  @default("supplier123")
+  active                  Boolean  @default(true)
+  logo                    String?  @default("")
+  status                  String   @default("Active") // 'Active' | 'Pending Approval' | 'Rejected' | 'Inactive'
+  financials              Json?    // AnnualFinancials[]
+  projectExperienceDocs   Json?    // string[]
+  projectHistory          Json?    // ProjectHistory[]
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+}
+
+model Item {
+  id                String   @id
+  name              String
+  category          String
+  description       String
+  unit              String
+  currentPrice      Float
+  benchmarkPrice    Float?
+  linkedSupplierIds Json     // string[]
+  priceHistory      Json     // PricePoint[]
+  purchaseHistory   Json     // PurchaseRecord[]
+  serviceDetails    Json?    // ServiceDetails
+  archived          Boolean  @default(false)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+// ── Procurement ──────────────────────────────────────────────
+
+model PurchaseOrder {
+  id                  String   @id
+  dateOfIssue         String
+  supplierId          String
+  supplierName        String
+  items               Json     // POItem[]
+  totalAmount         Float
+  totalAmountBase     Float    @default(0.0)
+  currency            String   @default("USD")
+  fxRate              Float    @default(1.0)
+  paymentTerms        String
+  amountPaid          Float    @default(0.0)
+  dateOfPayment       String?  @default("")
+  dueDate             String
+  deliveryStatus      String   @default("Draft") // POStatus
+  paymentStatus       String   @default("Unpaid") // PaymentStatus
+  eta                 String
+  incoterms           String
+  remarks             String?  @default("")
+  projectReference    String?  @default("")
+  requestNumber       String?  @default("")
+  approvalAuthority   String?  @default("")
+  cancellationReason  String?  @default("")
+  revisionNumber      Int      @default(0)
+  approvedBy          String?  @default("")
+  approvedAt          String?  @default("")
+  paymentRecords      Json?    // PaymentRecord[]
+  budgetId            String?  @default("")
+  approvalSteps       Json     // ApprovalStep[]
+  currentApprovalStep Int      @default(0)
+  matchStatus         String?  @default("Pending") // MatchStatus
+  savingsAmount       Float?   @default(0.0)
+  contractId          String?  @default("")
+  blanketPoId         String?  @default("")
+  acknowledgedAt      String?  @default("")
+  trackingNumber      String?  @default("")
+  carrier             String?  @default("")
+  shippedAt           String?  @default("")
+  amendmentRequest    Json?    // POAmendmentRequest
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+model RFQ {
+  id                    String   @id
+  title                 String
+  status                String   @default("Draft") // RFQStatus
+  createdBy             String
+  createdByName         String
+  dateCreated           String
+  dateSent              String?  @default("")
+  deadlineDate          String
+  projectReference      String?  @default("")
+  notes                 String?  @default("")
+  lineItems             Json     // RFQLineItem[]
+  invitedSupplierIds    Json     // string[]
+  awardedQuotationId    String?  @default("")
+  awardedSupplierId     String?  @default("")
+  awardedSupplierName   String?  @default("")
+  tenderType            String   @default("open") // TenderType
+  evaluationWeights     Json     // Record<string, number>
+  bidDeadline           String
+  clarificationDeadline String
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+model Quotation {
+  id               String   @id
+  rfqId            String
+  supplierId       String
+  supplierName     String
+  status           String   @default("Pending") // QuotationStatus
+  dateReceived     String?  @default("")
+  validUntil       String
+  paymentTerms     String
+  deliveryTerms    String
+  currency         String
+  totalAmount      Float
+  lineItems        Json     // QuotationLineItem[]
+  evaluation       Json?    // QuotationEvaluation
+  notes            String?
+  feedback         String?
+  negotiationCount Int      @default(0)
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model NegotiationMessage {
+  id          String   @id @default(cuid())
+  quotationId String
+  senderId    String
+  senderName  String
+  role        String   // 'buyer' | 'supplier'
+  text        String
+  timestamp   String
+  type        String   @default("info") // 'offer' | 'counter-offer' | 'info'
+  createdAt   DateTime @default(now())
+}
+
+model POMessage {
+  id        String   @id @default(cuid())
+  poId      String?  @default("")
+  rfqId     String?  @default("")
+  sender    String   // 'Supplier' | 'Buyer'
+  text      String
+  timestamp String
+  createdAt DateTime @default(now())
+}
+
+model POAmendmentRequest {
+  id                  String   @id @default(cuid())
+  poId                String
+  requestedQtyChanges Json?    // Record<string, number>
+  requestedDueDate    String?  @default("")
+  reason              String
+  status              String   @default("Pending") // 'Pending' | 'Approved' | 'Rejected'
+  timestamp           String
+  createdAt           DateTime @default(now())
+}
+
+model BlanketPO {
+  id              String   @id
+  supplierId      String
+  supplierName    String
+  totalCeiling    Float
+  consumedAmount  Float    @default(0.0)
+  validFrom       String
+  validTo         String
+  currency        String
+  status          String   @default("Draft") // BlanketStatus
+  releaseOrderIds Json     // string[]
+  category        String?  @default("")
+  department      String?  @default("")
+  project         String?  @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// ── Inventory ────────────────────────────────────────────────
+
+model StockItem {
+  id            String   @id @default(cuid())
+  itemId        String   @unique
+  itemName      String
+  category      String
+  unit          String
+  currentStock  Float
+  reservedStock Float    @default(0.0)
+  reorderPoint  Float
+  maxStock      Float
+  location      String
+  lastUpdated   String
+  lastGRNId     String?  @default("")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model StockMovement {
+  id           String   @id @default(cuid())
+  stockItemId  String
+  itemId       String
+  itemName     String
+  movementType String   // StockMovementType
+  quantity     Float
+  referenceId  String
+  date         String
+  performedBy  String
+  notes        String?  @default("")
+  balanceAfter Float
+  createdAt    DateTime @default(now())
+}
+
+model GRN {
+  id                 String   @id
+  poId               String
+  supplierId         String
+  supplierName       String
+  status             String   @default("Draft") // GRNStatus
+  dateCreated        String
+  dateApproved       String?  @default("")
+  createdBy          String
+  approvedBy         String?  @default("")
+  deliveryNoteNumber String?  @default("")
+  vehicleNumber      String?  @default("")
+  notes              String?  @default("")
+  lineItems          Json     // GRNLineItem[]
+  totalAccepted      Float
+  totalRejected      Float
+  stockUpdated       Boolean  @default(false)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model GRNDispute {
+  id             String   @id @default(cuid())
+  grnId          String
+  poId           String
+  supplierId     String
+  itemId         String
+  itemName       String
+  rejectedQty    Float
+  reason         String
+  supportingDocs Json?    // string[]
+  status         String   @default("Open") // 'Open' | 'Resolved' | 'Rejected'
+  timestamp      String
+  createdAt      DateTime @default(now())
+}
+
+// ── Finance & Assets ──────────────────────────────────────────
+
+model Invoice {
+  id                  String   @id @default(cuid())
+  invoiceNumber       String
+  poId                String
+  supplierId          String
+  supplierName        String
+  date                String
+  dueDate             String
+  totalAmount         Float
+  currency            String
+  status              String   @default("Pending") // InvoiceStatus
+  lineItems           Json     // InvoiceLineItem[]
+  matchStatus         String   @default("Pending") // MatchStatus
+  notes               String?  @default("")
+  expectedPaymentDate String?  @default("")
+  invoiceFileName     String?  @default("")
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+}
+
+model BudgetEnvelope {
+  id              String   @id
+  name            String
+  department      String
+  project         String?  @default("")
+  period          String   // e.g. "2026", "2026-Q1"
+  totalAmount     Float
+  committedAmount Float    @default(0.0)
+  spentAmount     Float    @default(0.0)
+  currency        String
+  status          String   @default("Active") // 'Active' | 'Closed' | 'Over-budget'
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+model Contract {
+  id                String   @id
+  title             String
+  supplierId        String
+  supplierName      String
+  startDate         String
+  endDate           String
+  totalValue        Float
+  currency          String
+  status            String   @default("Draft") // 'Draft' | 'Active' | 'Expiring' | 'Expired' | 'Terminated'
+  renewalWindowDays Int      @default(30)
+  linkedPoIds       Json     // string[]
+  docId             String?  @default("")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+}
+
+model Asset {
+  id                 String   @id
+  name               String
+  category           String
+  supplierId         String
+  purchaseDate       String
+  purchaseValue      Float
+  salvageValue       Float
+  depreciationRate   Float
+  usefulLife         Float
+  location           String
+  serialNumber       String?  @default("")
+  warrantyExpiry     String?  @default("")
+  warrantyDetails    String?  @default("")
+  maintenancePlan    String
+  maintenanceHistory Json     // MaintenanceRecord[]
+  status             String   @default("Active") // AssetStatus
+  description        String?  @default("")
+  poId               String?  @default("")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model AssetCategory {
+  id        String   @id @default(cuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+}
+
+model FXRate {
+  id        String   @id @default(cuid())
+  currency  String   @unique
+  rate      Float
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ── Documents ────────────────────────────────────────────────
+
+model AppDocument {
+  id           String   @id
+  name         String
+  category     String   // DocumentCategory
+  poId         String
+  itemId       String
+  uploadDate   String
+  fileSize     String
+  fileType     String
+  expiryDate   String?  @default("")
+  version      Int?     @default(1)
+  supersededBy String?  @default("")
+  createdAt    DateTime @default(now())
+}
+
+model ComplianceDocument {
+  id         String   @id
+  supplierId String
+  title      String
+  category   String   // ComplianceCategory
+  expiryDate String
+  status     String   @default("Active") // 'Active' | 'Expiring Soon' | 'Expired'
+  fileName   String
+  fileSize   String?  @default("")
+  uploadedAt String
+  createdAt  DateTime @default(now())
+}
+
+// ── Utilities ────────────────────────────────────────────────
+
+model AppNotification {
+  id         String   @id @default(cuid())
+  type       String   // NotificationType
+  source     String   // NotificationSource
+  title      String
+  message    String
+  timestamp  String
+  read       Boolean  @default(false)
+  entityId   String
+  entityType String
+  createdAt  DateTime @default(now())
+}
+
+model NotificationRule {
+  id        String   @id @default(cuid())
+  eventType String
+  enabled   Boolean  @default(true)
+  threshold Float?   @default(0.0)
+  channels  Json     // string[]
+  createdAt DateTime @default(now())
+}
+
+model AuditLogEntry {
+  id          String   @id @default(cuid())
+  timestamp   String
+  actorId     String
+  actorName   String
+  entityType  String   // 'PO' | 'Supplier' | 'Item' | ...
+  entityId    String
+  action      String   // 'Create' | 'Update' | 'Delete' | ...
+  changeSet   Json?    // change tracking array
+  description String?  @default("")
+  createdAt   DateTime @default(now())
+}
+
+model ProductLibraryItem {
+  id             String   @id @default(cuid())
+  name           String
+  sku            String
+  category       String
+  description    String
+  unit           String
+  basePrice      Float
+  currency       String
+  image          String?  @default("")
+  technicalDocs  Json     // string[]
+  certifications Json     // string[]
+  createdAt      DateTime @default(now())
+}

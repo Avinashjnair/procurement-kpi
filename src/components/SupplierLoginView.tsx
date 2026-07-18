@@ -12,27 +12,19 @@ export default function SupplierLoginView() {
   const [loading, setLoading] = useState(false);
   const [showRegistration, setShowRegistration] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
     
     // Artificial delay for premium feel
-    setTimeout(() => {
-      // Check if supplier exists but is pending
-      const targetSupplier = suppliers.find(s => s.id === supplierId);
-      if (targetSupplier && targetSupplier.status === 'Pending Approval') {
-        setError('Your registration is currently under review by the procurement team. Please check back later.');
-        setLoading(false);
-        return;
-      }
+    await new Promise(resolve => setTimeout(resolve, 800));
 
-      const success = supplierLogin(supplierId, password);
-      if (!success) {
-        setError('Invalid Supplier ID or Password. Please try again or contact support.');
-        setLoading(false);
-      }
-    }, 800);
+    const res = await supplierLogin(supplierId, password);
+    if (!res.success) {
+      setError(res.error || 'Invalid Supplier ID or Password. Please try again or contact support.');
+      setLoading(false);
+    }
   };
 
   if (showRegistration) {

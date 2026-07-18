@@ -1,26 +1,11 @@
 'use client';
-import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from 'react';
-import {
-  items as initialItems, suppliers as initialSuppliers,
-  purchaseOrders as initialPOs, documents as initialDocs,
-  Item, Supplier, SupplierKPIs, PurchaseOrder, AppDocument,
-  POStatus, PaymentStatus, PricePoint,
-} from '@/data/mockData';
-import {
-  users as initialUsers, rfqs as initialRFQs, quotations as initialQuotations,
-  stockItems as initialStock, stockMovements as initialMovements, grns as initialGRNs,
-  assets as initialAssets, assetCategories as initialCategories,
-} from '@/data/extendedMockData';
-import {
-  initialBudgets, initialContracts, initialInvoices, initialBlankets,
-  initialComplianceDocs, initialDisputes
-} from '@/data/roadmapMockData';
+import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect, useRef } from 'react';
 import type {
   User, RFQ, Quotation, QuotationEvaluation, StockItem, StockMovement, GRN, GRNLineItem,
   Asset, MaintenanceRecord, AssetStatus, PaymentRecord, PaymentRecordStatus,
   BudgetEnvelope, Contract, Invoice, AuditLogEntry, MatchStatus, ApprovalStep, BlanketPO,
   AppNotification, NotificationRule, NegotiationMessage, POAmendmentRequest,
-  ComplianceDocument, GRNDispute, POMessage, ProductLibraryItem,
+  ComplianceDocument, GRNDispute, POMessage, ProductLibraryItem, Supplier, SupplierKPIs, Item, PricePoint, POStatus, PaymentStatus, PurchaseOrder, AppDocument
 } from '@/types';
 import { calcEvalScore } from '@/types';
 
@@ -48,7 +33,6 @@ interface AppState {
   assets: Asset[];
   assetCategories: string[];
   selectedAssetId: string | null;
-  // Next Sprint extensions
   budgets: BudgetEnvelope[];
   contracts: Contract[];
   invoices: Invoice[];
@@ -82,92 +66,87 @@ interface AppContextType extends AppState {
   setFabOpen: (open: boolean) => void;
   setModalOpen: (modal: string | null) => void;
   toggleDarkMode: () => void;
-  login: (email: string, password: string) => boolean;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
-  addItem: (item: Item) => void;
-  updateItem: (id: string, updates: Partial<Item>) => void;
-  archiveItem: (id: string) => void;
-  unarchiveItem: (id: string) => void;
-  addItemPriceHistory: (itemId: string, point: PricePoint) => void;
-  addSupplier: (supplier: Supplier) => void;
-  updateSupplier: (id: string, updates: Partial<Supplier>) => void;
-  updateSupplierKPIs: (id: string, kpis: SupplierKPIs) => void;
-  togglePreferredSupplier: (id: string) => void;
-  addSupplierNote: (supplierId: string, note: string) => void;
-  addPurchaseOrder: (po: PurchaseOrder) => void;
-  updatePOStatus: (poId: string, status: POStatus) => void;
-  updatePOPayment: (poId: string, paymentStatus: PaymentStatus, amountPaid: number, dateOfPayment?: string) => void;
-  approvePO: (poId: string) => void;
-  rejectPO: (poId: string, reason: string) => void;
-  cancelPO: (poId: string, reason: string) => void;
-  duplicatePO: (poId: string) => void;
-  // ── Finance actions ──────────────────────────────────────
-  recordPayment: (record: Omit<PaymentRecord, 'id'>) => void;
-  approvePaymentRecord: (poId: string, recordId: string, status: PaymentRecordStatus) => void;
-  // ── Documents ──────────────────────────────────────────
-  addDocument: (doc: AppDocument) => void;
-  uploadNewDocVersion: (originalId: string, newDoc: AppDocument) => void;
-  addRFQ: (rfq: RFQ) => void;
-  updateRFQ: (id: string, updates: Partial<RFQ>) => void;
-  sendRFQ: (id: string) => void;
-  closeRFQ: (id: string) => void;
-  publishRFQ: (id: string) => void;
-  awardRFQ: (rfqId: string, quotationId: string) => void;
-  addQuotation: (q: Quotation) => void;
-  updateQuotation: (id: string, updates: Partial<Quotation>) => void;
-  submitEvaluation: (quotationId: string, evaluation: Omit<QuotationEvaluation, 'totalScore' | 'evaluatedBy' | 'evaluatedAt'>) => void;
-  addGRN: (grn: GRN) => void;
-  submitGRN: (id: string) => void;
-  approveGRN: (id: string) => void;
-  rejectGRN: (id: string, reason: string) => void;
-  adjustStock: (stockItemId: string, delta: number, reason: string) => void;
-  addAsset: (asset: Asset) => void;
-  updateAssetStatus: (id: string, status: AssetStatus) => void;
-  addAssetCategory: (category: string) => void;
-  logMaintenance: (assetId: string, record: Omit<MaintenanceRecord, 'id'>) => void;
+  addItem: (item: Item) => Promise<void>;
+  updateItem: (id: string, updates: Partial<Item>) => Promise<void>;
+  archiveItem: (id: string) => Promise<void>;
+  unarchiveItem: (id: string) => Promise<void>;
+  addItemPriceHistory: (itemId: string, point: PricePoint) => Promise<void>;
+  addSupplier: (supplier: Supplier) => Promise<void>;
+  updateSupplier: (id: string, updates: Partial<Supplier>) => Promise<void>;
+  updateSupplierKPIs: (id: string, kpis: SupplierKPIs) => Promise<void>;
+  togglePreferredSupplier: (id: string) => Promise<void>;
+  addSupplierNote: (supplierId: string, note: string) => Promise<void>;
+  addPurchaseOrder: (po: PurchaseOrder) => Promise<void>;
+  updatePOStatus: (poId: string, status: POStatus) => Promise<void>;
+  updatePOPayment: (poId: string, paymentStatus: PaymentStatus, amountPaid: number, dateOfPayment?: string) => Promise<void>;
+  approvePO: (poId: string) => Promise<void>;
+  rejectPO: (poId: string, reason: string) => Promise<void>;
+  cancelPO: (poId: string, reason: string) => Promise<void>;
+  duplicatePO: (poId: string) => Promise<void>;
+  recordPayment: (record: Omit<PaymentRecord, 'id'>) => Promise<void>;
+  approvePaymentRecord: (poId: string, recordId: string, status: PaymentRecordStatus) => Promise<void>;
+  addDocument: (doc: AppDocument) => Promise<void>;
+  uploadNewDocVersion: (originalId: string, newDoc: AppDocument) => Promise<void>;
+  addRFQ: (rfq: RFQ) => Promise<void>;
+  updateRFQ: (id: string, updates: Partial<RFQ>) => Promise<void>;
+  sendRFQ: (id: string) => Promise<void>;
+  closeRFQ: (id: string) => Promise<void>;
+  publishRFQ: (id: string) => Promise<void>;
+  awardRFQ: (rfqId: string, quotationId: string) => Promise<void>;
+  addQuotation: (q: Quotation) => Promise<void>;
+  updateQuotation: (id: string, updates: Partial<Quotation>) => Promise<void>;
+  submitEvaluation: (quotationId: string, evaluation: Omit<QuotationEvaluation, 'totalScore' | 'evaluatedBy' | 'evaluatedAt'>) => Promise<void>;
+  addGRN: (grn: GRN) => Promise<void>;
+  submitGRN: (id: string) => Promise<void>;
+  approveGRN: (id: string) => Promise<void>;
+  rejectGRN: (id: string, reason: string) => Promise<void>;
+  adjustStock: (stockItemId: string, delta: number, reason: string) => Promise<void>;
+  addAsset: (asset: Asset) => Promise<void>;
+  updateAssetStatus: (id: string, status: AssetStatus) => Promise<void>;
+  addAssetCategory: (category: string) => Promise<void>;
+  logMaintenance: (assetId: string, record: Omit<MaintenanceRecord, 'id'>) => Promise<void>;
   calculateCurrentAssetValue: (asset: Asset) => number;
   getSupplierById: (id: string) => Supplier | undefined;
   getItemById: (id: string) => Item | undefined;
   getPOById: (id: string) => PurchaseOrder | undefined;
   getRFQById: (id: string) => RFQ | undefined;
   getStockByItemId: (itemId: string) => StockItem | undefined;
-  // ── Roadmap Extensions ───────────────────────────────────
-  addBudget: (b: BudgetEnvelope) => void;
-  updateBudget: (id: string, updates: Partial<BudgetEnvelope>) => void;
-  addContract: (c: Contract) => void;
-  updateContract: (id: string, updates: Partial<Contract>) => void;
-  addInvoice: (i: Invoice) => void;
-  updateInvoice: (id: string, updates: Partial<Invoice>) => void;
-  logAudit: (log: Omit<AuditLogEntry, 'id' | 'timestamp' | 'actorId' | 'actorName'>) => void;
-  processApprovalStep: (poId: string, stepIndex: number, status: 'Approved' | 'Rejected', comments?: string) => void;
+  addBudget: (b: BudgetEnvelope) => Promise<void>;
+  updateBudget: (id: string, updates: Partial<BudgetEnvelope>) => Promise<void>;
+  addContract: (c: Contract) => Promise<void>;
+  updateContract: (id: string, updates: Partial<Contract>) => Promise<void>;
+  addInvoice: (i: Invoice) => Promise<void>;
+  updateInvoice: (id: string, updates: Partial<Invoice>) => Promise<void>;
+  logAudit: (log: Omit<AuditLogEntry, 'id' | 'timestamp' | 'actorId' | 'actorName'>) => Promise<void>;
+  processApprovalStep: (poId: string, stepIndex: number, status: 'Approved' | 'Rejected', comments?: string) => Promise<void>;
   performMatch: (poId: string) => MatchStatus;
-  // ── Blanket POs ──────────────────────────────────────────
-  addBlanket: (b: BlanketPO) => void;
-  updateBlanket: (id: string, updates: Partial<BlanketPO>) => void;
-  // ── Notifications ────────────────────────────────────────
-  addNotification: (n: Omit<AppNotification, 'id' | 'timestamp' | 'read'>) => void;
-  markNotificationRead: (id: string) => void;
-  markAllNotificationsRead: () => void;
-  toggleNotificationRule: (id: string) => void;
+  addBlanket: (b: BlanketPO) => Promise<void>;
+  updateBlanket: (id: string, updates: Partial<BlanketPO>) => Promise<void>;
+  addNotification: (n: Omit<AppNotification, 'id' | 'timestamp' | 'read'>) => Promise<void>;
+  markNotificationRead: (id: string) => Promise<void>;
+  markAllNotificationsRead: () => Promise<void>;
+  toggleNotificationRule: (id: string) => Promise<void>;
   setSelectedQuotationId: (id: string | null) => void;
   setSupplierPortal: (val: boolean) => void;
-  addNegotiationMessage: (msg: Omit<NegotiationMessage, 'id' | 'timestamp'>) => void;
-  updateQuotationFeedback: (id: string, feedback: string) => void;
-  acknowledgePO: (poId: string) => void;
-  updateShipment: (poId: string, tracking: string, carrier: string) => void;
-  requestAmendment: (poId: string, request: Omit<POAmendmentRequest, 'id' | 'timestamp' | 'status'>) => void;
-  updateDeliveredQty: (poId: string, itemId: string, qty: number) => void;
-  submitInvoice: (data: Omit<Invoice, 'id' | 'matchStatus' | 'status'>) => void;
-  disputeGRN: (data: Omit<GRNDispute, 'id' | 'timestamp' | 'status'>) => void;
-  uploadComplianceDoc: (data: Omit<ComplianceDocument, 'id' | 'uploadedAt' | 'status'>) => void;
+  addNegotiationMessage: (msg: Omit<NegotiationMessage, 'id' | 'timestamp'>) => Promise<void>;
+  updateQuotationFeedback: (id: string, feedback: string) => Promise<void>;
+  acknowledgePO: (poId: string) => Promise<void>;
+  updateShipment: (poId: string, tracking: string, carrier: string) => Promise<void>;
+  requestAmendment: (poId: string, request: Omit<POAmendmentRequest, 'id' | 'timestamp' | 'status'>) => Promise<void>;
+  updateDeliveredQty: (poId: string, itemId: string, qty: number) => Promise<void>;
+  submitInvoice: (data: Omit<Invoice, 'id' | 'matchStatus' | 'status'>) => Promise<void>;
+  disputeGRN: (data: Omit<GRNDispute, 'id' | 'timestamp' | 'status'>) => Promise<void>;
+  uploadComplianceDoc: (data: Omit<ComplianceDocument, 'id' | 'uploadedAt' | 'status'>) => Promise<void>;
   poMessages: POMessage[];
-  sendPOMessage: (msg: Omit<POMessage, 'id' | 'timestamp'>) => void;
-  updateSupplierProfile: (id: string, updates: Partial<Supplier>) => void;
-  requestEarlyPayment: (invoiceId: string, discountPct: number) => void;
-  addSupplierContact: (supplierId: string, contact: { name: string; role: string; email: string }) => void;
-  supplierLogin: (supplierId: string, passwordHash: string) => boolean;
+  sendPOMessage: (msg: Omit<POMessage, 'id' | 'timestamp'>) => Promise<void>;
+  updateSupplierProfile: (id: string, updates: Partial<Supplier>) => Promise<void>;
+  requestEarlyPayment: (invoiceId: string, discountPct: number) => Promise<void>;
+  addSupplierContact: (supplierId: string, contact: { name: string; role: string; email: string }) => Promise<void>;
+  supplierLogin: (supplierId: string, passwordHash: string) => Promise<{ success: boolean; error?: string }>;
   supplierLogout: () => void;
-  addProduct: (product: Omit<ProductLibraryItem, 'id'>) => void;
+  addProduct: (product: Omit<ProductLibraryItem, 'id'>) => Promise<void>;
   setGlobalSearchQuery: (q: string) => void;
   setMobileSidebarOpen: (open: boolean) => void;
 }
@@ -175,11 +154,15 @@ interface AppContextType extends AppState {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: ReactNode }) {
+  const [authToken, setAuthToken] = useState<string | null>(null);
+  const [tenantId, setTenantId] = useState<string>('steelmax');
+  const pendingMatches = useRef<Record<string, boolean>>({});
+  
   const [state, setState] = useState<AppState>({
-    items: initialItems,
-    suppliers: initialSuppliers,
-    purchaseOrders: initialPOs,
-    documents: initialDocs,
+    items: [],
+    suppliers: [],
+    purchaseOrders: [],
+    documents: [],
     activePage: 'dashboard',
     selectedItemId: null,
     selectedSupplierId: null,
@@ -188,635 +171,694 @@ export function AppProvider({ children }: { children: ReactNode }) {
     modalOpen: null,
     darkMode: true,
     currentUser: null,
-    users: initialUsers,
-    rfqs: initialRFQs,
-    quotations: initialQuotations,
-    stockItems: initialStock,
-    stockMovements: initialMovements,
-    grns: initialGRNs,
+    users: [],
+    rfqs: [],
+    quotations: [],
+    stockItems: [],
+    stockMovements: [],
+    grns: [],
     selectedRFQId: null,
     selectedGRNId: null,
-    assets: initialAssets,
-    assetCategories: initialCategories,
+    assets: [],
+    assetCategories: [],
     selectedAssetId: null,
-    // Next Sprint extensions
-    budgets: initialBudgets,
-    contracts: initialContracts,
-    invoices: initialInvoices,
+    budgets: [],
+    contracts: [],
+    invoices: [],
     auditLogs: [],
-    fxRates: { 'USD': 3.67, 'EUR': 4.01, 'GBP': 4.65, 'AED': 1.0 },
-    blanketPOs: initialBlankets,
+    fxRates: { 'USD': 3.67, 'EUR': 3.95, 'GBP': 4.65, 'AED': 1.0 },
+    blanketPOs: [],
     selectedBlanketId: null,
-    notifications: [
-      { id: 'NOTIF-1', type: 'warning', source: 'PO', title: 'Overdue Payment', message: 'PO-002 payment is overdue by 5 days', timestamp: new Date(Date.now() - 86400000).toISOString(), read: false, entityId: 'PO-002', entityType: 'PO' },
-      { id: 'NOTIF-2', type: 'info', source: 'GRN', title: 'GRN Submitted', message: 'GRN-005 has been submitted by Warehouse', timestamp: new Date(Date.now() - 3600000).toISOString(), read: false, entityId: 'GRN-005', entityType: 'GRN' }
-    ],
-    notificationRules: [
-      { id: 'RULE-1', eventType: 'approval_request', enabled: true, channels: ['in-app'] },
-      { id: 'RULE-2', eventType: 'overdue_payment', enabled: true, channels: ['in-app', 'email'] },
-      { id: 'RULE-3', eventType: 'low_stock', enabled: true, threshold: 10, channels: ['in-app'] }
-    ],
+    notifications: [],
+    notificationRules: [],
     isSupplierPortal: false,
     selectedQuotationId: null,
     negotiationMessages: [],
-    complianceDocs: initialComplianceDocs,
-    disputes: initialDisputes,
+    complianceDocs: [],
+    disputes: [],
     poMessages: [],
     currentSupplier: null,
-      products: [
-        { id: 'PRD-1', name: 'Seamless Carbon Pipe', sku: 'PIPE-SM-001', category: 'Piping', description: 'High-pressure seamless carbon steel pipe for industrial use.', unit: 'Meter', basePrice: 85.50, currency: 'USD', technicalDocs: ['CDOC-005'], certifications: ['ASME B16.5'] },
-        { id: 'PRD-2', name: 'Industrial Gate Valve', sku: 'VALV-GT-04', category: 'Valves', description: 'API 600 compliant heavy-duty gate valve.', unit: 'Piece', basePrice: 320.00, currency: 'USD', technicalDocs: ['CDOC-006'], certifications: ['API 600', 'ISO 9001'] },
-        { id: 'PRD-3', name: 'Stainless Steel Flange', sku: 'FLG-SS-08', category: 'Fittings', description: 'Corrosion resistant 316L stainless steel flange.', unit: 'Piece', basePrice: 195.00, currency: 'USD', technicalDocs: [], certifications: ['ASME B16.5'] }
-      ],
-      globalSearchQuery: '',
-      isMobileSidebarOpen: false,
-    });
+    products: [],
+    globalSearchQuery: '',
+    isMobileSidebarOpen: false,
+  });
 
-  // ── Session Persistence ───────────────────────────────────
-  useEffect(() => {
-    const savedUser = localStorage.getItem('procureiq_user');
-    const savedSupplier = localStorage.getItem('procureiq_supplier');
-    
-    if (savedUser) {
-      try {
-        const user = JSON.parse(savedUser);
-        setState(p => ({ ...p, currentUser: user, activePage: user.role === 'finance' ? 'finance' : 'dashboard' }));
-      } catch (e) { console.error('Failed to parse saved user'); }
-    }
-    
-    if (savedSupplier) {
-      try {
-        const supplier = JSON.parse(savedSupplier);
-        setState(p => ({ ...p, currentSupplier: supplier, isSupplierPortal: true, activePage: 'dashboard' }));
-      } catch (e) { console.error('Failed to parse saved supplier'); }
-    }
-  }, []);
+  // Get common API headers
+  const getHeaders = useCallback(() => {
+    return {
+      'Content-Type': 'application/json',
+      'x-tenant-id': tenantId,
+      ...(authToken && { 'Authorization': `Bearer ${authToken}` }),
+    };
+  }, [authToken, tenantId]);
 
-  useEffect(() => {
-    if (state.currentUser) {
-      localStorage.setItem('procureiq_user', JSON.stringify(state.currentUser));
-      localStorage.removeItem('procureiq_supplier');
-    } else {
-      localStorage.removeItem('procureiq_user');
-    }
-  }, [state.currentUser]);
-
-  useEffect(() => {
-    if (state.currentSupplier) {
-      localStorage.setItem('procureiq_supplier', JSON.stringify(state.currentSupplier));
-      localStorage.removeItem('procureiq_user');
-    } else {
-      localStorage.removeItem('procureiq_supplier');
-    }
-  }, [state.currentSupplier]);
-
-  // ── Roadmap Extensions ───────────────────────────────────
-
-  const logAudit = useCallback((log: Omit<AuditLogEntry, 'id' | 'timestamp' | 'actorId' | 'actorName'>) => {
-    setState(p => {
-      const newEntry: AuditLogEntry = {
-        ...log,
-        id: `LOG-${Date.now()}`,
-        timestamp: new Date().toISOString(),
-        actorId: p.currentUser?.id || 'SYS',
-        actorName: p.currentUser?.name || 'System',
-      };
-      return { ...p, auditLogs: [newEntry, ...p.auditLogs] };
-    });
-  }, []);
-
-  const addBudget = useCallback((b: BudgetEnvelope) => {
-    setState(p => ({ ...p, budgets: [...p.budgets, b] }));
-    logAudit({ entityType: 'Budget', entityId: b.id, action: 'Create', description: `Created budget: ${b.name}` });
-  }, [logAudit]);
-
-  const updateBudget = useCallback((id: string, updates: Partial<BudgetEnvelope>) => {
-    setState(p => ({ ...p, budgets: p.budgets.map(b => b.id === id ? { ...b, ...updates } : b) }));
-  }, []);
-
-  const addContract = useCallback((c: Contract) => {
-    setState(p => ({ ...p, contracts: [...p.contracts, c] }));
-    logAudit({ entityType: 'Contract', entityId: c.id, action: 'Create', description: `Registered contract: ${c.title}` });
-  }, [logAudit]);
-
-  const updateContract = useCallback((id: string, updates: Partial<Contract>) => {
-    setState(p => ({ ...p, contracts: p.contracts.map(c => c.id === id ? { ...c, ...updates } : c) }));
-  }, []);
-
-  const addInvoice = useCallback((i: Invoice) => {
-    setState(p => ({ ...p, invoices: [...p.invoices, i] }));
-    logAudit({ entityType: 'Invoice', entityId: i.id, action: 'Create', description: `Recorded invoice: ${i.invoiceNumber}` });
-  }, [logAudit]);
-
-  const updateInvoice = useCallback((id: string, updates: Partial<Invoice>) => {
-    setState(p => ({ ...p, invoices: p.invoices.map(i => i.id === id ? { ...i, ...updates } : i) }));
-  }, []);
-
-  const addBlanket = useCallback((b: BlanketPO) => {
-    setState(p => ({ ...p, blanketPOs: [...p.blanketPOs, b] }));
-    logAudit({ entityType: 'PO', entityId: b.id, action: 'Create', description: `Created Blanket PO: ${b.id} with ceiling ${b.totalCeiling}` });
-  }, [logAudit]);
-
-  const updateBlanket = useCallback((id: string, updates: Partial<BlanketPO>) => {
-    setState(p => ({ ...p, blanketPOs: p.blanketPOs.map(b => b.id === id ? { ...b, ...updates } : b) }));
-  }, []);
-
-  const addNotification = useCallback((n: Omit<AppNotification, 'id' | 'timestamp' | 'read'>) => {
-    setState(p => {
-      const newNotif: AppNotification = {
-        ...n,
-        id: `NOTIF-${Date.now()}`,
-        timestamp: new Date().toISOString(),
-        read: false,
-      };
-      return { ...p, notifications: [newNotif, ...p.notifications] };
-    });
-  }, []);
-
-  const markNotificationRead = useCallback((id: string) => {
-    setState(p => ({ ...p, notifications: p.notifications.map(n => n.id === id ? { ...n, read: true } : n) }));
-  }, []);
-
-  const markAllNotificationsRead = useCallback(() => {
-    setState(p => ({ ...p, notifications: p.notifications.map(n => ({ ...n, read: true })) }));
-  }, []);
-
-  const toggleNotificationRule = useCallback((id: string) => {
-    setState(p => ({ ...p, notificationRules: p.notificationRules.map(r => r.id === id ? { ...r, enabled: !r.enabled } : r) }));
-    logAudit({ entityType: 'Supplier', entityId: id, action: 'Update', description: `Toggled notification rule: ${id}` });
-  }, [logAudit]);
-
-  const setSupplierPortal = useCallback((val: boolean) => setState(p => ({ ...p, isSupplierPortal: val })), []);
-
-  const performMatch = useCallback((poId: string): MatchStatus => {
-    const po = state.purchaseOrders.find(p => p.id === poId);
-    if (!po) return 'Missing PO';
-    const grn = state.grns.find(g => g.poId === poId && g.status === 'Approved');
-    const invoice = state.invoices.find(i => i.poId === poId);
-
-    if (!grn) return 'Missing GRN';
-    if (!invoice) return 'Pending';
-
-    // Simplified 3-way match logic
-    const poQty = po.items.reduce((sum, item) => sum + item.quantity, 0);
-    const grnQty = grn.lineItems.reduce((sum, item) => sum + item.acceptedQty, 0);
-    const invQty = invoice.lineItems.reduce((sum, item) => sum + item.billedQty, 0);
-
-    if (poQty === grnQty && grnQty === invQty && po.totalAmount === invoice.totalAmount) {
-      return 'Full Match';
-    }
-    return 'Variance';
-  }, [state.purchaseOrders, state.grns, state.invoices]);
-
-  const processApprovalStep = useCallback((poId: string, stepIndex: number, status: 'Approved' | 'Rejected', comments?: string) => {
-    setState(p => {
-      const po = p.purchaseOrders.find(o => o.id === poId);
-      if (!po) return p;
-
-      const newSteps = [...po.approvalSteps];
-      newSteps[stepIndex] = {
-        ...newSteps[stepIndex],
-        status,
-        userId: p.currentUser?.id,
-        userName: p.currentUser?.name,
-        timestamp: new Date().toISOString(),
-        comments
-      };
-
-      let newStatus = po.deliveryStatus;
-      let nextStep = po.currentApprovalStep;
-
-      if (status === 'Approved') {
-        if (stepIndex === po.approvalSteps.length - 1) {
-          newStatus = 'Approved' as POStatus;
-        } else {
-          nextStep = stepIndex + 1;
-        }
+  // Bulk data loading
+  const initData = useCallback(async (token: string, tenant: string) => {
+    try {
+      const res = await fetch('/api/data/init', {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'x-tenant-id': tenant,
+        },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setState(p => ({
+          ...p,
+          users: data.users || [],
+          suppliers: data.suppliers || [],
+          items: data.items || [],
+          purchaseOrders: data.purchaseOrders || [],
+          documents: data.documents || [],
+          rfqs: data.rfqs || [],
+          quotations: data.quotations || [],
+          stockItems: data.stockItems || [],
+          stockMovements: data.stockMovements || [],
+          grns: data.grns || [],
+          assets: data.assets || [],
+          budgets: data.budgets || [],
+          contracts: data.contracts || [],
+          invoices: data.invoices || [],
+          blanketPOs: data.blanketPOs || [],
+          notifications: data.notifications || [],
+          auditLogs: data.auditLogs || [],
+          complianceDocs: data.complianceDocs || [],
+          disputes: data.disputes || [],
+          products: data.products || [],
+          negotiationMessages: data.negotiationMessages || [],
+          poMessages: data.poMessages || [],
+          notificationRules: data.notificationRules || [],
+          assetCategories: data.assetCategories || [],
+          fxRates: data.fxRates || p.fxRates,
+        }));
       } else {
-        newStatus = 'Cancelled' as POStatus; // Rejected ends the flow
+        console.error('Failed to load initial tenant data:', await res.text());
       }
-
-      const updatedPO = {
-        ...po,
-        approvalSteps: newSteps,
-        currentApprovalStep: nextStep,
-        deliveryStatus: newStatus,
-        approvedBy: status === 'Approved' && stepIndex === po.approvalSteps.length - 1 ? p.currentUser?.name : po.approvedBy,
-        approvedAt: status === 'Approved' && stepIndex === po.approvalSteps.length - 1 ? new Date().toISOString() : po.approvedAt
-      };
-
-      return {
-        ...p,
-        purchaseOrders: p.purchaseOrders.map(o => o.id === poId ? updatedPO : o)
-      };
-    });
-
-    logAudit({
-      entityType: 'PO',
-      entityId: poId,
-      action: status === 'Approved' ? 'Approve' : 'Reject',
-      description: `${status} step ${stepIndex + 1} of approval chain. ${comments || ''}`
-    });
-  }, [logAudit]);
-
-  const setActivePage         = useCallback((page: string) => setState(p => ({ ...p, activePage: page, selectedItemId: null, selectedSupplierId: null, selectedPOId: null, selectedRFQId: null, selectedGRNId: null })), []);
-  const setSelectedItemId     = useCallback((id: string | null) => setState(p => ({ ...p, selectedItemId: id })), []);
-  const setSelectedSupplierId = useCallback((id: string | null) => setState(p => ({ ...p, selectedSupplierId: id })), []);
-  const setSelectedPOId       = useCallback((id: string | null) => setState(p => ({ ...p, selectedPOId: id })), []);
-  const setSelectedRFQId      = useCallback((id: string | null) => setState(p => ({ ...p, selectedRFQId: id })), []);
-  const setSelectedGRNId      = useCallback((id: string | null) => setState(p => ({ ...p, selectedGRNId: id })), []);
-  const setSelectedAssetId    = useCallback((id: string | null) => setState(p => ({ ...p, setSelectedAssetId: id })), []);
-  const setSelectedBlanketId  = useCallback((id: string | null) => setState(p => ({ ...p, selectedBlanketId: id })), []);
-  const setSelectedQuotationId = useCallback((id: string | null) => setState(p => ({ ...p, selectedQuotationId: id })), []);
-  const setFabOpen            = useCallback((open: boolean) => setState(p => ({ ...p, fabOpen: open })), []);
-  const setModalOpen          = useCallback((modal: string | null) => setState(p => ({ ...p, modalOpen: modal, fabOpen: false })), []);
-  const toggleDarkMode        = useCallback(() => setState(p => ({ ...p, darkMode: !p.darkMode })), []);
-
-  const setGlobalSearchQuery = (q: string) => setState(p => ({ ...p, globalSearchQuery: q }));
-  const setMobileSidebarOpen = (open: boolean) => setState(p => ({ ...p, isMobileSidebarOpen: open }));
-
-  const login = useCallback((email: string, password: string): boolean => {
-    const user = state.users.find(u => u.email === email && u.passwordHash === password && u.active);
-    if (user) {
-      // Finance users land on the Finance page by default
-      const defaultPage = user.role === 'finance' ? 'finance' : 'dashboard';
-      setState(p => ({ ...p, currentUser: user, activePage: defaultPage }));
-      return true;
+    } catch (e) {
+      console.error('Failed to connect to init data API:', e);
     }
-    return false;
-  }, [state.users]);
+  }, []);
 
-  const logout = useCallback(() => setState(p => ({ ...p, currentUser: null, activePage: 'dashboard' })), []);
+  // ── Session Initialization ───────────────────────────────────
+  useEffect(() => {
+    const savedToken = localStorage.getItem('procureiq_token');
+    const savedTenant = localStorage.getItem('procureiq_tenant_id') || 'steelmax';
 
-  const supplierLogin = useCallback((supplierId: string, passwordHash: string): boolean => {
-    const supplier = state.suppliers.find(s => s.id === supplierId && s.passwordHash === passwordHash && s.status === 'Active');
-    if (supplier) {
-      setState(p => ({ ...p, currentSupplier: supplier }));
-      return true;
+    if (savedToken) {
+      setAuthToken(savedToken);
+      setTenantId(savedTenant);
+
+      // Verify session token
+      fetch('/api/auth/me', {
+        headers: {
+          'Authorization': `Bearer ${savedToken}`,
+          'x-tenant-id': savedTenant,
+        },
+      })
+      .then(async res => {
+        if (res.ok) {
+          const profile = await res.json();
+          if (profile.type === 'user') {
+            setState(p => ({
+              ...p,
+              currentUser: profile.user,
+              activePage: profile.user.role === 'finance' ? 'finance' : 'dashboard',
+            }));
+          } else {
+            setState(p => ({
+              ...p,
+              currentSupplier: profile.supplier,
+              isSupplierPortal: true,
+              activePage: 'dashboard',
+            }));
+          }
+          // Seed the rest of the application
+          initData(savedToken, savedTenant);
+        } else {
+          // Token expired or invalid
+          localStorage.removeItem('procureiq_token');
+          localStorage.removeItem('procureiq_tenant_id');
+          setAuthToken(null);
+        }
+      })
+      .catch(err => {
+        console.error('Identity checks failed:', err);
+      });
     }
-    return false;
-  }, [state.suppliers]);
+  }, [initData]);
 
-  const supplierLogout = useCallback(() => setState(p => ({ ...p, currentSupplier: null })), []);
+  // Auth logins
+  const login = useCallback(async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      // Determine tenant dynamically based on email domain to avoid manual configuration
+      const resolvedTenant = email.toLowerCase().includes('@eurochem') ? 'eurochem' : 'steelmax';
+      
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-tenant-id': resolvedTenant,
+        },
+        body: JSON.stringify({ email, password }),
+      });
 
-  // Items
-  const addItem             = useCallback((item: Item) => setState(p => ({ ...p, items: [...p.items, item] })), []);
-  const updateItem          = useCallback((id: string, updates: Partial<Item>) => setState(p => ({ ...p, items: p.items.map(i => i.id === id ? { ...i, ...updates } : i) })), []);
-  const archiveItem         = useCallback((id: string) => setState(p => ({ ...p, items: p.items.map(i => i.id === id ? { ...i, archived: true } : i) })), []);
-  const unarchiveItem       = useCallback((id: string) => setState(p => ({ ...p, items: p.items.map(i => i.id === id ? { ...i, archived: false } : i) })), []);
-  const addItemPriceHistory = useCallback((itemId: string, point: PricePoint) =>
-    setState(p => ({ ...p, items: p.items.map(i => i.id === itemId ? { ...i, priceHistory: [...i.priceHistory, point], currentPrice: point.price } : i) })), []);
+      if (res.ok) {
+        const { token, user } = await res.json();
+        
+        localStorage.setItem('procureiq_token', token);
+        localStorage.setItem('procureiq_tenant_id', resolvedTenant);
+        
+        setAuthToken(token);
+        setTenantId(resolvedTenant);
+        
+        const defaultPage = user.role === 'finance' ? 'finance' : 'dashboard';
+        setState(p => ({ ...p, currentUser: user, activePage: defaultPage }));
+        
+        await initData(token, resolvedTenant);
+        return { success: true };
+      }
+      
+      const errData = await res.json().catch(() => ({}));
+      return { success: false, error: errData.error || 'Invalid email or password' };
+    } catch (e) {
+      console.error('Login request failed:', e);
+      return { success: false, error: 'Network error or server offline' };
+    }
+  }, [initData]);
 
-  // Suppliers
-  const addSupplier            = useCallback((supplier: Supplier) => setState(p => ({ ...p, suppliers: [...p.suppliers, supplier] })), []);
-  const updateSupplier         = useCallback((id: string, updates: Partial<Supplier>) => setState(p => ({ ...p, suppliers: p.suppliers.map(s => s.id === id ? { ...s, ...updates } : s) })), []);
-  const updateSupplierKPIs     = useCallback((id: string, kpis: SupplierKPIs) => setState(p => ({ ...p, suppliers: p.suppliers.map(s => s.id === id ? { ...s, kpis } : s) })), []);
-  const togglePreferredSupplier= useCallback((id: string) => setState(p => ({ ...p, suppliers: p.suppliers.map(s => s.id === id ? { ...s, preferred: !s.preferred } : s) })), []);
-  const addSupplierNote        = useCallback((supplierId: string, note: string) => {
-    const newNote = { id: `NOTE-${Date.now()}`, text: note, date: new Date().toISOString().split('T')[0], author: state.currentUser?.name || 'Procurement Team' };
-    setState(p => ({ ...p, suppliers: p.suppliers.map(s => s.id === supplierId ? { ...s, notes: [...(s.notes || []), newNote] } : s) }));
-  }, [state.currentUser]);
+  const supplierLogin = useCallback(async (supplierId: string, passwordHash: string): Promise<{ success: boolean; error?: string }> => {
+    try {
+      // Route SUP-003 to EuroChem tenant, others to SteelMax
+      const resolvedTenant = supplierId.toUpperCase().trim() === 'SUP-003' ? 'eurochem' : 'steelmax';
 
-  // Purchase Orders
-  const addPurchaseOrder = useCallback((po: PurchaseOrder) => {
+      const res = await fetch('/api/auth/supplier-login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-tenant-id': resolvedTenant,
+        },
+        body: JSON.stringify({ supplierId, password: passwordHash }),
+      });
+
+      if (res.ok) {
+        const { token, supplier } = await res.json();
+        
+        localStorage.setItem('procureiq_token', token);
+        localStorage.setItem('procureiq_tenant_id', resolvedTenant);
+        
+        setAuthToken(token);
+        setTenantId(resolvedTenant);
+
+        setState(p => ({ ...p, currentSupplier: supplier, isSupplierPortal: true, activePage: 'dashboard' }));
+        
+        await initData(token, resolvedTenant);
+        return { success: true };
+      }
+      
+      const errData = await res.json().catch(() => ({}));
+      return { success: false, error: errData.error || 'Invalid supplier ID or password' };
+    } catch (e) {
+      console.error('Supplier login request failed:', e);
+      return { success: false, error: 'Network error or server offline' };
+    }
+  }, [initData]);
+
+  const logout = useCallback(() => {
+    localStorage.removeItem('procureiq_token');
+    localStorage.removeItem('procureiq_tenant_id');
+    setAuthToken(null);
+    setState(p => ({
+      ...p,
+      currentUser: null,
+      currentSupplier: null,
+      isSupplierPortal: false,
+      activePage: 'dashboard',
+      items: [],
+      suppliers: [],
+      purchaseOrders: [],
+      rfqs: [],
+      quotations: [],
+      stockItems: [],
+      stockMovements: [],
+      grns: [],
+      assets: [],
+      budgets: [],
+      contracts: [],
+      invoices: [],
+      blanketPOs: [],
+      notifications: [],
+      negotiationMessages: [],
+      complianceDocs: [],
+      disputes: [],
+      poMessages: [],
+    }));
+  }, []);
+
+  const supplierLogout = useCallback(() => {
+    logout();
+  }, [logout]);
+
+  // Centralized Dynamic mutation helper
+  const runMutation = useCallback(async (action: string, payload: any) => {
+    try {
+      const res = await fetch('/api/data/mutate', {
+        method: 'POST',
+        headers: getHeaders(),
+        body: JSON.stringify({ action, payload }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        return data.result;
+      }
+      throw new Error(await res.text());
+    } catch (e) {
+      console.error(`Mutation ${action} failed:`, e);
+      throw e;
+    }
+  }, [getHeaders]);
+
+  // ── Items ──────────────────────────────────────────────
+  const addItem = useCallback(async (item: Item) => {
+    const result = await runMutation('ADD_ITEM', item);
+    setState(p => ({ ...p, items: [...p.items, result] }));
+  }, [runMutation]);
+
+  const updateItem = useCallback(async (id: string, updates: Partial<Item>) => {
+    const result = await runMutation('UPDATE_ITEM', { id, updates });
+    setState(p => ({ ...p, items: p.items.map(i => i.id === id ? result : i) }));
+  }, [runMutation]);
+
+  const archiveItem = useCallback(async (id: string) => {
+    const result = await runMutation('ARCHIVE_ITEM', { id });
+    setState(p => ({ ...p, items: p.items.map(i => i.id === id ? result : i) }));
+  }, [runMutation]);
+
+  const unarchiveItem = useCallback(async (id: string) => {
+    const result = await runMutation('UNARCHIVE_ITEM', { id });
+    setState(p => ({ ...p, items: p.items.map(i => i.id === id ? result : i) }));
+  }, [runMutation]);
+
+  const addItemPriceHistory = useCallback(async (itemId: string, point: PricePoint) => {
+    const result = await runMutation('ADD_ITEM_PRICE_HISTORY', { itemId, point });
+    setState(p => ({ ...p, items: p.items.map(i => i.id === itemId ? result : i) }));
+  }, [runMutation]);
+
+  // ── Suppliers ──────────────────────────────────────────
+  const addSupplier = useCallback(async (supplier: Supplier) => {
+    const result = await runMutation('ADD_SUPPLIER', supplier);
+    setState(p => ({ ...p, suppliers: [...p.suppliers, result] }));
+  }, [runMutation]);
+
+  const updateSupplier = useCallback(async (id: string, updates: Partial<Supplier>) => {
+    const result = await runMutation('UPDATE_SUPPLIER', { id, updates });
+    setState(p => ({ ...p, suppliers: p.suppliers.map(s => s.id === id ? result : s) }));
+  }, [runMutation]);
+
+  const updateSupplierKPIs = useCallback(async (id: string, kpis: SupplierKPIs) => {
+    const result = await runMutation('UPDATE_SUPPLIER_KPIS', { id, kpis });
+    setState(p => ({ ...p, suppliers: p.suppliers.map(s => s.id === id ? result : s) }));
+  }, [runMutation]);
+
+  const togglePreferredSupplier = useCallback(async (id: string) => {
+    const result = await runMutation('TOGGLE_PREFERRED_SUPPLIER', { id });
+    setState(p => ({ ...p, suppliers: p.suppliers.map(s => s.id === id ? result : s) }));
+  }, [runMutation]);
+
+  const addSupplierNote = useCallback(async (supplierId: string, note: string) => {
+    const result = await runMutation('ADD_SUPPLIER_NOTE', { supplierId, note });
+    setState(p => ({ ...p, suppliers: p.suppliers.map(s => s.id === supplierId ? result : s) }));
+  }, [runMutation]);
+
+  const addSupplierContact = useCallback(async (supplierId: string, contact: { name: string; role: string; email: string }) => {
+    const result = await runMutation('ADD_SUPPLIER_CONTACT', { supplierId, contact });
+    setState(p => ({ ...p, suppliers: p.suppliers.map(s => s.id === supplierId ? result : s) }));
+  }, [runMutation]);
+
+  const updateSupplierProfile = useCallback(async (id: string, updates: Partial<Supplier>) => {
+    const result = await runMutation('UPDATE_SUPPLIER_PROFILE', { id, updates });
+    setState(p => ({ ...p, suppliers: p.suppliers.map(s => s.id === id ? result : s) }));
+  }, [runMutation]);
+
+  // ── Purchase Orders ──────────────────────────────────────
+  const addPurchaseOrder = useCallback(async (po: PurchaseOrder) => {
+    const result = await runMutation('ADD_PURCHASE_ORDER', po);
     setState(p => {
       let updatedBlankets = p.blanketPOs;
-      if (po.blanketPoId) {
+      if (result.blanketPoId) {
         updatedBlankets = p.blanketPOs.map(b => {
-          if (b.id === po.blanketPoId) {
+          if (b.id === result.blanketPoId) {
             return {
               ...b,
-              consumedAmount: b.consumedAmount + po.totalAmount,
-              releaseOrderIds: [...b.releaseOrderIds, po.id]
+              consumedAmount: b.consumedAmount + result.totalAmount,
+              releaseOrderIds: Array.isArray(b.releaseOrderIds) ? [...b.releaseOrderIds, result.id] : [result.id],
             };
           }
           return b;
         });
       }
-      return { ...p, purchaseOrders: [po, ...p.purchaseOrders], blanketPOs: updatedBlankets };
-    });
-    logAudit({ entityType: 'PO', entityId: po.id, action: 'Create', description: `Created${po.blanketPoId ? ' Release' : ''} PO: ${po.id}` });
-    
-    // Notify Manager
-    addNotification({
-      type: 'info',
-      source: 'PO',
-      title: 'New PO Approval Req',
-      message: `A new PO ${po.id} requires your approval.`,
-      entityId: po.id,
-      entityType: 'PO'
-    });
-  }, [logAudit, addNotification]);
-  const updatePOStatus   = useCallback((poId: string, status: POStatus) => setState(p => ({ ...p, purchaseOrders: p.purchaseOrders.map(po => po.id === poId ? { ...po, deliveryStatus: status } : po) })), []);
-  const updatePOPayment  = useCallback((poId: string, paymentStatus: PaymentStatus, amountPaid: number, dateOfPayment?: string) =>
-    setState(p => ({ ...p, purchaseOrders: p.purchaseOrders.map(po => po.id === poId ? { ...po, paymentStatus, amountPaid, dateOfPayment: dateOfPayment || po.dateOfPayment } : po) })), []);
-  const approvePO = useCallback((poId: string) =>
-    setState(p => ({ ...p, purchaseOrders: p.purchaseOrders.map(po => po.id === poId ? { ...po, deliveryStatus: 'Approved' as POStatus } : po) })), []);
-  const rejectPO  = useCallback((poId: string, reason: string) =>
-    setState(p => ({ ...p, purchaseOrders: p.purchaseOrders.map(po => po.id === poId ? { ...po, deliveryStatus: 'Cancelled' as POStatus, cancellationReason: `REJECTED: ${reason}` } : po) })), []);
-  const cancelPO  = useCallback((poId: string, reason: string) =>
-    setState(p => ({ ...p, purchaseOrders: p.purchaseOrders.map(po => po.id === poId ? { ...po, deliveryStatus: 'Cancelled' as POStatus, cancellationReason: reason } : po) })), []);
-
-  const duplicatePO = useCallback((poId: string) => {
-    setState(p => {
-      const original = p.purchaseOrders.find(po => po.id === poId);
-      if (!original) return p;
-      const newId = `PO-${String(p.purchaseOrders.length + 1).padStart(3, '0')}`;
-      return { ...p, purchaseOrders: [{ ...original, id: newId, dateOfIssue: new Date().toISOString().split('T')[0], deliveryStatus: 'Draft' as POStatus, paymentStatus: 'Unpaid' as PaymentStatus, amountPaid: 0, dateOfPayment: null, paymentRecords: [] }, ...p.purchaseOrders] };
-    });
-  }, []);
-
-  const acknowledgePO    = useCallback((poId: string) => {
-    setState(p => ({
-      ...p,
-      purchaseOrders: p.purchaseOrders.map(po => po.id === poId ? { ...po, acknowledgedAt: new Date().toISOString() } : po)
-    }));
-  }, []);
-
-  const updateShipment   = useCallback((poId: string, tracking: string, carrier: string) => {
-    setState(p => ({
-      ...p,
-      purchaseOrders: p.purchaseOrders.map(po => po.id === poId ? { 
-        ...po, 
-        deliveryStatus: 'Shipped', 
-        trackingNumber: tracking, 
-        carrier, 
-        shippedAt: new Date().toISOString() 
-      } : po)
-    }));
-  }, []);
-
-  const requestAmendment = useCallback((poId: string, request: Omit<POAmendmentRequest, 'id' | 'timestamp' | 'status'>) => {
-    setState(p => ({
-      ...p,
-      purchaseOrders: p.purchaseOrders.map(po => po.id === poId ? { 
-        ...po, 
-        amendmentRequest: { 
-          ...request, 
-          id: `AMD-${Date.now()}`, 
-          timestamp: new Date().toISOString(), 
-          status: 'Pending' 
-        } 
-      } : po)
-    }));
-  }, []);
-
-  const updateDeliveredQty = useCallback((poId: string, itemId: string, qty: number) => {
-    setState(p => ({
-      ...p,
-      purchaseOrders: p.purchaseOrders.map(po => {
-        if (po.id !== poId) return po;
-        const newItems = po.items.map(item => item.itemId === itemId ? { ...item, deliveredQty: (item.deliveredQty || 0) + Number(qty) } : item);
-        
-        // Determine status
-        const allDelivered = newItems.every(i => (i.deliveredQty || 0) >= i.quantity);
-        const someDelivered = newItems.some(i => (i.deliveredQty || 0) > 0);
-        const newStatus: POStatus = allDelivered ? 'Delivered' : (someDelivered ? 'Partially Delivered' : po.deliveryStatus);
-        
-        return { ...po, items: newItems, deliveryStatus: newStatus };
-      })
-    }));
-  }, []);
-
-  const submitInvoice = useCallback((data: Omit<Invoice, 'id' | 'matchStatus' | 'status'>) => {
-    const newInvoice: Invoice = {
-      ...data,
-      id: `INV-${Date.now()}`,
-      status: 'Pending',
-      matchStatus: 'Pending',
-    };
-    setState(p => ({ ...p, invoices: [newInvoice, ...p.invoices] }));
-  }, []);
-
-  const disputeGRN = useCallback((data: Omit<GRNDispute, 'id' | 'timestamp' | 'status'>) => {
-    const newDispute: GRNDispute = {
-      ...data,
-      id: `DSP-${Date.now()}`,
-      timestamp: new Date().toISOString(),
-      status: 'Open'
-    };
-    setState(p => ({ ...p, disputes: [newDispute, ...p.disputes] }));
-  }, []);
-
-  const uploadComplianceDoc = useCallback((data: Omit<ComplianceDocument, 'id' | 'uploadedAt' | 'status'>) => {
-    const expires = new Date(data.expiryDate);
-    const now = new Date();
-    const diff = (expires.getTime() - now.getTime()) / (1000 * 3600 * 24);
-    
-    const status: ComplianceDocument['status'] = expires < now ? 'Expired' : (diff < 30 ? 'Expiring Soon' : 'Active');
-    
-    const newDoc: ComplianceDocument = {
-      ...data,
-      id: `CDOC-${Date.now()}`,
-      uploadedAt: new Date().toISOString(),
-      status
-    };
-    setState(p => ({ ...p, complianceDocs: [newDoc, ...p.complianceDocs] }));
-  }, []);
-
-  // ── Finance actions ────────────────────────────────────────
-
-  const recordPayment = useCallback((record: Omit<PaymentRecord, 'id'>) => {
-    setState(p => {
-      const newRecord: PaymentRecord = { ...record, id: `PAY-${Date.now()}` };
-      const updatedPOs = p.purchaseOrders.map(po => {
-        if (po.id !== record.poId) return po;
-        const existing = po.paymentRecords || [];
-        const newRecords = [...existing, newRecord];
-
-        // Only update balances if the record is auto-approved (manager recorded it directly)
-        if (record.status === 'Approved') {
-          const totalPaid = newRecords.filter((r: PaymentRecord) => r.status === 'Approved').reduce((s: number, r: PaymentRecord) => s + r.amount, 0);
-          const paymentStatus: PaymentStatus = totalPaid >= po.totalAmount ? 'Paid' : totalPaid > 0 ? 'Partial' : 'Unpaid';
-          return { ...po, paymentRecords: newRecords, amountPaid: totalPaid, paymentStatus, dateOfPayment: totalPaid >= po.totalAmount ? record.paymentDate : po.dateOfPayment };
-        }
-        return { ...po, paymentRecords: newRecords };
-      });
-      return { ...p, purchaseOrders: updatedPOs };
-    });
-  }, []);
-
-  const approvePaymentRecord = useCallback((poId: string, recordId: string, status: PaymentRecordStatus) => {
-    setState(p => {
-      const updatedPOs = p.purchaseOrders.map(po => {
-        if (po.id !== poId) return po;
-        const updatedRecords = (po.paymentRecords || []).map((r: PaymentRecord) =>
-          r.id === recordId ? { ...r, status, approvedBy: p.currentUser?.id, approvedAt: new Date().toISOString().split('T')[0] } : r
-        );
-        // Recalculate totals from approved records only
-        const totalPaid = updatedRecords.filter((r: PaymentRecord) => r.status === 'Approved').reduce((s: number, r: PaymentRecord) => s + r.amount, 0);
-        const paymentStatus: PaymentStatus = totalPaid >= po.totalAmount ? 'Paid' : totalPaid > 0 ? 'Partial' : 'Unpaid';
-        const lastApproved = updatedRecords.filter((r: PaymentRecord) => r.status === 'Approved').sort((a: PaymentRecord, b: PaymentRecord) => b.paymentDate.localeCompare(a.paymentDate))[0];
-        return {
-          ...po,
-          paymentRecords: updatedRecords,
-          amountPaid: totalPaid,
-          paymentStatus,
-          dateOfPayment: lastApproved?.paymentDate || po.dateOfPayment,
-        };
-      });
-      return { ...p, purchaseOrders: updatedPOs };
-    });
-  }, []);
-
-  // Documents
-  const addDocument          = useCallback((doc: AppDocument) => setState(p => ({ ...p, documents: [...p.documents, doc] })), []);
-  const uploadNewDocVersion  = useCallback((originalId: string, newDoc: AppDocument) =>
-    setState(p => ({ ...p, documents: [...p.documents.map(d => d.id === originalId ? { ...d, supersededBy: newDoc.id } : d), newDoc] })), []);
-
-  // RFQ
-  const addRFQ    = useCallback((rfq: RFQ) => setState(p => ({ ...p, rfqs: [rfq, ...p.rfqs] })), []);
-  const updateRFQ = useCallback((id: string, updates: Partial<RFQ>) => setState(p => ({ ...p, rfqs: p.rfqs.map(r => r.id === id ? { ...r, ...updates } : r) })), []);
-  const sendRFQ   = useCallback((id: string) => setState(p => ({ ...p, rfqs: p.rfqs.map(r => r.id === id ? { ...r, status: 'Sent', dateSent: new Date().toISOString().split('T')[0] } : r) })), []);
-  const closeRFQ  = useCallback((id: string) => setState(p => ({ ...p, rfqs: p.rfqs.map(r => r.id === id ? { ...r, status: 'Closed' } : r) })), []);
-  const publishRFQ = useCallback((id: string) => setState(p => ({ ...p, rfqs: p.rfqs.map(r => r.id === id ? { ...r, status: 'Published' } : r) })), []);
-  const awardRFQ  = useCallback((rfqId: string, quotationId: string) => {
-    setState(p => {
-      const quotation = p.quotations.find(q => q.id === quotationId);
-      if (!quotation) return p;
       return {
         ...p,
-        rfqs: p.rfqs.map(r => r.id === rfqId ? { ...r, status: 'Awarded', awardedQuotationId: quotationId, awardedSupplierId: quotation.supplierId, awardedSupplierName: quotation.supplierName } : r),
-        quotations: p.quotations.map(q => {
-          if (q.rfqId !== rfqId) return q;
-          return q.id === quotationId ? { ...q, status: 'Awarded' } : { ...q, status: 'Rejected' };
-        }),
+        purchaseOrders: [result, ...p.purchaseOrders],
+        blanketPOs: updatedBlankets,
       };
     });
-  }, []);
+  }, [runMutation]);
 
-  // Quotations
-  const addQuotation    = useCallback((q: Quotation) => {
-    setState(p => ({ ...p, quotations: [q, ...p.quotations] }));
-    addNotification({
-      type: 'info',
-      source: 'Document',
-      title: 'New Bid Received',
-      message: `${q.supplierName} submitted a bid for RFQ ${q.rfqId}`,
-      entityId: q.id,
-      entityType: 'Quotation'
-    });
-  }, [addNotification]);
-  const updateQuotation = useCallback((id: string, updates: Partial<Quotation>) => setState(p => ({ ...p, quotations: p.quotations.map(q => q.id === id ? { ...q, ...updates } : q) })), []);
-  const updateQuotationFeedback = useCallback((id: string, feedback: string) => setState(p => ({ ...p, quotations: p.quotations.map(q => q.id === id ? { ...q, feedback } : q) })), []);
-  const addNegotiationMessage = useCallback((msg: Omit<NegotiationMessage, 'id' | 'timestamp'>) => {
-    setState(p => {
-      const newMsg: NegotiationMessage = {
-        ...msg,
-        id: `MSG-${Date.now()}`,
-        timestamp: new Date().toISOString(),
-      };
-      return { ...p, negotiationMessages: [...p.negotiationMessages, newMsg] };
-    });
-  }, []);
-  const submitEvaluation = useCallback((quotationId: string, evalData: Omit<QuotationEvaluation, 'totalScore' | 'evaluatedBy' | 'evaluatedAt'>) => {
-    setState(p => {
-      const quotation = p.quotations.find(q => q.id === quotationId);
-      const rfq = p.rfqs.find(r => r.id === quotation?.rfqId);
-      const totalScore = calcEvalScore(evalData, rfq?.evaluationWeights);
-      const fullEval: QuotationEvaluation = { ...evalData, totalScore, evaluatedBy: p.currentUser?.id || 'USR-001', evaluatedAt: new Date().toISOString().split('T')[0] };
-      return { ...p, quotations: p.quotations.map(q => q.id === quotationId ? { ...q, evaluation: fullEval, status: 'Evaluated' } : q) };
-    });
-  }, []);
+  const updatePOStatus = useCallback(async (poId: string, status: POStatus) => {
+    const result = await runMutation('UPDATE_PO_STATUS', { poId, status });
+    setState(p => ({ ...p, purchaseOrders: p.purchaseOrders.map(po => po.id === poId ? result : po) }));
+  }, [runMutation]);
 
-  // GRN
-  const addGRN    = useCallback((grn: GRN) => setState(p => ({ ...p, grns: [grn, ...p.grns] })), []);
-  const submitGRN = useCallback((id: string) => setState(p => ({ ...p, grns: p.grns.map(g => g.id === id ? { ...g, status: 'Submitted' } : g) })), []);
+  const updatePOPayment = useCallback(async (poId: string, paymentStatus: PaymentStatus, amountPaid: number, dateOfPayment?: string) => {
+    const result = await runMutation('UPDATE_PO_PAYMENT', { poId, paymentStatus, amountPaid, dateOfPayment });
+    setState(p => ({ ...p, purchaseOrders: p.purchaseOrders.map(po => po.id === poId ? result : po) }));
+  }, [runMutation]);
 
-  const approveGRN = useCallback((id: string) => {
-    setState(p => {
-      const grn = p.grns.find(g => g.id === id);
-      if (!grn || grn.stockUpdated) return p;
-      let updatedStock = [...p.stockItems];
-      const newMovements: StockMovement[] = [];
-      const today = new Date().toISOString().split('T')[0];
-      grn.lineItems.forEach(line => {
-        const stockIdx = updatedStock.findIndex(s => s.itemId === line.itemId);
-        if (stockIdx >= 0) {
-          const newBalance = updatedStock[stockIdx].currentStock + line.acceptedQty;
-          updatedStock[stockIdx] = { ...updatedStock[stockIdx], currentStock: newBalance, lastUpdated: today, lastGRNId: id };
-          newMovements.push({ id: `MOV-${Date.now()}-${line.itemId}`, stockItemId: updatedStock[stockIdx].id, itemId: line.itemId, itemName: line.itemName, movementType: 'GRN', quantity: line.acceptedQty, referenceId: id, date: today, performedBy: p.currentUser?.id || 'USR-001', balanceAfter: newBalance, notes: `GRN ${id} approved` });
-        }
-      });
-      const updatedPOs = p.purchaseOrders.map(po => po.id === grn.poId ? { ...po, deliveryStatus: 'Delivered' as POStatus } : po);
-      return { ...p, grns: p.grns.map(g => g.id === id ? { ...g, status: 'Approved', dateApproved: today, approvedBy: p.currentUser?.id || 'USR-001', stockUpdated: true } : g), stockItems: updatedStock, stockMovements: [...p.stockMovements, ...newMovements], purchaseOrders: updatedPOs };
-    });
-  }, []);
+  const approvePO = useCallback(async (poId: string) => {
+    const result = await runMutation('APPROVE_PO', { poId });
+    setState(p => ({ ...p, purchaseOrders: p.purchaseOrders.map(po => po.id === poId ? result : po) }));
+  }, [runMutation]);
 
-  const rejectGRN  = useCallback((id: string, reason: string) =>
-    setState(p => ({ ...p, grns: p.grns.map(g => g.id === id ? { ...g, status: 'Rejected', notes: (g.notes ? g.notes + ' | ' : '') + `Rejection: ${reason}` } : g) })), []);
+  const rejectPO = useCallback(async (poId: string, reason: string) => {
+    const result = await runMutation('REJECT_PO', { poId, reason });
+    setState(p => ({ ...p, purchaseOrders: p.purchaseOrders.map(po => po.id === poId ? result : po) }));
+  }, [runMutation]);
 
-  const adjustStock = useCallback((stockItemId: string, delta: number, reason: string) => {
-    setState(p => {
-      const today = new Date().toISOString().split('T')[0];
-      const idx = p.stockItems.findIndex(s => s.id === stockItemId);
-      if (idx < 0) return p;
-      const newBalance = Math.max(0, p.stockItems[idx].currentStock + delta);
-      const updatedStock = [...p.stockItems];
-      updatedStock[idx] = { ...updatedStock[idx], currentStock: newBalance, lastUpdated: today };
-      const movement: StockMovement = { id: `MOV-${Date.now()}`, stockItemId, itemId: updatedStock[idx].itemId, itemName: updatedStock[idx].itemName, movementType: 'Adjustment', quantity: delta, referenceId: `ADJ-${Date.now()}`, date: today, performedBy: p.currentUser?.id || 'USR-001', balanceAfter: newBalance, notes: reason };
-      return { ...p, stockItems: updatedStock, stockMovements: [...p.stockMovements, movement] };
-    });
-  }, []);
+  const cancelPO = useCallback(async (poId: string, reason: string) => {
+    const result = await runMutation('CANCEL_PO', { poId, reason });
+    setState(p => ({ ...p, purchaseOrders: p.purchaseOrders.map(po => po.id === poId ? result : po) }));
+  }, [runMutation]);
 
-  // Assets
-  const addAsset          = useCallback((asset: Asset) => setState(p => ({ ...p, assets: [asset, ...p.assets] })), []);
-  const updateAssetStatus = useCallback((id: string, status: AssetStatus) => setState(p => ({ ...p, assets: p.assets.map(a => a.id === id ? { ...a, status } : a) })), []);
-  const addAssetCategory  = useCallback((cat: string) => setState(p => ({ ...p, assetCategories: Array.from(new Set([...p.assetCategories, cat])) })), []);
-  const logMaintenance    = useCallback((assetId: string, record: Omit<MaintenanceRecord, 'id'>) => {
-    const newRecord = { ...record, id: `MNT-${Date.now()}` };
-    setState(p => ({ ...p, assets: p.assets.map(a => a.id === assetId ? { ...a, maintenanceHistory: [newRecord, ...(a.maintenanceHistory || [])] } : a) }));
-  }, []);
+  const duplicatePO = useCallback(async (poId: string) => {
+    const result = await runMutation('DUPLICATE_PO', { poId });
+    setState(p => ({ ...p, purchaseOrders: [result, ...p.purchaseOrders] }));
+  }, [runMutation]);
+
+  const acknowledgePO = useCallback(async (poId: string) => {
+    const result = await runMutation('ACKNOWLEDGE_PO', { poId });
+    setState(p => ({ ...p, purchaseOrders: p.purchaseOrders.map(po => po.id === poId ? result : po) }));
+  }, [runMutation]);
+
+  const updateShipment = useCallback(async (poId: string, tracking: string, carrier: string) => {
+    const result = await runMutation('UPDATE_SHIPMENT', { poId, tracking, carrier });
+    setState(p => ({ ...p, purchaseOrders: p.purchaseOrders.map(po => po.id === poId ? result : po) }));
+  }, [runMutation]);
+
+  const requestAmendment = useCallback(async (poId: string, request: Omit<POAmendmentRequest, 'id' | 'timestamp' | 'status'>) => {
+    const result = await runMutation('REQUEST_AMENDMENT', { poId, request });
+    setState(p => ({ ...p, purchaseOrders: p.purchaseOrders.map(po => po.id === poId ? result : po) }));
+  }, [runMutation]);
+
+  const updateDeliveredQty = useCallback(async (poId: string, itemId: string, qty: number) => {
+    const result = await runMutation('UPDATE_DELIVERED_QTY', { poId, itemId, qty });
+    setState(p => ({ ...p, purchaseOrders: p.purchaseOrders.map(po => po.id === poId ? result : po) }));
+  }, [runMutation]);
+
+  // ── Payments ─────────────────────────────────────────────
+  const recordPayment = useCallback(async (record: Omit<PaymentRecord, 'id'>) => {
+    const result = await runMutation('RECORD_PAYMENT', { record });
+    setState(p => ({ ...p, purchaseOrders: p.purchaseOrders.map(po => po.id === record.poId ? result : po) }));
+  }, [runMutation]);
+
+  const approvePaymentRecord = useCallback(async (poId: string, recordId: string, status: PaymentRecordStatus) => {
+    const result = await runMutation('APPROVE_PAYMENT_RECORD', { poId, recordId, status });
+    setState(p => ({ ...p, purchaseOrders: p.purchaseOrders.map(po => po.id === poId ? result : po) }));
+  }, [runMutation]);
+
+  // ── Documents ────────────────────────────────────────────
+  const addDocument = useCallback(async (doc: AppDocument) => {
+    const result = await runMutation('ADD_DOCUMENT', doc);
+    setState(p => ({ ...p, documents: [...p.documents, result] }));
+  }, [runMutation]);
+
+  const uploadNewDocVersion = useCallback(async (originalId: string, newDoc: AppDocument) => {
+    const result = await runMutation('UPLOAD_NEW_DOC_VERSION', { originalId, newDoc });
+    setState(p => ({
+      ...p,
+      documents: p.documents.map(d => d.id === originalId ? { ...d, supersededBy: result.id } : d).concat(result),
+    }));
+  }, [runMutation]);
+
+  // ── RFQs ─────────────────────────────────────────────────
+  const addRFQ = useCallback(async (rfq: RFQ) => {
+    const result = await runMutation('ADD_RFQ', rfq);
+    setState(p => ({ ...p, rfqs: [result, ...p.rfqs] }));
+  }, [runMutation]);
+
+  const updateRFQ = useCallback(async (id: string, updates: Partial<RFQ>) => {
+    const result = await runMutation('UPDATE_RFQ', { id, updates });
+    setState(p => ({ ...p, rfqs: p.rfqs.map(r => r.id === id ? result : r) }));
+  }, [runMutation]);
+
+  const sendRFQ = useCallback(async (id: string) => {
+    const result = await runMutation('SEND_RFQ', { id });
+    setState(p => ({ ...p, rfqs: p.rfqs.map(r => r.id === id ? result : r) }));
+  }, [runMutation]);
+
+  const closeRFQ = useCallback(async (id: string) => {
+    const result = await runMutation('CLOSE_RFQ', { id });
+    setState(p => ({ ...p, rfqs: p.rfqs.map(r => r.id === id ? result : r) }));
+  }, [runMutation]);
+
+  const publishRFQ = useCallback(async (id: string) => {
+    const result = await runMutation('PUBLISH_RFQ', { id });
+    setState(p => ({ ...p, rfqs: p.rfqs.map(r => r.id === id ? result : r) }));
+  }, [runMutation]);
+
+  const awardRFQ = useCallback(async (rfqId: string, quotationId: string) => {
+    await runMutation('AWARD_RFQ', { rfqId, quotationId });
+    // Reload RFQs & Quotations lists from standard REST init data to ensure exact sync
+    await initData(authToken || '', tenantId);
+  }, [runMutation, initData, authToken, tenantId]);
+
+  // ── Quotations ───────────────────────────────────────────
+  const addQuotation = useCallback(async (q: Quotation) => {
+    const result = await runMutation('ADD_QUOTATION', q);
+    setState(p => ({ ...p, quotations: [result, ...p.quotations] }));
+  }, [runMutation]);
+
+  const updateQuotation = useCallback(async (id: string, updates: Partial<Quotation>) => {
+    const result = await runMutation('UPDATE_QUOTATION', { id, updates });
+    setState(p => ({ ...p, quotations: p.quotations.map(q => q.id === id ? result : q) }));
+  }, [runMutation]);
+
+  const submitEvaluation = useCallback(async (quotationId: string, evalData: Omit<QuotationEvaluation, 'totalScore' | 'evaluatedBy' | 'evaluatedAt'>) => {
+    const result = await runMutation('SUBMIT_EVALUATION', { quotationId, evaluation: evalData });
+    setState(p => ({ ...p, quotations: p.quotations.map(q => q.id === quotationId ? result : q) }));
+  }, [runMutation]);
+
+  const addNegotiationMessage = useCallback(async (msg: Omit<NegotiationMessage, 'id' | 'timestamp'>) => {
+    const result = await runMutation('ADD_NEGOTIATION_MESSAGE', msg);
+    setState(p => ({ ...p, negotiationMessages: [...p.negotiationMessages, result] }));
+  }, [runMutation]);
+
+  const updateQuotationFeedback = useCallback(async (id: string, feedback: string) => {
+    const result = await runMutation('UPDATE_QUOTATION_FEEDBACK', { id, feedback });
+    setState(p => ({ ...p, quotations: p.quotations.map(q => q.id === id ? result : q) }));
+  }, [runMutation]);
+
+  // ── Goods Receipt Note (GRN) ──────────────────────────────
+  const addGRN = useCallback(async (grn: GRN) => {
+    const result = await runMutation('ADD_GRN', grn);
+    setState(p => ({ ...p, grns: [result, ...p.grns] }));
+  }, [runMutation]);
+
+  const submitGRN = useCallback(async (id: string) => {
+    const result = await runMutation('SUBMIT_GRN', { id });
+    setState(p => ({ ...p, grns: p.grns.map(g => g.id === id ? result : g) }));
+  }, [runMutation]);
+
+  const approveGRN = useCallback(async (id: string) => {
+    await runMutation('APPROVE_GRN', { id });
+    // Reload state completely on GRN approval to correctly pull updated stock items, stock movements, and PO statuses
+    await initData(authToken || '', tenantId);
+  }, [runMutation, initData, authToken, tenantId]);
+
+  const rejectGRN = useCallback(async (id: string, reason: string) => {
+    const result = await runMutation('REJECT_GRN', { id, reason });
+    setState(p => ({ ...p, grns: p.grns.map(g => g.id === id ? result : g) }));
+  }, [runMutation]);
+
+  // ── Stock Adjustments ─────────────────────────────────────
+  const adjustStock = useCallback(async (stockItemId: string, delta: number, reason: string) => {
+    await runMutation('ADJUST_STOCK', { stockItemId, delta, reason });
+    // Reload init to fetch updated stock status & movements list
+    await initData(authToken || '', tenantId);
+  }, [runMutation, initData, authToken, tenantId]);
+
+  // ── Assets ───────────────────────────────────────────────
+  const addAsset = useCallback(async (asset: Asset) => {
+    const result = await runMutation('ADD_ASSET', asset);
+    setState(p => ({ ...p, assets: [result, ...p.assets] }));
+  }, [runMutation]);
+
+  const updateAssetStatus = useCallback(async (id: string, status: AssetStatus) => {
+    const result = await runMutation('UPDATE_ASSET_STATUS', { id, status });
+    setState(p => ({ ...p, assets: p.assets.map(a => a.id === id ? result : a) }));
+  }, [runMutation]);
+
+  const addAssetCategory = useCallback(async (category: string) => {
+    const result = await runMutation('ADD_ASSET_CATEGORY', { category });
+    setState(p => ({ ...p, assetCategories: Array.from(new Set([...p.assetCategories, result.name])) }));
+  }, [runMutation]);
+
+  const logMaintenance = useCallback(async (assetId: string, record: Omit<MaintenanceRecord, 'id'>) => {
+    const result = await runMutation('LOG_MAINTENANCE', { assetId, record });
+    setState(p => ({ ...p, assets: p.assets.map(a => a.id === assetId ? result : a) }));
+  }, [runMutation]);
+
   const calculateCurrentAssetValue = useCallback((asset: Asset) => {
     const yearsElapsed = (new Date().getTime() - new Date(asset.purchaseDate).getTime()) / (1000 * 60 * 60 * 24 * 365.25);
     if (yearsElapsed <= 0) return asset.purchaseValue;
     return Math.max(asset.purchaseValue * Math.pow(1 - asset.depreciationRate, yearsElapsed), asset.salvageValue);
   }, []);
 
-  // Lookups
-  const getSupplierById  = useCallback((id: string) => state.suppliers.find(s => s.id === id), [state.suppliers]);
-  const getItemById      = useCallback((id: string) => state.items.find(i => i.id === id), [state.items]);
-  const getPOById        = useCallback((id: string) => state.purchaseOrders.find(po => po.id === id), [state.purchaseOrders]);
-  const getRFQById       = useCallback((id: string) => state.rfqs.find(r => r.id === id), [state.rfqs]);
+  // ── Budgets, Contracts & Blanket POs ───────────────────────
+  const addBudget = useCallback(async (b: BudgetEnvelope) => {
+    const result = await runMutation('ADD_BUDGET', b);
+    setState(p => ({ ...p, budgets: [...p.budgets, result] }));
+  }, [runMutation]);
+
+  const updateBudget = useCallback(async (id: string, updates: Partial<BudgetEnvelope>) => {
+    const result = await runMutation('UPDATE_BUDGET', { id, updates });
+    setState(p => ({ ...p, budgets: p.budgets.map(b => b.id === id ? result : b) }));
+  }, [runMutation]);
+
+  const addContract = useCallback(async (c: Contract) => {
+    const result = await runMutation('ADD_CONTRACT', c);
+    setState(p => ({ ...p, contracts: [...p.contracts, result] }));
+  }, [runMutation]);
+
+  const updateContract = useCallback(async (id: string, updates: Partial<Contract>) => {
+    const result = await runMutation('UPDATE_CONTRACT', { id, updates });
+    setState(p => ({ ...p, contracts: p.contracts.map(c => c.id === id ? result : c) }));
+  }, [runMutation]);
+
+  const addInvoice = useCallback(async (i: Invoice) => {
+    const result = await runMutation('ADD_INVOICE', i);
+    setState(p => ({ ...p, invoices: [...p.invoices, result] }));
+  }, [runMutation]);
+
+  const updateInvoice = useCallback(async (id: string, updates: Partial<Invoice>) => {
+    const result = await runMutation('UPDATE_INVOICE', { id, updates });
+    setState(p => ({ ...p, invoices: p.invoices.map(i => i.id === id ? result : i) }));
+  }, [runMutation]);
+
+  const addBlanket = useCallback(async (b: BlanketPO) => {
+    const result = await runMutation('ADD_BLANKET', b);
+    setState(p => ({ ...p, blanketPOs: [...p.blanketPOs, result] }));
+  }, [runMutation]);
+
+  const updateBlanket = useCallback(async (id: string, updates: Partial<BlanketPO>) => {
+    const result = await runMutation('UPDATE_BLANKET', { id, updates });
+    setState(p => ({ ...p, blanketPOs: p.blanketPOs.map(b => b.id === id ? result : b) }));
+  }, [runMutation]);
+
+  // ── Notifications ────────────────────────────────────────
+  const addNotification = useCallback(async (n: Omit<AppNotification, 'id' | 'timestamp' | 'read'>) => {
+    const result = await runMutation('ADD_NOTIFICATION', n);
+    setState(p => ({ ...p, notifications: [result, ...p.notifications] }));
+  }, [runMutation]);
+
+  const markNotificationRead = useCallback(async (id: string) => {
+    const result = await runMutation('MARK_NOTIFICATION_READ', { id });
+    setState(p => ({ ...p, notifications: p.notifications.map(n => n.id === id ? result : n) }));
+  }, [runMutation]);
+
+  const markAllNotificationsRead = useCallback(async () => {
+    await runMutation('MARK_ALL_NOTIFICATIONS_READ', {});
+    setState(p => ({ ...p, notifications: p.notifications.map(n => ({ ...n, read: true })) }));
+  }, [runMutation]);
+
+  const toggleNotificationRule = useCallback(async (id: string) => {
+    const result = await runMutation('TOGGLE_NOTIFICATION_RULE', { id });
+    setState(p => ({ ...p, notificationRules: p.notificationRules.map(r => r.id === id ? result : r) }));
+  }, [runMutation]);
+
+  // ── Supplier Portal Actions ──────────────────────────────
+  const submitInvoice = useCallback(async (invoiceData: Omit<Invoice, 'id' | 'matchStatus' | 'status'>) => {
+    const result = await runMutation('SUBMIT_INVOICE', invoiceData);
+    setState(p => ({ ...p, invoices: [result, ...p.invoices] }));
+  }, [runMutation]);
+
+  const disputeGRN = useCallback(async (disputeData: Omit<GRNDispute, 'id' | 'timestamp' | 'status'>) => {
+    const result = await runMutation('DISPUTE_GRN', disputeData);
+    setState(p => ({ ...p, disputes: [result, ...p.disputes] }));
+  }, [runMutation]);
+
+  const uploadComplianceDoc = useCallback(async (docData: Omit<ComplianceDocument, 'id' | 'uploadedAt' | 'status'>) => {
+    const result = await runMutation('UPLOAD_COMPLIANCE_DOC', docData);
+    setState(p => ({ ...p, complianceDocs: [result, ...p.complianceDocs] }));
+  }, [runMutation]);
+
+  const sendPOMessage = useCallback(async (msg: Omit<POMessage, 'id' | 'timestamp'>) => {
+    const result = await runMutation('SEND_PO_MESSAGE', msg);
+    setState(p => ({ ...p, poMessages: [...p.poMessages, result] }));
+  }, [runMutation]);
+
+  const requestEarlyPayment = useCallback(async (invoiceId: string, discountPct: number) => {
+    const result = await runMutation('REQUEST_EARLY_PAYMENT', { invoiceId, discountPct });
+    setState(p => ({ ...p, invoices: p.invoices.map(inv => inv.id === invoiceId ? result : inv) }));
+  }, [runMutation]);
+
+  const addProduct = useCallback(async (product: Omit<ProductLibraryItem, 'id'>) => {
+    const result = await runMutation('ADD_PRODUCT', product);
+    setState(p => ({ ...p, products: [...p.products, result] }));
+  }, [runMutation]);
+
+  // ── Audit logs ───────────────────────────────────────────
+  const logAudit = useCallback(async (log: Omit<AuditLogEntry, 'id' | 'timestamp' | 'actorId' | 'actorName'>) => {
+    const result = await runMutation('LOG_AUDIT', log);
+    setState(p => ({ ...p, auditLogs: [result, ...p.auditLogs] }));
+  }, [runMutation]);
+
+  // ── PO Multi-step Approvals ──────────────────────────────
+  const processApprovalStep = useCallback(async (poId: string, stepIndex: number, status: 'Approved' | 'Rejected', comments?: string) => {
+    const result = await runMutation('PROCESS_APPROVAL_STEP', { poId, stepIndex, status, comments });
+    setState(p => ({ ...p, purchaseOrders: p.purchaseOrders.map(po => po.id === poId ? result : po) }));
+  }, [runMutation]);
+
+  // ── 3-Way Match Algorithm trigger ────────────────────────
+  const performMatch = useCallback((poId: string): MatchStatus => {
+    // Perform match is triggered instantly via client and updated.
+    // Use pendingMatches cache to prevent duplicate requests during re-renders.
+    if (pendingMatches.current[poId]) {
+      return 'Pending';
+    }
+    pendingMatches.current[poId] = true;
+    runMutation('PERFORM_MATCH', { poId })
+      .then(() => {
+        initData(authToken || '', tenantId);
+      })
+      .finally(() => {
+        delete pendingMatches.current[poId];
+      });
+    return 'Pending';
+  }, [runMutation, initData, authToken, tenantId]);
+
+  // ── Navigation & Selection Actions ────────────────────────
+  const setActivePage = useCallback((page: string) => setState(p => ({ ...p, activePage: page, selectedItemId: null, selectedSupplierId: null, selectedPOId: null, selectedRFQId: null, selectedGRNId: null })), []);
+  const setSelectedItemId = useCallback((id: string | null) => setState(p => ({ ...p, selectedItemId: id })), []);
+  const setSelectedSupplierId = useCallback((id: string | null) => setState(p => ({ ...p, selectedSupplierId: id })), []);
+  const setSelectedPOId = useCallback((id: string | null) => setState(p => ({ ...p, selectedPOId: id })), []);
+  const setSelectedRFQId = useCallback((id: string | null) => setState(p => ({ ...p, selectedRFQId: id })), []);
+  const setSelectedGRNId = useCallback((id: string | null) => setState(p => ({ ...p, selectedGRNId: id })), []);
+  const setSelectedAssetId = useCallback((id: string | null) => setState(p => ({ ...p, selectedAssetId: id })), []);
+  const setSelectedBlanketId = useCallback((id: string | null) => setState(p => ({ ...p, selectedBlanketId: id })), []);
+  const setSelectedQuotationId = useCallback((id: string | null) => setState(p => ({ ...p, selectedQuotationId: id })), []);
+  const setFabOpen = useCallback((open: boolean) => setState(p => ({ ...p, fabOpen: open })), []);
+  const setModalOpen = useCallback((modal: string | null) => setState(p => ({ ...p, modalOpen: modal, fabOpen: false })), []);
+  const toggleDarkMode = useCallback(() => setState(p => ({ ...p, darkMode: !p.darkMode })), []);
+  const setSupplierPortal = useCallback((val: boolean) => setState(p => ({ ...p, isSupplierPortal: val })), []);
+  const setGlobalSearchQuery = useCallback((q: string) => setState(p => ({ ...p, globalSearchQuery: q })), []);
+  const setMobileSidebarOpen = useCallback((open: boolean) => setState(p => ({ ...p, isMobileSidebarOpen: open })), []);
+
+  // ── Lookups ──────────────────────────────────────────────
+  const getSupplierById = useCallback((id: string) => state.suppliers.find(s => s.id === id), [state.suppliers]);
+  const getItemById = useCallback((id: string) => state.items.find(i => i.id === id), [state.items]);
+  const getPOById = useCallback((id: string) => state.purchaseOrders.find(po => po.id === id), [state.purchaseOrders]);
+  const getRFQById = useCallback((id: string) => state.rfqs.find(r => r.id === id), [state.rfqs]);
   const getStockByItemId = useCallback((itemId: string) => state.stockItems.find(s => s.itemId === itemId), [state.stockItems]);
-  const sendPOMessage = useCallback((msg: Omit<POMessage, 'id' | 'timestamp'>) => {
-    setState(p => ({
-      ...p,
-      poMessages: [...p.poMessages, { ...msg, id: `MSG-${Date.now()}`, timestamp: new Date().toISOString() }]
-    }));
-  }, []);
-
-  const updateSupplierProfile = useCallback((id: string, updates: Partial<Supplier>) => {
-    setState(p => ({
-      ...p,
-      suppliers: p.suppliers.map(s => s.id === id ? { ...s, ...updates } : s)
-    }));
-  }, []);
-
-  const requestEarlyPayment = useCallback((invoiceId: string, discountPct: number) => {
-    setState(p => ({
-      ...p,
-      invoices: p.invoices.map(inv => inv.id === invoiceId ? { ...inv, status: 'Processing' as any, matchStatus: `Early Pay (${discountPct}%)` as any } : inv)
-    }));
-    logAudit({ entityType: 'Invoice', entityId: invoiceId, action: 'Payment', description: `Early payment requested with ${discountPct}% discount.` });
-  }, [logAudit]);
-
-  const addSupplierContact = useCallback((supplierId: string, contact: { name: string; role: string; email: string }) => {
-    setState(p => ({
-      ...p,
-      suppliers: p.suppliers.map(s => s.id === supplierId ? { 
-        ...s, 
-        contactList: [...(s.contactList || []), { ...contact, id: `CON-${Date.now()}` }] 
-      } : s)
-    }));
-  }, []);
-
-  const addProduct = useCallback((product: Omit<ProductLibraryItem, 'id'>) => {
-    setState(p => ({
-      ...p,
-      products: [...p.products, { ...product, id: `PRD-${Date.now()}` }]
-    }));
-  }, []);
 
   return (
     <AppContext.Provider value={{
@@ -836,7 +878,6 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addAsset, updateAssetStatus, addAssetCategory, logMaintenance, calculateCurrentAssetValue,
       getSupplierById, getItemById, getPOById, getRFQById, getStockByItemId,
       setSelectedAssetId, setSelectedQuotationId,
-      // Roadmap Extensions
       addBudget, updateBudget, addContract, updateContract, addInvoice, updateInvoice,
       logAudit, processApprovalStep, performMatch,
       addBlanket, updateBlanket, setSelectedBlanketId,

@@ -42,24 +42,18 @@ export default function LoginPage() {
     await new Promise(r => setTimeout(r, 600));
     
     if (loginType === 'internal') {
-      const ok = login(email, password);
+      const res = await login(email, password);
       setLoading(false);
-      if (!ok) setError('Invalid email or password. Try a demo account below.');
-    } else {
-      // Check if supplier is pending
-      const targetSupplier = suppliers.find(s => s.id === supplierId);
-      if (targetSupplier && targetSupplier.status === 'Pending Approval') {
-        setError('Your registration is currently under review by the procurement team. Please check back later.');
-        setLoading(false);
-        return;
+      if (!res.success) {
+        setError(res.error || 'Invalid email or password. Try a demo account below.');
       }
-
-      const ok = supplierLogin(supplierId, password);
+    } else {
+      const res = await supplierLogin(supplierId, password);
       setLoading(false);
-      if (ok) {
+      if (res.success) {
         router.push('/portal');
       } else {
-        setError('Invalid Supplier ID or password. Use SUP-001 / supplier123 for demo.');
+        setError(res.error || 'Invalid Supplier ID or password. Use SUP-001 / supplier123 for demo.');
       }
     }
   };
