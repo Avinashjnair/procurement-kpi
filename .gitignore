@@ -46,3 +46,7 @@ next-env.d.ts
 *.db-journal
 *.db-shm
 *.db-wal
+
+# IDE / AI Agent rules files
+AGENTS.md
+CLAUDE.md
