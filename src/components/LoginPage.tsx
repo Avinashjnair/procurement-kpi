@@ -5,9 +5,9 @@ import { useApp } from '@/context/AppContext';
 import { Lock, Mail, Eye, EyeOff, ChevronRight, ShieldCheck, Globe } from 'lucide-react';
 
 const DEMO_ACCOUNTS = [
-  { email: 'aisha@procureiq.ae', password: 'manager123',  label: 'Manager — Full Access',            role: 'manager',  initials: 'AA', color: '#b1cad7' },
-  { email: 'james@procureiq.ae', password: 'engineer123', label: 'Engineer — Limited Access',        role: 'engineer', initials: 'JO', color: '#7c94a0' },
-  { email: 'fatima@procureiq.ae',password: 'finance123',  label: 'Finance & Accounts — Payments',   role: 'finance',  initials: 'FZ', color: '#e9c176' },
+  { email: 'aisha@procurebuddy.ae', password: 'manager123',  label: 'Manager — Full Access',            role: 'manager',  initials: 'AA', color: '#b1cad7' },
+  { email: 'james@procurebuddy.ae', password: 'engineer123', label: 'Engineer — Limited Access',        role: 'engineer', initials: 'JO', color: '#7c94a0' },
+  { email: 'fatima@procurebuddy.ae',password: 'finance123',  label: 'Finance & Accounts — Payments',   role: 'finance',  initials: 'FZ', color: '#e9c176' },
 ];
 
 const ROLE_LABELS: Record<string, string> = {

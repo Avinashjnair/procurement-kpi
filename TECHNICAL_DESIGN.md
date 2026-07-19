@@ -1,6 +1,6 @@
 # TECHNICAL_DESIGN.md
 
-# ProcureIQ — Detailed Technical Specification
+# ProcureBuddy — Detailed Technical Specification
 
 **Version:** 2.0
 **Date:** 2026-06-23
@@ -27,7 +27,7 @@
 
 ## 1\. System Overview
 
-ProcureIQ is an end-to-end procurement management platform designed for industrial companies with complex procurement cycles. It manages the complete lifecycle from demand creation through to payment settlement, including supplier management, tendering, goods receipt, and financial reconciliation.
+ProcureBuddy is an end-to-end procurement management platform designed for industrial companies with complex procurement cycles. It manages the complete lifecycle from demand creation through to payment settlement, including supplier management, tendering, goods receipt, and financial reconciliation.
 
 ### Core Procurement Flow
 

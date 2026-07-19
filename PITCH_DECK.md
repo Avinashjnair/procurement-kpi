@@ -1,18 +1,18 @@
-# 🚀 ProcureIQ Pitch Deck: Slide-by-Slide Presentation Structure
+# 🚀 ProcureBuddy Pitch Deck: Slide-by-Slide Presentation Structure
 
-This guide outlines a professional, high-impact presentation structure you can use to pitch **ProcureIQ** to manufacturing and engineering firms (like Crystal Engineering). 
+This guide outlines a professional, high-impact presentation structure you can use to pitch **ProcureBuddy** to manufacturing and engineering firms (like Crystal Engineering). 
 
 Each slide includes a **Visual Suggestion**, **Key Points**, and a **Delivery Script** you can read or adapt.
 
 ---
 
 ## Slide 1: Title Slide
-* **Visual**: Clean, premium dark background with the ProcureIQ logo, dynamic lines connecting a factory icon to a supplier icon.
-* **Heading**: **ProcureIQ**
+* **Visual**: Clean, premium dark background with the ProcureBuddy logo, dynamic lines connecting a factory icon to a supplier icon.
+* **Heading**: **ProcureBuddy**
 * **Sub-heading**: Next-Generation Multi-Tenant Procurement & Vendor Portal
 * **Presenter Info**: *[Your Name]*
 * **Script**:
-  > "Good morning, everyone. Today, I want to show you how we can transform one of the most critical yet friction-heavy operations in your business: procurement. This is ProcureIQ, a collaborative platform designed to seamlessly connect your internal engineering, management, and finance teams directly with your external vendors in real time."
+  > "Good morning, everyone. Today, I want to show you how we can transform one of the most critical yet friction-heavy operations in your business: procurement. This is ProcureBuddy, a collaborative platform designed to seamlessly connect your internal engineering, management, and finance teams directly with your external vendors in real time."
 
 ---
 
@@ -29,7 +29,7 @@ Each slide includes a **Visual Suggestion**, **Key Points**, and a **Delivery Sc
 
 ---
 
-## Slide 3: The Solution — ProcureIQ
+## Slide 3: The Solution — ProcureBuddy
 * **Visual**: A central hub diagram showing the Buyer Portal (Internal) and the Vendor Portal (External) syncing in a closed loop.
 * **Heading**: Centralized, Real-Time Collaboration
 * **Key Bullet Points**:
@@ -38,7 +38,7 @@ Each slide includes a **Visual Suggestion**, **Key Points**, and a **Delivery Sc
   * **Auto-Pilot Operations**: Automated 3-way matching and instant stock alerts.
   * **Private Cloud Isolation**: Physical database-per-tenant security to guarantee your company's data is 100% private.
 * **Script**:
-  > "ProcureIQ solves this by creating a single, collaborative digital bridge. Your internal teams get dedicated workspaces tailored to their jobs, while your suppliers log into a secure self-service portal to receive POs, bid on quotes, and submit invoices. Every action updates the shared database instantly, replacing hundreds of emails with clean, automated workflows."
+  > "ProcureBuddy solves this by creating a single, collaborative digital bridge. Your internal teams get dedicated workspaces tailored to their jobs, while your suppliers log into a secure self-service portal to receive POs, bid on quotes, and submit invoices. Every action updates the shared database instantly, replacing hundreds of emails with clean, automated workflows."
 
 ---
 
@@ -56,7 +56,7 @@ Each slide includes a **Visual Suggestion**, **Key Points**, and a **Delivery Sc
 ---
 
 ## Slide 5: The Strategic Power of Live Analytics
-* **Visual**: Screenshot of the ProcureIQ Operational Dashboard (monthly spend charts, supplier scorecard, and spend health gauge).
+* **Visual**: Screenshot of the ProcureBuddy Operational Dashboard (monthly spend charts, supplier scorecard, and spend health gauge).
 * **Heading**: Data-Driven Purchasing
 * **Key Bullet Points**:
   * **Live Spend Breakdown**: Track where every dollar goes by project, department, or item category.
@@ -64,7 +64,7 @@ Each slide includes a **Visual Suggestion**, **Key Points**, and a **Delivery Sc
   * **Budget Health**: Real-time progress bars showing committed vs. spent amounts.
   * **Emergency Alerts**: Immediate warning if express/urgent order ratios spike.
 * **Script**:
-  > "With ProcureIQ, you are not just executing orders; you are collecting intelligence. The executive dashboard shows exactly where money is being spent. The live Supplier Scorecard ranks your vendors on price stability and delivery speed, letting you negotiate better contracts and eliminate high-risk suppliers before they cause delays."
+  > "With ProcureBuddy, you are not just executing orders; you are collecting intelligence. The executive dashboard shows exactly where money is being spent. The live Supplier Scorecard ranks your vendors on price stability and delivery speed, letting you negotiate better contracts and eliminate high-risk suppliers before they cause delays."
 
 ---
 
@@ -76,7 +76,7 @@ Each slide includes a **Visual Suggestion**, **Key Points**, and a **Delivery Sc
   * **Zero Leak Risk**: No shared rows or database cross-talk; your trade secrets, pricing agreements, and contracts are physically separated.
   * **Flexible Deployment**: Easily hosted locally in your factory, on a private server, or in a secure AWS cloud account.
 * **Script**:
-  > "One of the key security features of ProcureIQ is its physical database isolation. Unlike generic software where everyone's data is mixed together, we set up a dedicated database file for your company. This guarantees that your proprietary pricing, supplier lists, and financial records are physically separated and cannot leak to anyone else."
+  > "One of the key security features of ProcureBuddy is its physical database isolation. Unlike generic software where everyone's data is mixed together, we set up a dedicated database file for your company. This guarantees that your proprietary pricing, supplier lists, and financial records are physically separated and cannot leak to anyone else."
 
 ---
 

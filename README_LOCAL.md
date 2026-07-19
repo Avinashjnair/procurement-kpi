@@ -1,6 +1,6 @@
-# ProcureIQ — Local Setup & Verification Guide
+# ProcureBuddy — Local Setup & Verification Guide
 
-This guide is designed for developers setting up the ProcureIQ application on their local machine for the first time. Follow these steps to install dependencies, initialize the multi-tenant databases, and verify the backend functionality.
+This guide is designed for developers setting up the ProcureBuddy application on their local machine for the first time. Follow these steps to install dependencies, initialize the multi-tenant databases, and verify the backend functionality.
 
 ---
 
@@ -66,7 +66,7 @@ Open your browser and navigate to: **`http://localhost:3000`**
 
 ### Test 1: Internal User Authentication & Multi-Tenancy Isolation
 1. Go to the login screen at `http://localhost:3000`.
-2. Click **Manager — Full Access** to automatically fill credentials for Aisha Al-Mansoori (`aisha@procureiq.ae`). Log in.
+2. Click **Manager — Full Access** to automatically fill credentials for Aisha Al-Mansoori (`aisha@procurebuddy.ae`). Log in.
 3. You are resolved to the `steelmax` database. Go to **Materials & Services** and click **Add New Item** (top-right FAB button). Register an item (e.g., Name: `Testing Pipe`, Category: `Piping`, Price: `150`).
 4. Click **Sign Out** in the sidebar.
 5. Log in using the **Finance Analyst** demo credentials (`finance@eurochem.com`). This resolves you to the `eurochem` database tenant.
@@ -74,7 +74,7 @@ Open your browser and navigate to: **`http://localhost:3000`**
 7. Sign out, log back in as Aisha, and confirm the item exists, verifying data persistence.
 
 ### Test 2: 3-Way Match Verification
-1. Log in as Aisha Al-Mansoori (`aisha@procureiq.ae`).
+1. Log in as Aisha Al-Mansoori (`aisha@procurebuddy.ae`).
 2. Go to **Invoices**. Note down an invoice status (e.g., `Pending`).
 3. Create a new Invoice matching a Purchase Order's total, or approve the corresponding Goods Receipt Note (GRN) in the **Goods Receipt** module.
 4. Refresh/visit the **Invoices** page. Notice that the match status updates automatically to `Full Match` or `Variance` in real-time, verifying that the database triggers automatic match calculations.
