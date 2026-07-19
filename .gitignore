@@ -50,3 +50,8 @@ next-env.d.ts
 # IDE / AI Agent rules files
 AGENTS.md
 CLAUDE.md
+
+# Deployment artifacts & tiers doc
+feature_tier_breakdown.docx
+procurebuddy-stg.zip
+procurebuddy-prod.zip
