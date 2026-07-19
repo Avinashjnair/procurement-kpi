@@ -97,7 +97,7 @@ export default function LoginPage() {
           <div style={{ width: 56, height: 56, borderRadius: 16, background: 'var(--gradient-primary)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 26, marginBottom: 14, boxShadow: 'var(--shadow-glow)' }}>
             📊
           </div>
-          <h1 style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.8px', margin: '0 0 6px' }}>ProcureIQ</h1>
+          <h1 style={{ fontSize: 28, fontWeight: 800, color: 'var(--text-primary)', letterSpacing: '-0.8px', margin: '0 0 6px' }}>ProcureBuddy</h1>
           <p style={{ color: 'var(--text-muted)', fontSize: 14, margin: 0 }}>Procurement Management Platform</p>
         </div>
 
@@ -130,7 +130,7 @@ export default function LoginPage() {
                 <label className="form-label">Email address</label>
                 <div style={{ position: 'relative' }}>
                   <Mail size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                  <input type="email" className="form-input" placeholder="you@procureiq.ae"
+                  <input type="email" className="form-input" placeholder="you@procurebuddy.ae"
                     value={email} onChange={e => setEmail(e.target.value)}
                     required style={{ paddingLeft: 36 }} />
                 </div>
@@ -186,7 +186,7 @@ export default function LoginPage() {
 
           {loginType === 'supplier' && (
             <div style={{ marginTop: 24, textAlign: 'center', paddingTop: 20, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-              <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>New Partner? Join ProcureIQ ecosystem</p>
+              <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>New Partner? Join ProcureBuddy ecosystem</p>
               <button 
                 onClick={() => setShowRegistration(true)}
                 style={{ width: '100%', padding: '10px', borderRadius: 10, background: 'rgba(59,130,246,0.1)', border: '1px solid rgba(59,130,246,0.2)', color: '#60a5fa', fontSize: 12, fontWeight: 700, cursor: 'pointer', transition: 'all 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}

@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 import { NextRequest } from 'next/server';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'secret-procureiq-stealth-key';
+const JWT_SECRET = process.env.JWT_SECRET || 'secret-procurebuddy-stealth-key';
 const JWT_EXPIRY = parseInt(process.env.JWT_EXPIRY || '28800'); // 8 hours in seconds
 
 export interface TokenPayload {

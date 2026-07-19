@@ -84,7 +84,7 @@ export default function Sidebar() {
         <div className="sidebar-header">
           <div className="sidebar-logo">
             <div className="sidebar-logo-icon" style={{ background: 'var(--gradient-primary)' }}>📊</div>
-            <div><h1>ProcureIQ</h1><span>Stealth OS</span></div>
+            <div><h1>ProcureBuddy</h1><span>Stealth OS</span></div>
           </div>
         </div>
 

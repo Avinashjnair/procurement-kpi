@@ -264,8 +264,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   // ── Session Initialization ───────────────────────────────────
   useEffect(() => {
-    const savedToken = localStorage.getItem('procureiq_token');
-    const savedTenant = localStorage.getItem('procureiq_tenant_id') || 'steelmax';
+    const savedToken = localStorage.getItem('procurebuddy_token');
+    const savedTenant = localStorage.getItem('procurebuddy_tenant_id') || 'steelmax';
 
     if (savedToken) {
       setAuthToken(savedToken);
@@ -299,8 +299,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
           initData(savedToken, savedTenant);
         } else {
           // Token expired or invalid
-          localStorage.removeItem('procureiq_token');
-          localStorage.removeItem('procureiq_tenant_id');
+          localStorage.removeItem('procurebuddy_token');
+          localStorage.removeItem('procurebuddy_tenant_id');
           setAuthToken(null);
         }
       })
@@ -328,8 +328,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (res.ok) {
         const { token, user } = await res.json();
         
-        localStorage.setItem('procureiq_token', token);
-        localStorage.setItem('procureiq_tenant_id', resolvedTenant);
+        localStorage.setItem('procurebuddy_token', token);
+        localStorage.setItem('procurebuddy_tenant_id', resolvedTenant);
         
         setAuthToken(token);
         setTenantId(resolvedTenant);
@@ -366,8 +366,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
       if (res.ok) {
         const { token, supplier } = await res.json();
         
-        localStorage.setItem('procureiq_token', token);
-        localStorage.setItem('procureiq_tenant_id', resolvedTenant);
+        localStorage.setItem('procurebuddy_token', token);
+        localStorage.setItem('procurebuddy_tenant_id', resolvedTenant);
         
         setAuthToken(token);
         setTenantId(resolvedTenant);
@@ -387,8 +387,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [initData]);
 
   const logout = useCallback(() => {
-    localStorage.removeItem('procureiq_token');
-    localStorage.removeItem('procureiq_tenant_id');
+    localStorage.removeItem('procurebuddy_token');
+    localStorage.removeItem('procurebuddy_tenant_id');
     setAuthToken(null);
     setState(p => ({
       ...p,

@@ -49,7 +49,7 @@ export default function SupplierLoginView() {
             <Globe className="text-blue-400" size={32} />
           </div>
           <h1 className="text-3xl font-bold tracking-tight mb-2 text-white">Vendor Portal</h1>
-          <p className="text-gray-400 text-sm">Secure access for ProcureIQ Valued Partners</p>
+          <p className="text-gray-400 text-sm">Secure access for ProcureBuddy Valued Partners</p>
         </div>
 
         <div className="bg-[#111319]/80 backdrop-blur-xl border border-white/10 p-8 rounded-3xl shadow-2xl">
@@ -139,7 +139,7 @@ export default function SupplierLoginView() {
 
         <div className="text-center mt-8">
           <p className="text-gray-500 text-xs tracking-wide uppercase">
-            Powering Global Supply Chains with <span className="text-blue-400 font-bold">ProcureIQ</span>
+            Powering Global Supply Chains with <span className="text-blue-400 font-bold">ProcureBuddy</span>
           </p>
         </div>
       </div>

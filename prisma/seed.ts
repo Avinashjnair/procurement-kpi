@@ -555,6 +555,40 @@ async function main() {
     const tenantPath = path.join(dbDir, `company_${tenant}.db`);
     console.log(`Cloning default template to tenant: ${tenantPath}`);
     fs.copyFileSync(defaultPath, tenantPath);
+
+    // Customize the CompanyProfile specifically for each tenant database
+    const adapter = new PrismaBetterSqlite3({
+      url: `file:${tenantPath}`,
+    });
+    const tenantPrisma = new PrismaClient({ adapter });
+
+    try {
+      if (tenant === 'steelmax') {
+        await tenantPrisma.companyProfile.updateMany({
+          data: {
+            name: 'SteelMax Industries LLC',
+            email: 'procurement@steelmax.ae',
+            phone: '+971 4 555 1234',
+            taxRegNumber: 'TRN-100234567800003',
+          },
+        });
+      } else if (tenant === 'eurochem') {
+        await tenantPrisma.companyProfile.updateMany({
+          data: {
+            name: 'EuroChem Chemicals LLC',
+            address: 'P.O. Box 98765, Ruwais Industrial Complex, Abu Dhabi, UAE',
+            email: 'procurement@eurochem.ae',
+            phone: '+971 2 555 9900',
+            taxRegNumber: 'TRN-100456789000005',
+          },
+        });
+      }
+      console.log(`- Configured company profile for tenant: ${tenant}`);
+    } catch (err) {
+      console.error(`Failed to configure company profile for ${tenant}:`, err);
+    } finally {
+      await tenantPrisma.$disconnect();
+    }
   }
 
   console.log('Seeding completed successfully!');

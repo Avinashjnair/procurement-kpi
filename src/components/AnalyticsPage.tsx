@@ -102,7 +102,7 @@ export default function AnalyticsPage() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
     link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `ProcureIQ_Analytics_Export_${new Date().toISOString().split('T')[0]}.csv`);
+    link.setAttribute("download", `ProcureBuddy_Analytics_Export_${new Date().toISOString().split('T')[0]}.csv`);
     document.body.appendChild(link);
     link.click();
   };
