@@ -313,8 +313,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Auth logins
   const login = useCallback(async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      // Determine tenant dynamically based on email domain to avoid manual configuration
-      const resolvedTenant = email.toLowerCase().includes('@eurochem') ? 'eurochem' : 'steelmax';
+      const resolvedTenant = 'veltrix';
       
       const res = await fetch('/api/auth/login', {
         method: 'POST',
@@ -351,8 +350,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const supplierLogin = useCallback(async (supplierId: string, passwordHash: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      // Route SUP-003 to EuroChem tenant, others to SteelMax
-      const resolvedTenant = supplierId.toUpperCase().trim() === 'SUP-003' ? 'eurochem' : 'steelmax';
+      const resolvedTenant = 'veltrix';
 
       const res = await fetch('/api/auth/supplier-login', {
         method: 'POST',

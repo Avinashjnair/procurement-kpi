@@ -5,9 +5,7 @@ import { useApp } from '@/context/AppContext';
 import { Lock, Mail, Eye, EyeOff, ChevronRight, ShieldCheck, Globe } from 'lucide-react';
 
 const DEMO_ACCOUNTS = [
-  { email: 'aisha@procurebuddy.ae', password: 'manager123',  label: 'Manager — Full Access',            role: 'manager',  initials: 'AA', color: '#b1cad7' },
-  { email: 'james@procurebuddy.ae', password: 'engineer123', label: 'Engineer — Limited Access',        role: 'engineer', initials: 'JO', color: '#7c94a0' },
-  { email: 'fatima@eurochem.ae',    password: 'finance123',  label: 'Finance & Accounts — Payments',   role: 'finance',  initials: 'FZ', color: '#e9c176' },
+  { email: 'admin@veltrixlabs.in', password: 'admin123',  label: 'Veltrix Test Client (Manager)',   role: 'manager',  initials: 'VT', color: '#b1cad7' },
 ];
 
 const ROLE_LABELS: Record<string, string> = {
@@ -80,7 +78,7 @@ export default function LoginPage() {
   const fillSupplierDemo = () => {
     setLoginType('supplier');
     setSupplierId('SUP-001');
-    setPassword('supplier123');
+    setPassword('vendor123');
     setError('');
   };
 
@@ -227,10 +225,10 @@ export default function LoginPage() {
               <button onClick={fillSupplierDemo}
                 style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 12, border: '1px solid rgba(59,130,246,0.3)', background: 'rgba(59,130,246,0.05)', cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s', width: '100%', fontFamily: 'inherit' }}>
                 <div style={{ width: 38, height: 38, borderRadius: 10, background: 'rgba(59,130,246,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: '#60a5fa', flexShrink: 0 }}>
-                  SM
+                  VV
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>SteelMax Industries (Vendor)</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Veltrix Test Vendor (Portal)</div>
                   <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>Access the standalone supplier self-service portal</div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 6, background: 'rgba(59,130,246,0.1)', color: '#60a5fa', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
