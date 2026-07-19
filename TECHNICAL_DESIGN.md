@@ -1362,6 +1362,25 @@ The current app stores the serialised user object in `localStorage.procureiq_use
 ### 7.3 Supplier Portal Scoping
 
 Supplier sessions (`type: 'supplier'`) may only access `/portal/*` endpoints. All portal queries are automatically scoped by `supplierId` from the JWT — a supplier cannot read another supplier's data. Enforce this at the API middleware level, not in application logic.
+
+### 7.4 Subscription Tier Gating
+
+To support multi-tenant SaaS commercial packaging, features are gated by the tenant's subscription tier (`CompanyProfile.subscriptionTier` field, which stores `'essential' | 'professional' | 'enterprise'`). 
+
+Feature access is checked hierarchically (Essential = 1, Professional = 2, Enterprise = 3):
+
+1. **Essential Tier**:
+   * Access to: Supplier Database, POs & Goods Receipt, 3-Way Invoice Matching, Basic Dashboard Metrics, Documents.
+   * Locked: RFQs & Tendering, Budget Control, Inventory Management, Advanced Analytics, Contracts, Fixed Assets, Multi-Currency FX Rates, Audit Logs, Supplier Portal, Advanced Multi-Tier Approvals.
+2. **Professional Tier**:
+   * Adds: RFQs & Tendering, Budget Control, Inventory Management, Advanced Analytics (Spend trends, cycle time, savings).
+   * Locked: Contracts, Fixed Assets, Multi-Currency FX Rates, Audit Logs, Supplier Portal, Advanced Multi-Tier Approvals.
+3. **Enterprise Tier**:
+   * Adds: Contracts, Fixed Assets, Multi-Currency FX Rates, Audit Logs, Supplier Portal, Advanced Multi-Tier Approvals.
+
+Gating is enforced at two levels:
+* **API Mutation Gate**: The server checks the client's tenant subscription tier inside `/api/data/mutate` and rejects higher-tier actions with `HTTP 403 Forbidden`.
+* **Frontend Navigation & UI Gate**: The sidebar links and dashboard widgets are filtered dynamically based on the current tenant's active `subscriptionTier`.
 * * *
 
 ## 8\. Workflow State Machines

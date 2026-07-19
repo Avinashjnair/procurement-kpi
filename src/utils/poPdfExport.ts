@@ -22,6 +22,7 @@ const DEFAULT_COMPANY: CompanyProfile = {
   logoUrl: '',
   currency: 'USD',
   country: '',
+  subscriptionTier: 'essential',
 };
 
 // Dynamically load jsPDF from CDN (no npm install needed)

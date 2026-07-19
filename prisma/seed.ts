@@ -114,7 +114,6 @@ async function seedDatabase(dbFilePath: string) {
       await prisma.assetCategory.create({ data: ac });
     }
 
-    // Seed Company Profile — one per tenant database
     await prisma.companyProfile.create({
       data: {
         id: 'company-profile-1',
@@ -126,6 +125,7 @@ async function seedDatabase(dbFilePath: string) {
         logoUrl: '',
         currency: 'USD',
         country: 'UAE',
+        subscriptionTier: 'enterprise',
       },
     });
     console.log('- Seeded company profile');
@@ -570,6 +570,7 @@ async function main() {
             email: 'procurement@steelmax.ae',
             phone: '+971 4 555 1234',
             taxRegNumber: 'TRN-100234567800003',
+            subscriptionTier: 'professional',
           },
         });
       } else if (tenant === 'eurochem') {
@@ -580,8 +581,18 @@ async function main() {
             email: 'procurement@eurochem.ae',
             phone: '+971 2 555 9900',
             taxRegNumber: 'TRN-100456789000005',
+            subscriptionTier: 'essential',
           },
         });
+        // Update user emails to match tenant domain
+        const dbUsers = await tenantPrisma.user.findMany();
+        for (const u of dbUsers) {
+          const newEmail = u.email.replace('@procurebuddy.ae', '@eurochem.ae');
+          await tenantPrisma.user.update({
+            where: { id: u.id },
+            data: { email: newEmail },
+          });
+        }
       }
       console.log(`- Configured company profile for tenant: ${tenant}`);
     } catch (err) {

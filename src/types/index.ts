@@ -75,6 +75,8 @@ export function can(user: User | null, permission: string): boolean {
 
 // ── Master Data ──────────────────────────────────────────────
 
+export type SubscriptionTier = 'essential' | 'professional' | 'enterprise';
+
 // Company / Tenant Profile (stored in DB, one row per tenant)
 export interface CompanyProfile {
   id: string;
@@ -86,6 +88,7 @@ export interface CompanyProfile {
   logoUrl: string;
   currency: string;
   country: string;
+  subscriptionTier: SubscriptionTier;
 }
 
 export interface SupplierNote {

@@ -14,26 +14,23 @@ One huge advantage of deploying on cPanel is that it uses a persistent local fil
 
 ## 🛠️ Step-by-Step Deployment
 
-### Step 1: Build the Code Locally
-Shared hosting servers on cPanel have CPU and RAM limits, meaning running a Next.js production build directly on the server will fail or get killed. You should build the app on your local machine first:
-1. Run the production build command in your terminal:
+### Step 1: Compile and Package the Code Locally
+Shared hosting servers on cPanel have CPU and RAM limits, meaning running a Next.js production build directly on the server will fail or get killed. You should build and zip the app on your local machine first:
+
+1. **For Staging**:
    ```bash
-   npm run build
+   npm run zip:stg
    ```
-2. This creates the production output directory named `.next`.
+2. **For Production**:
+   ```bash
+   npm run zip:prod
+   ```
+This automatically runs the Next.js production compiler and generates a deployment-ready archive (`procurebuddy-stg.zip` or `procurebuddy-prod.zip`) containing only the necessary runtime files (excluding `node_modules` and `.git`).
 
-### Step 2: Upload the Files to cPanel
-1. In cPanel, open **File Manager** and create a directory in your home directory (e.g., `/home/username/procurebuddy`).
-2. Compress and upload the following files/folders from your local project root into that folder:
-   * `.next/` (The compiled production build)
-   * `databases/` (Contains the sqlite databases)
-   * `prisma/` (Contains database migrations and schema)
-   * `public/` (Static assets like logos)
-   * `package.json` & `package-lock.json`
-   * `server.js` (The custom entry point start script for cPanel)
-   * `.env` (Create this file directly in cPanel using File Manager with your production credentials)
-
-*Note: Do not upload `node_modules` or `.git` folders.*
+### Step 2: Upload and Extract in cPanel
+1. In cPanel, open **File Manager** and create a directory in your home directory (e.g., `/home/username/procurebuddy-stg` or `/home/username/procurebuddy-prod`).
+2. Upload the generated `.zip` file from your local machine to that folder.
+3. Right-click the `.zip` file inside File Manager and click **Extract**.
 
 ### Step 3: Register the App in Application Manager
 1. In cPanel, click **Application Manager** (under the **Software** section).

@@ -15,6 +15,36 @@ export async function POST(req: Request) {
     }
 
     const db = getTenantDb(session.tenantId);
+    
+    // Fetch tenant subscription tier
+    const company = await db.companyProfile.findFirst();
+    const tier = company?.subscriptionTier || 'essential';
+
+    const PROFESSIONAL_ONLY_ACTIONS = [
+      'CREATE_RFQ', 'UPDATE_RFQ', 'DELETE_RFQ',
+      'CREATE_QUOTATION', 'UPDATE_QUOTATION',
+      'CREATE_BUDGET_ENVELOPE', 'UPDATE_BUDGET_ENVELOPE', 'DELETE_BUDGET_ENVELOPE',
+      'CREATE_STOCK_ITEM', 'UPDATE_STOCK_ITEM', 'CREATE_STOCK_MOVEMENT', 'RECORD_STOCK_MOVEMENT'
+    ];
+
+    const ENTERPRISE_ONLY_ACTIONS = [
+      'CREATE_CONTRACT', 'UPDATE_CONTRACT', 'DELETE_CONTRACT',
+      'CREATE_BLANKET_PO', 'UPDATE_BLANKET_PO', 'DELETE_BLANKET_PO',
+      'CREATE_ASSET', 'UPDATE_ASSET', 'DELETE_ASSET', 'ADD_ASSET',
+      'CREATE_FX_RATE', 'UPDATE_FX_RATE',
+      'CREATE_NOTIFICATION_RULE', 'UPDATE_NOTIFICATION_RULE'
+    ];
+
+    if (tier === 'essential') {
+      if (PROFESSIONAL_ONLY_ACTIONS.includes(action) || ENTERPRISE_ONLY_ACTIONS.includes(action)) {
+        return NextResponse.json({ error: `Upgrade required: The feature '${action}' is not available in the Essential tier.` }, { status: 403 });
+      }
+    } else if (tier === 'professional') {
+      if (ENTERPRISE_ONLY_ACTIONS.includes(action)) {
+        return NextResponse.json({ error: `Upgrade required: The feature '${action}' is not available in the Professional tier.` }, { status: 403 });
+      }
+    }
+
     let result: any = null;
 
     // Helper to log audit trail

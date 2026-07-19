@@ -198,7 +198,7 @@ function KPICard({
 }
 
 export default function DashboardPage() {
-  const { purchaseOrders, suppliers, budgets, setActivePage, setSelectedSupplierId, setSelectedPOId } = useApp();
+  const { purchaseOrders, suppliers, budgets, setActivePage, setSelectedSupplierId, setSelectedPOId, companyProfile } = useApp();
   const [dateRange, setDateRange] = useState<DateRange>('all');
   const [drillDown, setDrillDown] = useState<{ title: string, type: 'po' | 'supplier' | 'generic', data: any[] } | null>(null);
 
@@ -479,31 +479,46 @@ export default function DashboardPage() {
 
       {/* ── Row 1: Budget and Spend Focus ── */}
       <div className="grid-2" style={{ marginBottom: 28 }}>
-        <div className="card">
+        <div className="card" style={{ position: 'relative' }}>
           <div className="card-header">
             <div>
               <div className="card-title">Budget Utilization</div>
               <div className="card-subtitle">Tracking by department & project</div>
             </div>
-            <button className="btn btn-sm btn-secondary" onClick={() => setActivePage('budgets')}>Manage</button>
+            {companyProfile?.subscriptionTier !== 'essential' && (
+              <button className="btn btn-sm btn-secondary" onClick={() => setActivePage('budgets')}>Manage</button>
+            )}
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {budgets.slice(0, 3).map(b => {
-              const utilization = Math.round(((b.spentAmount + b.committedAmount) / b.totalAmount) * 100);
-              const statusColor = utilization >= 100 ? '#f43f5e' : utilization >= 80 ? '#f59e0b' : '#10b981';
-              return (
-                <div key={b.id}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: '#f1f5f9' }}>{b.name}</span>
-                    <span style={{ fontSize: 11, color: statusColor, fontWeight: 700 }}>{utilization}%</span>
+          {companyProfile?.subscriptionTier === 'essential' ? (
+            <div style={{ 
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', 
+              padding: '24px 12px', textAlign: 'center', gap: 8, height: 'calc(100% - 60px)', minHeight: 120 
+            }}>
+              <span style={{ fontSize: 18 }}>🔒</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>Premium Feature</span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', maxWidth: 220 }}>
+                Upgrade to Professional to unlock Budget Control and real-time utilization tracking.
+              </span>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {budgets.slice(0, 3).map(b => {
+                const utilization = Math.round(((b.spentAmount + b.committedAmount) / b.totalAmount) * 100);
+                const statusColor = utilization >= 100 ? '#f43f5e' : utilization >= 80 ? '#f59e0b' : '#10b981';
+                return (
+                  <div key={b.id}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: '#f1f5f9' }}>{b.name}</span>
+                      <span style={{ fontSize: 11, color: statusColor, fontWeight: 700 }}>{utilization}%</span>
+                    </div>
+                    <div style={{ height: 6, background: 'rgba(255,255,255,0.05)', borderRadius: 3, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${Math.min(utilization, 100)}%`, background: statusColor, borderRadius: 3 }} />
+                    </div>
                   </div>
-                  <div style={{ height: 6, background: 'rgba(255,255,255,0.05)', borderRadius: 3, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${Math.min(utilization, 100)}%`, background: statusColor, borderRadius: 3 }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         <div className="card">

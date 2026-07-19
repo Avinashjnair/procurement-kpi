@@ -9,7 +9,9 @@
     "lint": "eslint",
     "db:push": "prisma db push",
     "db:seed": "npx tsx prisma/seed.ts",
-    "db:setup": "npm run db:push && npm run db:seed"
+    "db:setup": "npm run db:push && npm run db:seed",
+    "zip:stg": "powershell -ExecutionPolicy Bypass -File ./build-deploy-zip.ps1 stg",
+    "zip:prod": "powershell -ExecutionPolicy Bypass -File ./build-deploy-zip.ps1 prod"
   },
   "dependencies": {
     "@prisma/adapter-better-sqlite3": "^7.8.0",
