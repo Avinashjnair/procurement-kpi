@@ -19,6 +19,11 @@ if [ -f "$ZIP_NAME" ]; then
   echo "Removed existing $ZIP_NAME"
 fi
 
+# Clean development cache folders from .next to keep the zip archive clean
+rm -rf .next/cache
+rm -rf .next/dev
+echo "Cleaned dev and cache folders from .next"
+
 # Zip folders and files (excluding node_modules, .git, etc.)
 zip -r "$ZIP_NAME" .next databases prisma public package.json package-lock.json server.js
 

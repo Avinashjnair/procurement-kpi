@@ -5,12 +5,15 @@ import { useApp } from '@/context/AppContext';
 import { Lock, Mail, Eye, EyeOff, ChevronRight, ShieldCheck, Globe } from 'lucide-react';
 
 const DEMO_ACCOUNTS = [
-  { email: 'admin@veltrixlabs.in', password: 'admin123',  label: 'Veltrix Test Client (Manager)',   role: 'manager',  initials: 'VT', color: '#b1cad7' },
+  { email: 'admin@veltrixlabs.in', password: 'admin123',  label: 'Veltrix Test Client (Admin/Manager)',   role: 'manager',  initials: 'VA', color: '#b1cad7' },
+  { email: 'requester@veltrixlabs.in', password: 'requester123',  label: 'Veltrix Test Client (Requester)',   role: 'engineer',  initials: 'VR', color: '#38bdf8' },
+  { email: 'buyer@veltrixlabs.in', password: 'buyer123',  label: 'Veltrix Test Client (Buyer)',   role: 'engineer',  initials: 'VB', color: '#fb7185' },
+  { email: 'finance@veltrixlabs.in', password: 'finance123',  label: 'Veltrix Test Client (Finance)',   role: 'finance',  initials: 'VF', color: '#34d399' },
 ];
 
 const ROLE_LABELS: Record<string, string> = {
-  manager:  'Manager',
-  engineer: 'Engineer',
+  manager:  'Admin',
+  engineer: 'Operations',
   finance:  'Finance',
 };
 
@@ -195,8 +198,8 @@ export default function LoginPage() {
           )}
         </div>
 
-        {/* Demo accounts - only render in development or testing environments */}
-        {process.env.NODE_ENV !== 'production' && (
+        {/* Demo accounts - rendered for staging/testing environment */}
+        {true && (
           <div style={{ marginTop: 20 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
               <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />

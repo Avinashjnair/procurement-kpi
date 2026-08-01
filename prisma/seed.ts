@@ -48,11 +48,11 @@ async function seedDatabase(dbFilePath: string) {
     await prisma.productLibraryItem.deleteMany({});
     await prisma.companyProfile.deleteMany({});
 
-    // 2. Hash user passwords and insert admin user
+    // 2. Hash user passwords and insert admin/role-based users
     await prisma.user.create({
       data: {
         id: 'USR-001',
-        name: 'Admin Manager',
+        name: 'Veltrix Admin',
         email: 'admin@veltrixlabs.in',
         passwordHash: bcrypt.hashSync('admin123', 10),
         role: 'manager',
@@ -61,7 +61,46 @@ async function seedDatabase(dbFilePath: string) {
         active: true,
       },
     });
-    console.log(`- Seeded admin user`);
+    
+    await prisma.user.create({
+      data: {
+        id: 'USR-002',
+        name: 'Veltrix Requester',
+        email: 'requester@veltrixlabs.in',
+        passwordHash: bcrypt.hashSync('requester123', 10),
+        role: 'engineer',
+        department: 'Engineering Department',
+        avatarInitials: 'VR',
+        active: true,
+      },
+    });
+
+    await prisma.user.create({
+      data: {
+        id: 'USR-003',
+        name: 'Veltrix Buyer',
+        email: 'buyer@veltrixlabs.in',
+        passwordHash: bcrypt.hashSync('buyer123', 10),
+        role: 'engineer',
+        department: 'Procurement Operations',
+        avatarInitials: 'VB',
+        active: true,
+      },
+    });
+
+    await prisma.user.create({
+      data: {
+        id: 'USR-004',
+        name: 'Veltrix Finance Officer',
+        email: 'finance@veltrixlabs.in',
+        passwordHash: bcrypt.hashSync('finance123', 10),
+        role: 'finance',
+        department: 'Finance & Accounts',
+        avatarInitials: 'VF',
+        active: true,
+      },
+    });
+    console.log(`- Seeded admin and role-based test users`);
 
     // 3. Seed Supplier
     await prisma.supplier.create({

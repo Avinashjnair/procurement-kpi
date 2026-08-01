@@ -5,8 +5,8 @@ param (
 
 $ErrorActionPreference = "Stop"
 
-Write-Host "=== 1. Starting Production Build ===" -ForegroundColor Cyan
-npm run build
+Write-Host "=== 1. Preparing Source Files ===" -ForegroundColor Cyan
+# Skip local build, compilation will happen on the Linux server to avoid binary/path mismatches
 
 Write-Host "=== 2. Creating Deployment Archive ===" -ForegroundColor Cyan
 $ZipName = "procurebuddy-$Env.zip"
@@ -19,12 +19,16 @@ if (Test-Path $ZipName) {
 
 # Define files and folders to include
 $FilesToZip = @(
-    ".next",
+    "src",
     "databases",
     "prisma",
     "public",
     "package.json",
     "package-lock.json",
+    "next.config.ts",
+    "tsconfig.json",
+    "postcss.config.mjs",
+    "eslint.config.mjs",
     "server.js"
 )
 
