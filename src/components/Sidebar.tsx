@@ -47,7 +47,7 @@ export default function Sidebar() {
   const {
     activePage, setActivePage, setModalOpen, darkMode, toggleDarkMode,
     currentUser, logout, notifications, markNotificationRead, markAllNotificationsRead,
-    isSupplierPortal, setSupplierPortal,
+    isSupplierPortal, setSupplierPortal, setSelectedSupplierId,
     isMobileSidebarOpen, setMobileSidebarOpen,
     companyProfile
   } = useApp();
@@ -162,7 +162,17 @@ export default function Sidebar() {
                   <div className="notif-section">
                     <div className="notif-section-title danger">Action Required</div>
                     {unreadNotifications.map(n => (
-                      <div key={n.id} className="notif-row" onClick={() => { markNotificationRead(n.id); setActivePage('notifications'); setNotifOpen(false); setMobileSidebarOpen(false); }}>
+                      <div key={n.id} className="notif-row" onClick={() => {
+                        markNotificationRead(n.id);
+                        if (n.entityType === 'Supplier' && n.entityId) {
+                          setSelectedSupplierId(n.entityId);
+                          setActivePage('suppliers');
+                        } else {
+                          setActivePage('notifications');
+                        }
+                        setNotifOpen(false);
+                        setMobileSidebarOpen(false);
+                      }}>
                         <div className="notif-details">
                           <div className="notif-title">{n.title}</div>
                           <div className="notif-meta">{n.source} • {new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>

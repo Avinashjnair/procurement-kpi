@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import bcrypt from 'bcryptjs';
 import { getTenantDb } from '@/lib/dbManager';
 import { getAuthSession } from '@/lib/auth';
 
@@ -65,53 +66,82 @@ export async function POST(req: Request) {
         console.error('Audit log failed:', err);
       }
     };
-    // Helper to calculate & persist 3-way match status
-    const runThreeWayMatch = async (poId: string) => {
+    // Matches a single invoice against its own GRN: prefers the specific GRN it was recorded
+    // against (invoice.grnId, set when the invoice was created against a chosen GRN), and only
+    // falls back to "any Approved GRN for this PO" for older/unlinked invoices.
+    const matchInvoiceToGRN = async (po: any, invoice: any): Promise<string> => {
+      let grn = null;
+      if (invoice.grnId) {
+        const linkedGrn = await db.gRN.findUnique({ where: { id: invoice.grnId } });
+        if (linkedGrn && linkedGrn.status === 'Approved') grn = linkedGrn;
+      }
+      if (!grn) {
+        grn = await db.gRN.findFirst({ where: { poId: po.id, status: 'Approved' } });
+      }
+      if (!grn) return 'Missing GRN';
+
+      const poItems = Array.isArray(po.items) ? po.items : [];
+      const grnItems = Array.isArray(grn.lineItems) ? grn.lineItems : [];
+      const invItems = Array.isArray(invoice.lineItems) ? invoice.lineItems : [];
+
+      const poQty = poItems.reduce((sum: number, item: any) => sum + item.quantity, 0);
+      const grnQty = grnItems.reduce((sum: number, item: any) => sum + item.acceptedQty, 0);
+      const invQty = invItems.reduce((sum: number, item: any) => sum + (item.billedQty || item.quantity), 0);
+
+      if (poQty === grnQty && grnQty === invQty && po.totalAmount === invoice.totalAmount) {
+        return 'Full Match';
+      }
+      return 'Variance';
+    };
+
+    // The PO-level match status is a single field summarizing potentially multiple invoices
+    // (partial billing) — surface the most concerning status across all of them.
+    const aggregatePoMatchStatus = (statuses: string[]): string => {
+      if (statuses.length === 0) return 'Pending';
+      if (statuses.includes('Variance')) return 'Variance';
+      if (statuses.includes('Missing GRN')) return 'Missing GRN';
+      if (statuses.includes('Pending')) return 'Pending';
+      return 'Full Match';
+    };
+
+    // Helper to calculate & persist 3-way match status.
+    // If invoiceId is given, only that invoice is (re)matched — used right after creating/submitting
+    // it, since a new invoice can't affect the matching of any other invoice on the same PO.
+    // If omitted, every invoice on the PO is (re)matched — used after a GRN is approved, since newly
+    // available accepted quantities can change the match outcome for any invoice already recorded
+    // against this PO. The PO's own matchStatus is always recomputed as an aggregate of all its invoices.
+    const runThreeWayMatch = async (poId: string, invoiceId?: string) => {
       try {
         const po = await db.purchaseOrder.findUnique({ where: { id: poId } });
         if (!po) return 'Missing PO';
 
-        const grn = await db.gRN.findFirst({
-          where: { poId, status: 'Approved' },
-        });
-        const invoice = await db.invoice.findFirst({
-          where: { poId },
-        });
+        const invoicesToMatch = invoiceId
+          ? await db.invoice.findMany({ where: { id: invoiceId } })
+          : await db.invoice.findMany({ where: { poId } });
 
-        let matchStatus = 'Pending';
-        if (!grn) {
-          matchStatus = 'Missing GRN';
-        } else if (!invoice) {
-          matchStatus = 'Pending';
-        } else {
-          const poItems = Array.isArray(po.items) ? po.items : [];
-          const grnItems = Array.isArray(grn.lineItems) ? grn.lineItems : [];
-          const invItems = Array.isArray(invoice.lineItems) ? invoice.lineItems : [];
-
-          const poQty = poItems.reduce((sum: number, item: any) => sum + item.quantity, 0);
-          const grnQty = grnItems.reduce((sum: number, item: any) => sum + item.acceptedQty, 0);
-          const invQty = invItems.reduce((sum: number, item: any) => sum + (item.billedQty || item.quantity), 0);
-
-          if (poQty === grnQty && grnQty === invQty && po.totalAmount === invoice.totalAmount) {
-            matchStatus = 'Full Match';
-          } else {
-            matchStatus = 'Variance';
-          }
+        if (invoicesToMatch.length === 0) {
+          const grn = await db.gRN.findFirst({ where: { poId, status: 'Approved' } });
+          const matchStatus = grn ? 'Pending' : 'Missing GRN';
+          await db.purchaseOrder.update({ where: { id: poId }, data: { matchStatus } });
+          return matchStatus;
         }
 
-        // Persist match status on the invoice and PO
-        if (invoice) {
+        let lastStatus = 'Pending';
+        for (const invoice of invoicesToMatch) {
+          lastStatus = await matchInvoiceToGRN(po, invoice);
           await db.invoice.update({
             where: { id: invoice.id },
-            data: { matchStatus, status: matchStatus === 'Full Match' ? 'Matched' : 'Variance' },
+            data: { matchStatus: lastStatus, status: lastStatus === 'Full Match' ? 'Matched' : 'Variance' },
           });
         }
-        await db.purchaseOrder.update({
-          where: { id: poId },
-          data: { matchStatus },
-        });
 
-        return matchStatus;
+        // Recompute the PO-level aggregate from every invoice on the PO (not just the one(s) just
+        // rechecked), so the PO's overall status always reflects everything billed against it.
+        const allInvoices = await db.invoice.findMany({ where: { poId } });
+        const poMatchStatus = aggregatePoMatchStatus(allInvoices.map((i: any) => i.matchStatus));
+        await db.purchaseOrder.update({ where: { id: poId }, data: { matchStatus: poMatchStatus } });
+
+        return invoiceId ? lastStatus : poMatchStatus;
       } catch (err) {
         console.error('3-Way Match calculation failed:', err);
         return 'Pending';
@@ -250,6 +280,40 @@ export async function POST(req: Request) {
         });
         break;
       }
+      case 'APPROVE_SUPPLIER': {
+        const sup = await db.supplier.findUnique({ where: { id: payload.id } });
+        if (!sup) throw new Error('Supplier not found');
+        if (!payload.password || String(payload.password).length < 6) {
+          throw new Error('A password of at least 6 characters is required to approve a supplier.');
+        }
+        result = await db.supplier.update({
+          where: { id: payload.id },
+          data: {
+            status: 'Active',
+            active: true,
+            passwordHash: bcrypt.hashSync(String(payload.password), 10),
+          },
+        });
+        await logAudit('Supplier', payload.id, 'Approve', `Approved vendor registration for "${sup.name}" and activated portal access.`);
+        break;
+      }
+      case 'REJECT_SUPPLIER': {
+        const sup = await db.supplier.findUnique({ where: { id: payload.id } });
+        if (!sup) throw new Error('Supplier not found');
+        const rejectionNote = {
+          id: `NOTE-${Date.now()}`,
+          text: `Registration rejected: ${payload.reason || 'No reason provided.'}`,
+          date: new Date().toISOString().split('T')[0],
+          author: session.name,
+        };
+        const notes = Array.isArray(sup.notes) ? [...sup.notes, rejectionNote] : [rejectionNote];
+        result = await db.supplier.update({
+          where: { id: payload.id },
+          data: { status: 'Rejected', active: false, notes },
+        });
+        await logAudit('Supplier', payload.id, 'Reject', `Rejected vendor registration for "${sup.name}": ${payload.reason || 'No reason provided.'}`);
+        break;
+      }
 
       // ── Purchase Orders ──────────────────────────────────────
       case 'ADD_PURCHASE_ORDER': {
@@ -370,10 +434,27 @@ export async function POST(req: Request) {
         break;
       }
       case 'ACKNOWLEDGE_PO': {
+        const targetPo = await db.purchaseOrder.findUnique({ where: { id: payload.poId } });
+        if (!targetPo) throw new Error('PO not found');
+
+        const ackStatus = payload.status === 'Acknowledged with Exceptions' ? 'Acknowledged with Exceptions' : 'Acknowledged';
         result = await db.purchaseOrder.update({
           where: { id: payload.poId },
-          data: { acknowledgedAt: new Date().toISOString() },
+          data: {
+            acknowledgedAt: new Date().toISOString(),
+            acknowledgedBy: payload.acknowledgedBy || session.name,
+            acknowledgementStatus: ackStatus,
+            acknowledgedDeliveryDate: payload.confirmedDeliveryDate || targetPo.eta,
+            acknowledgementNotes: payload.notes || '',
+          },
         });
+
+        await logAudit(
+          'PO',
+          payload.poId,
+          'StatusChange',
+          `Supplier acknowledged PO (${ackStatus})${payload.acknowledgedBy ? ' by ' + payload.acknowledgedBy : ''}${payload.notes ? ' — ' + payload.notes : ''}`
+        );
         break;
       }
       case 'UPDATE_SHIPMENT': {
@@ -381,11 +462,18 @@ export async function POST(req: Request) {
           where: { id: payload.poId },
           data: {
             deliveryStatus: 'Shipped',
-            trackingNumber: payload.tracking,
+            trackingNumber: payload.trackingNumber,
             carrier: payload.carrier,
+            shipmentEta: payload.estimatedDelivery || '',
             shippedAt: new Date().toISOString(),
           },
         });
+        await logAudit(
+          'PO',
+          payload.poId,
+          'StatusChange',
+          `Shipment confirmed by supplier — carrier: ${payload.carrier || '—'}, tracking: ${payload.trackingNumber || '—'}${payload.estimatedDelivery ? `, ETA: ${payload.estimatedDelivery}` : ''}`
+        );
         break;
       }
       case 'REQUEST_AMENDMENT': {
@@ -812,7 +900,7 @@ export async function POST(req: Request) {
           },
         });
         await logAudit('Invoice', payload.id, 'Create', `Recorded invoice: ${payload.invoiceNumber}`);
-        await runThreeWayMatch(result.poId);
+        await runThreeWayMatch(result.poId, result.id);
         break;
       }
       case 'UPDATE_INVOICE': {
@@ -886,7 +974,7 @@ export async function POST(req: Request) {
             lineItems: payload.lineItems || [],
           },
         });
-        await runThreeWayMatch(result.poId);
+        await runThreeWayMatch(result.poId, result.id);
         break;
       }
       case 'DISPUTE_GRN': {
@@ -997,7 +1085,7 @@ export async function POST(req: Request) {
       }
 
       case 'PERFORM_MATCH': {
-        result = await runThreeWayMatch(payload.poId);
+        result = await runThreeWayMatch(payload.poId, payload.invoiceId);
         break;
       }
 

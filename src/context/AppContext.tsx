@@ -5,7 +5,7 @@ import type {
   Asset, MaintenanceRecord, AssetStatus, PaymentRecord, PaymentRecordStatus,
   BudgetEnvelope, Contract, Invoice, AuditLogEntry, MatchStatus, ApprovalStep, BlanketPO,
   AppNotification, NotificationRule, NegotiationMessage, POAmendmentRequest,
-  ComplianceDocument, GRNDispute, POMessage, ProductLibraryItem, Supplier, SupplierKPIs, Item, PricePoint, POStatus, PaymentStatus, PurchaseOrder, AppDocument, CompanyProfile
+  ComplianceDocument, GRNDispute, POMessage, ProductLibraryItem, Supplier, SupplierKPIs, Item, PricePoint, POStatus, PaymentStatus, PurchaseOrder, AppDocument, CompanyProfile, AcknowledgePODetails, UpdateShipmentDetails
 } from '@/types';
 import { calcEvalScore } from '@/types';
 
@@ -122,7 +122,7 @@ interface AppContextType extends AppState {
   updateInvoice: (id: string, updates: Partial<Invoice>) => Promise<void>;
   logAudit: (log: Omit<AuditLogEntry, 'id' | 'timestamp' | 'actorId' | 'actorName'>) => Promise<void>;
   processApprovalStep: (poId: string, stepIndex: number, status: 'Approved' | 'Rejected', comments?: string) => Promise<void>;
-  performMatch: (poId: string) => MatchStatus;
+  performMatch: (poId: string, invoiceId?: string) => MatchStatus;
   addBlanket: (b: BlanketPO) => Promise<void>;
   updateBlanket: (id: string, updates: Partial<BlanketPO>) => Promise<void>;
   addNotification: (n: Omit<AppNotification, 'id' | 'timestamp' | 'read'>) => Promise<void>;
@@ -133,8 +133,8 @@ interface AppContextType extends AppState {
   setSupplierPortal: (val: boolean) => void;
   addNegotiationMessage: (msg: Omit<NegotiationMessage, 'id' | 'timestamp'>) => Promise<void>;
   updateQuotationFeedback: (id: string, feedback: string) => Promise<void>;
-  acknowledgePO: (poId: string) => Promise<void>;
-  updateShipment: (poId: string, tracking: string, carrier: string) => Promise<void>;
+  acknowledgePO: (poId: string, details?: AcknowledgePODetails) => Promise<void>;
+  updateShipment: (poId: string, details: UpdateShipmentDetails) => Promise<void>;
   requestAmendment: (poId: string, request: Omit<POAmendmentRequest, 'id' | 'timestamp' | 'status'>) => Promise<void>;
   updateDeliveredQty: (poId: string, itemId: string, qty: number) => Promise<void>;
   submitInvoice: (data: Omit<Invoice, 'id' | 'matchStatus' | 'status'>) => Promise<void>;
@@ -143,6 +143,8 @@ interface AppContextType extends AppState {
   poMessages: POMessage[];
   sendPOMessage: (msg: Omit<POMessage, 'id' | 'timestamp'>) => Promise<void>;
   updateSupplierProfile: (id: string, updates: Partial<Supplier>) => Promise<void>;
+  approveSupplier: (id: string, password: string) => Promise<void>;
+  rejectSupplier: (id: string, reason: string) => Promise<void>;
   requestEarlyPayment: (invoiceId: string, discountPct: number) => Promise<void>;
   addSupplierContact: (supplierId: string, contact: { name: string; role: string; email: string }) => Promise<void>;
   supplierLogin: (supplierId: string, passwordHash: string) => Promise<{ success: boolean; error?: string }>;
@@ -500,6 +502,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState(p => ({ ...p, suppliers: p.suppliers.map(s => s.id === id ? result : s) }));
   }, [runMutation]);
 
+  // ── Vendor Registration Approval ──────────────────────────
+  const approveSupplier = useCallback(async (id: string, password: string) => {
+    const result = await runMutation('APPROVE_SUPPLIER', { id, password });
+    setState(p => ({ ...p, suppliers: p.suppliers.map(s => s.id === id ? result : s) }));
+  }, [runMutation]);
+
+  const rejectSupplier = useCallback(async (id: string, reason: string) => {
+    const result = await runMutation('REJECT_SUPPLIER', { id, reason });
+    setState(p => ({ ...p, suppliers: p.suppliers.map(s => s.id === id ? result : s) }));
+  }, [runMutation]);
+
   // ── Purchase Orders ──────────────────────────────────────
   const addPurchaseOrder = useCallback(async (po: PurchaseOrder) => {
     const result = await runMutation('ADD_PURCHASE_ORDER', po);
@@ -555,13 +568,13 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState(p => ({ ...p, purchaseOrders: [result, ...p.purchaseOrders] }));
   }, [runMutation]);
 
-  const acknowledgePO = useCallback(async (poId: string) => {
-    const result = await runMutation('ACKNOWLEDGE_PO', { poId });
+  const acknowledgePO = useCallback(async (poId: string, details?: AcknowledgePODetails) => {
+    const result = await runMutation('ACKNOWLEDGE_PO', { poId, ...details });
     setState(p => ({ ...p, purchaseOrders: p.purchaseOrders.map(po => po.id === poId ? result : po) }));
   }, [runMutation]);
 
-  const updateShipment = useCallback(async (poId: string, tracking: string, carrier: string) => {
-    const result = await runMutation('UPDATE_SHIPMENT', { poId, tracking, carrier });
+  const updateShipment = useCallback(async (poId: string, details: UpdateShipmentDetails) => {
+    const result = await runMutation('UPDATE_SHIPMENT', { poId, ...details });
     setState(p => ({ ...p, purchaseOrders: p.purchaseOrders.map(po => po.id === poId ? result : po) }));
   }, [runMutation]);
 
@@ -820,19 +833,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [runMutation]);
 
   // ── 3-Way Match Algorithm trigger ────────────────────────
-  const performMatch = useCallback((poId: string): MatchStatus => {
+  // invoiceId (optional) scopes the recalculation to one specific invoice on the PO — omit it to
+  // recheck every invoice on the PO (e.g. after a GRN approval that could affect several of them).
+  const performMatch = useCallback((poId: string, invoiceId?: string): MatchStatus => {
     // Perform match is triggered instantly via client and updated.
     // Use pendingMatches cache to prevent duplicate requests during re-renders.
-    if (pendingMatches.current[poId]) {
+    const cacheKey = invoiceId ? `${poId}:${invoiceId}` : poId;
+    if (pendingMatches.current[cacheKey]) {
       return 'Pending';
     }
-    pendingMatches.current[poId] = true;
-    runMutation('PERFORM_MATCH', { poId })
+    pendingMatches.current[cacheKey] = true;
+    runMutation('PERFORM_MATCH', { poId, invoiceId })
       .then(() => {
         initData(authToken || '', tenantId);
       })
       .finally(() => {
-        delete pendingMatches.current[poId];
+        delete pendingMatches.current[cacheKey];
       });
     return 'Pending';
   }, [runMutation, initData, authToken, tenantId]);
@@ -886,7 +902,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setSupplierPortal, addNegotiationMessage, updateQuotationFeedback,
       acknowledgePO, updateShipment, requestAmendment, updateDeliveredQty,
       submitInvoice, disputeGRN, uploadComplianceDoc,
-      sendPOMessage, updateSupplierProfile, requestEarlyPayment, addSupplierContact,
+      sendPOMessage, updateSupplierProfile, approveSupplier, rejectSupplier, requestEarlyPayment, addSupplierContact,
       supplierLogin, supplierLogout, addProduct, setGlobalSearchQuery, setMobileSidebarOpen
     }}>
       {children}

@@ -6,7 +6,7 @@ import {
   CheckCircle2, AlertTriangle, XCircle,
   Star, StarOff, Shield, ShieldAlert, ShieldX,
   Edit2, Check, X, Plus, MessageSquare, ChevronDown, ChevronUp,
-  Wrench,
+  Wrench, UserPlus, ShieldCheck, ShieldQuestion, FileBadge, Briefcase, Lock, Copy,
 } from 'lucide-react';
 import {
   RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
@@ -60,6 +60,29 @@ function ServiceBadge() {
       border: '1px solid rgba(139,92,246,0.3)',
     }}>
       <Wrench size={11} /> Service Provider
+    </span>
+  );
+}
+
+// ─────────────────────────────────────────────
+// Registration status badge (Pending Approval / Rejected / Inactive)
+// ─────────────────────────────────────────────
+function SupplierStatusBadge({ status }: { status: Supplier['status'] }) {
+  if (status === 'Active') return null;
+  const meta: Record<string, { color: string; bg: string; icon: React.ReactNode; label: string }> = {
+    'Pending Approval': { color: '#f59e0b', bg: 'rgba(245,158,11,0.12)', icon: <ShieldQuestion size={11} />, label: 'Pending Approval' },
+    'Rejected':          { color: '#f43f5e', bg: 'rgba(244,63,94,0.12)', icon: <XCircle size={11} />,        label: 'Rejected' },
+    'Inactive':          { color: '#94a3b8', bg: 'rgba(148,163,184,0.12)', icon: <XCircle size={11} />,      label: 'Inactive' },
+  };
+  const m = meta[status];
+  if (!m) return null;
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 4,
+      padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+      background: m.bg, color: m.color, border: `1px solid ${m.color}40`,
+    }}>
+      {m.icon} {m.label}
     </span>
   );
 }
@@ -212,6 +235,209 @@ function getKpiColor(val: number, thresholds: [number, number], inverted = false
   return 'kpi-bad';
 }
 
+// ─────────────────────────────────────────────
+// Vendor registration review panel — approve / reject a self-registered supplier
+// ─────────────────────────────────────────────
+function RegistrationReviewPanel({ supplier }: { supplier: Supplier }) {
+  const { approveSupplier, rejectSupplier } = useApp();
+  const [mode, setMode] = useState<'none' | 'approve' | 'reject'>('none');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [reason, setReason] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState('');
+  const [approvedCreds, setApprovedCreds] = useState<{ id: string; password: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const generatePassword = () => {
+    const pw = Math.random().toString(36).slice(-6) + Math.floor(Math.random() * 90 + 10);
+    setPassword(pw);
+    setConfirmPassword(pw);
+  };
+
+  const canApprove = password.length >= 6 && password === confirmPassword;
+
+  const handleApprove = async () => {
+    if (!canApprove || submitting) return;
+    setSubmitting(true);
+    setError('');
+    try {
+      await approveSupplier(supplier.id, password);
+      setApprovedCreds({ id: supplier.id, password });
+    } catch (err: any) {
+      setError(err?.message || 'Failed to approve supplier.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!reason.trim() || submitting) return;
+    setSubmitting(true);
+    setError('');
+    try {
+      await rejectSupplier(supplier.id, reason.trim());
+      setMode('none');
+    } catch (err: any) {
+      setError(err?.message || 'Failed to reject supplier.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const copyCreds = () => {
+    if (!approvedCreds) return;
+    navigator.clipboard?.writeText(`Supplier ID: ${approvedCreds.id}\nPassword: ${approvedCreds.password}`);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  if (approvedCreds) {
+    return (
+      <div className="card" style={{ marginBottom: 20, border: '1px solid rgba(16,185,129,0.3)', background: 'rgba(16,185,129,0.05)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, color: '#10b981', fontWeight: 700 }}>
+          <CheckCircle2 size={16} /> Vendor Approved — Portal Access Activated
+        </div>
+        <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 12 }}>
+          Share these login credentials with the vendor directly (e.g. by phone) — they are not sent automatically.
+        </p>
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 10, padding: '10px 14px', background: 'rgba(0,0,0,0.15)', borderRadius: 8, fontFamily: 'monospace', fontSize: 13 }}>
+          <Lock size={14} />
+          <span>Supplier ID: <strong>{approvedCreds.id}</strong></span>
+          <span>·</span>
+          <span>Password: <strong>{approvedCreds.password}</strong></span>
+          <button type="button" className="btn btn-ghost btn-sm" style={{ marginLeft: 'auto' }} onClick={copyCreds}>
+            <Copy size={12} /> {copied ? 'Copied!' : 'Copy'}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card" style={{ marginBottom: 20, border: '1px solid rgba(245,158,11,0.3)', background: 'rgba(245,158,11,0.04)' }}>
+      <div className="card-header">
+        <div className="card-title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <ShieldQuestion size={16} style={{ color: '#f59e0b' }} /> Vendor Registration — Pending Review
+        </div>
+      </div>
+
+      {supplier.financials && supplier.financials.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8 }}>Financial Statements</div>
+          <div className="data-table-wrapper">
+            <table className="data-table">
+              <thead><tr><th>Year</th><th>Turnover</th><th>Current Assets</th><th>Current Liabilities</th><th>Statement</th></tr></thead>
+              <tbody>
+                {supplier.financials.map((f, i) => (
+                  <tr key={i}>
+                    <td>{f.year}</td>
+                    <td className="font-mono">${f.turnover.toLocaleString()}</td>
+                    <td className="font-mono">${f.currentAssets.toLocaleString()}</td>
+                    <td className="font-mono">${f.currentLiabilities.toLocaleString()}</td>
+                    <td>{f.docId ? <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 12 }}><FileBadge size={12} /> {f.docId}</span> : '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {supplier.projectHistory && supplier.projectHistory.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8 }}>Project Experience</div>
+          <div className="data-table-wrapper">
+            <table className="data-table">
+              <thead><tr><th>Description</th><th>Year</th><th>Country</th><th>Order Value</th><th>Scope</th></tr></thead>
+              <tbody>
+                {supplier.projectHistory.map((p, i) => (
+                  <tr key={i}>
+                    <td style={{ fontWeight: 600 }}>{p.description}</td>
+                    <td>{p.year}</td>
+                    <td>{p.country}</td>
+                    <td className="font-mono">${p.orderValue.toLocaleString()}</td>
+                    <td style={{ fontSize: 12 }}>{p.scope}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {supplier.projectExperienceDocs && supplier.projectExperienceDocs.length > 0 && (
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 8 }}>Reference Documents</div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {supplier.projectExperienceDocs.map((doc, i) => (
+              <span key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-color)', borderRadius: 8, fontSize: 12 }}>
+                <Briefcase size={12} /> {doc}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {error && <div style={{ fontSize: 12, color: '#f43f5e', marginBottom: 10 }}>{error}</div>}
+
+      {mode === 'none' && (
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button type="button" className="btn btn-primary btn-sm" onClick={() => setMode('approve')}>
+            <ShieldCheck size={13} /> Approve Vendor
+          </button>
+          <button type="button" className="btn btn-danger btn-sm" onClick={() => setMode('reject')}>
+            <XCircle size={13} /> Reject Registration
+          </button>
+        </div>
+      )}
+
+      {mode === 'approve' && (
+        <div style={{ padding: 14, borderRadius: 10, background: 'rgba(16,185,129,0.05)', border: '1px solid rgba(16,185,129,0.2)' }}>
+          <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 10 }}>
+            Set an initial portal password for this vendor. They will log in with Supplier ID <strong>{supplier.id}</strong> and this password.
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Password *</label>
+              <input type="text" className="form-input" value={password} onChange={e => setPassword(e.target.value)} placeholder="Min. 6 characters" />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Confirm Password *</label>
+              <input type="text" className="form-input" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Re-enter password" />
+            </div>
+          </div>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={generatePassword} style={{ marginBottom: 12 }}>Generate random password</button>
+          {password && confirmPassword && password !== confirmPassword && (
+            <div style={{ fontSize: 12, color: '#f43f5e', marginBottom: 10 }}>Passwords do not match.</div>
+          )}
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setMode('none')}>Cancel</button>
+            <button type="button" className="btn btn-primary btn-sm" disabled={!canApprove || submitting} onClick={handleApprove}>
+              <Check size={13} /> {submitting ? 'Approving…' : 'Confirm Approval'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {mode === 'reject' && (
+        <div style={{ padding: 14, borderRadius: 10, background: 'rgba(244,63,94,0.05)', border: '1px solid rgba(244,63,94,0.2)' }}>
+          <div className="form-group">
+            <label className="form-label">Rejection Reason *</label>
+            <textarea className="form-input" rows={2} value={reason} onChange={e => setReason(e.target.value)} placeholder="Explain why this registration is being rejected…" />
+          </div>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setMode('none')}>Cancel</button>
+            <button type="button" className="btn btn-danger btn-sm" disabled={!reason.trim() || submitting} onClick={handleReject}>
+              <X size={13} /> {submitting ? 'Rejecting…' : 'Confirm Rejection'}
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SupplierDetail({ supplierId }: { supplierId: string }) {
   const { suppliers, purchaseOrders, items, setSelectedSupplierId, updateSupplierKPIs, togglePreferredSupplier } = useApp();
   const supplier = suppliers.find(s => s.id === supplierId);
@@ -251,7 +477,8 @@ function SupplierDetail({ supplierId }: { supplierId: string }) {
       <div className="page-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
           <h2>{supplier.name}</h2>
-          <RiskBadge kpis={kpis} />
+          <SupplierStatusBadge status={supplier.status} />
+          {supplier.status === 'Active' && <RiskBadge kpis={kpis} />}
           {supplier.preferred && <PreferredBadge />}
           {isServiceProvider && <ServiceBadge />}
         </div>
@@ -268,29 +495,34 @@ function SupplierDetail({ supplierId }: { supplierId: string }) {
         </div>
       </div>
 
-      {/* Action bar */}
-      <div style={{ display: 'flex', gap: 10, marginBottom: 24, flexWrap: 'wrap' }}>
-        <button
-          className="btn btn-secondary btn-sm"
-          onClick={() => setEditingKPIs(e => !e)}
-        >
-          <Edit2 size={14} /> {editingKPIs ? 'Cancel Edit' : 'Edit KPIs'}
-        </button>
-        <button
-          className="btn btn-sm"
-          style={{
-            background: supplier.preferred ? 'rgba(245,158,11,0.12)' : 'rgba(99,102,241,0.08)',
-            color: supplier.preferred ? '#f59e0b' : 'var(--text-secondary)',
-            border: `1px solid ${supplier.preferred ? 'rgba(245,158,11,0.3)' : 'var(--border-color)'}`,
-          }}
-          onClick={() => togglePreferredSupplier(supplier.id)}
-        >
-          {supplier.preferred
-            ? <><StarOff size={14} /> Remove Preferred</>
-            : <><Star size={14} /> Mark as Preferred</>
-          }
-        </button>
-      </div>
+      {/* Vendor self-registration review — pending suppliers need approval before they're usable */}
+      {supplier.status === 'Pending Approval' && <RegistrationReviewPanel supplier={supplier} />}
+
+      {/* Action bar (not relevant until a vendor is approved) */}
+      {supplier.status === 'Active' && (
+        <div style={{ display: 'flex', gap: 10, marginBottom: 24, flexWrap: 'wrap' }}>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => setEditingKPIs(e => !e)}
+          >
+            <Edit2 size={14} /> {editingKPIs ? 'Cancel Edit' : 'Edit KPIs'}
+          </button>
+          <button
+            className="btn btn-sm"
+            style={{
+              background: supplier.preferred ? 'rgba(245,158,11,0.12)' : 'rgba(99,102,241,0.08)',
+              color: supplier.preferred ? '#f59e0b' : 'var(--text-secondary)',
+              border: `1px solid ${supplier.preferred ? 'rgba(245,158,11,0.3)' : 'var(--border-color)'}`,
+            }}
+            onClick={() => togglePreferredSupplier(supplier.id)}
+          >
+            {supplier.preferred
+              ? <><StarOff size={14} /> Remove Preferred</>
+              : <><Star size={14} /> Mark as Preferred</>
+            }
+          </button>
+        </div>
+      )}
 
       {/* KPI editor */}
       {editingKPIs && (
@@ -614,7 +846,8 @@ export default function SuppliersPage() {
   const serviceCount = suppliers.filter(s => s.kpis.deliveryTerms === 'N/A').length;
   const goodsCount = suppliers.length - serviceCount;
   const preferredCount = suppliers.filter(s => s.preferred).length;
-  
+  const pendingSuppliers = suppliers.filter(s => s.status === 'Pending Approval');
+
   const riskCounts = {
     Low:    suppliers.filter(s => computeRiskScore(s.kpis).label === 'Low').length,
     Medium: suppliers.filter(s => computeRiskScore(s.kpis).label === 'Medium').length,
@@ -631,6 +864,28 @@ export default function SuppliersPage() {
         <h2>Supplier &amp; Provider Management</h2>
         <p>Track, evaluate and manage performance of vendors and service providers</p>
       </div>
+
+      {/* Pending vendor self-registrations — need review before they can log in or be used */}
+      {pendingSuppliers.length > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+          padding: '12px 16px', marginBottom: 20, borderRadius: 12,
+          background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.25)',
+        }}>
+          <UserPlus size={18} style={{ color: '#f59e0b', flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#f59e0b' }}>
+              {pendingSuppliers.length} vendor registration{pendingSuppliers.length === 1 ? '' : 's'} awaiting review
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+              {pendingSuppliers.slice(0, 3).map(s => s.name).join(', ')}{pendingSuppliers.length > 3 ? `, +${pendingSuppliers.length - 3} more` : ''}
+            </div>
+          </div>
+          <button className="btn btn-primary btn-sm" onClick={() => setSelectedSupplierId(pendingSuppliers[0].id)}>
+            Review Now
+          </button>
+        </div>
+      )}
 
       {/* Summary stats */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 12, marginBottom: 20 }}>
@@ -728,6 +983,10 @@ export default function SuppliersPage() {
                   </div>
                 </div>
               </div>
+
+              {supplier.status !== 'Active' && (
+                <div style={{ marginBottom: 8 }}><SupplierStatusBadge status={supplier.status} /></div>
+              )}
 
               <div className="supplier-kpi-bar">
                 <div className="supplier-kpi-tag" style={{

@@ -122,10 +122,10 @@ export default function VendorRegistrationForm({ onCancel }: { onCancel: () => v
     setTimeout(() => {
       addSupplier(newSupplier);
       addNotification({
-        type: 'info',
-        source: 'Document',
+        type: 'alert',
+        source: 'Supplier',
         title: 'New Vendor Registration',
-        message: `Vendor '${formData.name}' has submitted a registration request. Review required.`,
+        message: `'${formData.name}' has submitted a registration request and is awaiting approval.`,
         entityId: newSupplier.id,
         entityType: 'Supplier'
       });

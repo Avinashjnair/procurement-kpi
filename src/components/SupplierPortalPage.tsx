@@ -19,7 +19,9 @@ import {
   ResponsiveContainer, LineChart, Line, BarChart, Bar, Cell, ReferenceLine
 } from 'recharts';
 
-import { PortalTab } from '@/types';
+import { PortalTab, UpdateShipmentDetails } from '@/types';
+import { exportPOAsPDF } from '@/utils/poPdfExport';
+import { formatFileSize } from '@/utils/formatFileSize';
 
 // ─── CalendarIcon (moved to top to fix hoisting bug) ─────────────────────────
 const CalendarIcon = ({ size = 16, color = 'currentColor' }: { size?: number; color?: string }) => (
@@ -67,7 +69,7 @@ function StatusPill({ status }: { status: string }) {
     switch (status) {
       case 'Released': case 'Active': case 'Approved': case 'Awarded': case 'Delivered':
         return { bg: 'rgba(74,222,128,0.08)', color: '#4ade80', border: 'rgba(74,222,128,0.15)' };
-      case 'Pending Ack': case 'Expiring Soon': case 'Processing': case 'In Review': case 'Shipped':
+      case 'Pending Ack': case 'Expiring Soon': case 'Processing': case 'In Review': case 'Shipped': case 'Ack. w/ Exceptions':
         return { bg: 'rgba(233,193,118,0.08)', color: 'var(--accent-amber)', border: 'rgba(233,193,118,0.15)' };
       case 'Expired': case 'Rejected': case 'Overdue': case 'QC Variance':
         return { bg: 'rgba(248,113,113,0.08)', color: '#f87171', border: 'rgba(248,113,113,0.15)' };
@@ -87,6 +89,13 @@ function StatusPill({ status }: { status: string }) {
       {status}
     </span>
   );
+}
+
+// Derives the status label shown for a PO — flags supplier-raised exceptions distinctly from a plain acknowledgement.
+function poStatusLabel(po: any): string {
+  if (!po.acknowledgedAt) return 'Pending Ack';
+  if (po.acknowledgementStatus === 'Acknowledged with Exceptions') return 'Ack. w/ Exceptions';
+  return po.deliveryStatus;
 }
 
 // FIX: AlertBadge now renders as proper inline chips, not heavy bordered blocks
@@ -221,11 +230,13 @@ function NotificationPanel({ onClose, pendingAck, expiringDocs, expiredDocs, isM
 }
 
 // NEW: PO Detail Drawer
-function PODetailDrawer({ po, onClose, onAcknowledge, onUpdateShipment, onSubmitInvoice, isMobile }: {
+function PODetailDrawer({ po, onClose, onAcknowledge, onUpdateShipment, onSubmitInvoice, onDownloadPdf, pdfLoading, isMobile }: {
   po: any; onClose: () => void;
-  onAcknowledge: (id: string) => void;
-  onUpdateShipment: (id: string, data: any) => void;
+  onAcknowledge: (po: any) => void;
+  onUpdateShipment: (id: string, details: UpdateShipmentDetails) => void;
   onSubmitInvoice: () => void;
+  onDownloadPdf: (po: any) => void;
+  pdfLoading?: boolean;
   isMobile: boolean;
 }) {
   const [shipmentForm, setShipmentForm] = useState({ trackingNumber: po.trackingNumber || '', carrier: '', estimatedDelivery: '' });
@@ -247,7 +258,7 @@ function PODetailDrawer({ po, onClose, onAcknowledge, onUpdateShipment, onSubmit
             <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Issued {po.dateOfIssue}</div>
           </div>
           <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <StatusPill status={!po.acknowledgedAt ? 'Pending Ack' : po.deliveryStatus} />
+            <StatusPill status={poStatusLabel(po)} />
             <button onClick={onClose} style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-faint)', padding: 4 }}><X size={18} /></button>
           </div>
         </div>
@@ -260,6 +271,8 @@ function PODetailDrawer({ po, onClose, onAcknowledge, onUpdateShipment, onSubmit
               { label: 'Line items', value: po.items?.length || 0 },
               { label: 'Delivery status', value: po.deliveryStatus || 'Pending' },
               { label: 'Tracking #', value: po.trackingNumber || '—' },
+              ...(po.carrier ? [{ label: 'Carrier', value: po.carrier }] : []),
+              ...(po.shipmentEta ? [{ label: 'Shipment ETA', value: po.shipmentEta }] : []),
             ].map((f, i) => (
               <div key={i} style={{ padding: 14, background: 'rgba(255,255,255,0.02)', borderRadius: 10, border: '1px solid var(--border-subtle)' }}>
                 <div style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-faint)', marginBottom: 5, letterSpacing: '0.06em' }}>{f.label.toUpperCase()}</div>
@@ -284,6 +297,29 @@ function PODetailDrawer({ po, onClose, onAcknowledge, onUpdateShipment, onSubmit
             </div>
           </div>
 
+          {/* Acknowledgement Summary */}
+          {po.acknowledgedAt && (
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-faint)', letterSpacing: '0.06em', marginBottom: 10 }}>ACKNOWLEDGEMENT</div>
+              <div style={{
+                padding: 14, borderRadius: 10, border: `1px solid ${po.acknowledgementStatus === 'Acknowledged with Exceptions' ? 'rgba(245,158,11,0.25)' : 'rgba(74,222,128,0.2)'}`,
+                background: po.acknowledgementStatus === 'Acknowledged with Exceptions' ? 'rgba(245,158,11,0.06)' : 'rgba(74,222,128,0.06)',
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: po.acknowledgementStatus === 'Acknowledged with Exceptions' ? '#f59e0b' : '#4ade80' }}>
+                    {po.acknowledgementStatus || 'Acknowledged'}
+                  </span>
+                  <span style={{ fontSize: 10, color: 'var(--text-faint)' }}>{new Date(po.acknowledgedAt).toLocaleString()}</span>
+                </div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.6 }}>
+                  {po.acknowledgedBy && <div><strong>By:</strong> {po.acknowledgedBy}</div>}
+                  {po.acknowledgedDeliveryDate && <div><strong>Confirmed date:</strong> {po.acknowledgedDeliveryDate}</div>}
+                  {po.acknowledgementNotes && <div style={{ marginTop: 4 }}><strong>Comments:</strong> {po.acknowledgementNotes}</div>}
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Shipment Update */}
           {po.acknowledgedAt && po.deliveryStatus !== 'Delivered' && (
             <div>
@@ -305,7 +341,19 @@ function PODetailDrawer({ po, onClose, onAcknowledge, onUpdateShipment, onSubmit
                   </Field>
                   <div style={{ display: 'flex', gap: 8 }}>
                     <button className="btn btn-ghost" style={{ flex: 1, fontSize: 11 }} onClick={() => setShowShipmentForm(false)}>Cancel</button>
-                    <button className="btn btn-primary" style={{ flex: 1, fontSize: 11 }} onClick={() => { onUpdateShipment(po.id, shipmentForm); setShowShipmentForm(false); }}>
+                    <button
+                      className="btn btn-primary"
+                      style={{ flex: 1, fontSize: 11 }}
+                      disabled={!shipmentForm.trackingNumber.trim() || !shipmentForm.carrier.trim()}
+                      onClick={() => {
+                        onUpdateShipment(po.id, {
+                          trackingNumber: shipmentForm.trackingNumber.trim(),
+                          carrier: shipmentForm.carrier.trim(),
+                          estimatedDelivery: shipmentForm.estimatedDelivery || undefined,
+                        });
+                        setShowShipmentForm(false);
+                      }}
+                    >
                       <Check size={12} /> Confirm
                     </button>
                   </div>
@@ -316,15 +364,20 @@ function PODetailDrawer({ po, onClose, onAcknowledge, onUpdateShipment, onSubmit
         </div>
 
         {/* Footer Actions */}
-        <div style={{ padding: 20, borderTop: '1px solid var(--border-subtle)', display: 'flex', gap: 10 }}>
+        <div style={{ padding: 20, borderTop: '1px solid var(--border-subtle)', display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           {!po.acknowledgedAt && (
-            <button className="btn btn-primary" style={{ flex: 1, justifyContent: 'center', fontSize: 12 }} onClick={() => { onAcknowledge(po.id); onClose(); }}>
+            <button className="btn btn-primary" style={{ flex: 1, justifyContent: 'center', fontSize: 12 }} onClick={() => onAcknowledge(po)}>
               <Check size={13} /> Acknowledge PO
             </button>
           )}
           {po.deliveryStatus === 'Delivered' && (
             <button className="btn btn-primary" style={{ flex: 1, justifyContent: 'center', fontSize: 12 }} onClick={onSubmitInvoice}>
               <ReceiptText size={13} /> Submit invoice
+            </button>
+          )}
+          {po.deliveryStatus !== 'Draft' && (
+            <button className="btn btn-ghost" style={{ flex: 1, justifyContent: 'center', fontSize: 12 }} disabled={pdfLoading} onClick={() => onDownloadPdf(po)}>
+              <Download size={13} /> {pdfLoading ? 'Generating…' : 'Download PDF'}
             </button>
           )}
           <button className="btn btn-ghost" style={{ flex: 1, justifyContent: 'center', fontSize: 12 }}>
@@ -378,15 +431,268 @@ function SubmitInvoiceModal({ po, onClose, onSubmit }: { po: any; onClose: () =>
   );
 }
 
+// FIX: "Submit proposal" on the Tenders tab was a dead button — this wires it up to a real bid-submission form.
+function BidSubmissionModal({ rfq, supplierId, supplierName, onClose, onSubmit }: { rfq: any; supplierId: string; supplierName: string; onClose: () => void; onSubmit: (quotation: any) => void }) {
+  const lineItems = rfq.lineItems || [];
+  const [linePrices, setLinePrices] = useState<Record<string, string>>({});
+  const [leadTimes, setLeadTimes] = useState<Record<string, string>>({});
+  const [paymentTerms, setPaymentTerms] = useState('Net 30');
+  const [validityDays, setValidityDays] = useState('30');
+  const [techSpecCompliance, setTechSpecCompliance] = useState('Fully Compliant');
+  const [notes, setNotes] = useState('');
+  const [quoteFile, setQuoteFile] = useState<File | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%', padding: '9px 12px', borderRadius: 8,
+    background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-subtle)',
+    color: '#fff', fontSize: 12, outline: 'none', fontWeight: 600, boxSizing: 'border-box'
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setQuoteFile(e.target.files?.[0] || null);
+  };
+
+  const isValid = lineItems.length > 0 && lineItems.every((li: any) => Number(linePrices[li.id]) > 0);
+  const totalAmount = lineItems.reduce((sum: number, li: any) => sum + (Number(linePrices[li.id]) || 0) * li.quantity, 0);
+
+  const handleSubmit = () => {
+    if (!isValid || submitting) return;
+    setSubmitting(true);
+    const quotationItems = lineItems.map((li: any) => ({
+      rfqLineItemId: li.id,
+      itemId: li.itemId,
+      itemName: li.itemName,
+      quantity: li.quantity,
+      unit: li.unit,
+      unitPrice: Number(linePrices[li.id]) || 0,
+      totalPrice: (Number(linePrices[li.id]) || 0) * li.quantity,
+      leadTimeDays: Number(leadTimes[li.id]) || 14,
+    }));
+    const combinedNotes = [`Technical compliance: ${techSpecCompliance}`, notes.trim()].filter(Boolean).join(' — ');
+
+    onSubmit({
+      id: `QTN-${Date.now()}`,
+      rfqId: rfq.id,
+      supplierId,
+      supplierName,
+      status: 'Received',
+      dateReceived: new Date().toISOString().split('T')[0],
+      validUntil: new Date(Date.now() + (Number(validityDays) || 30) * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+      paymentTerms,
+      deliveryTerms: 'DDP - Delivered Duty Paid',
+      currency: 'USD',
+      totalAmount,
+      lineItems: quotationItems,
+      notes: combinedNotes,
+      quotationFileName: quoteFile?.name,
+      quotationFileSize: quoteFile ? formatFileSize(quoteFile.size) : undefined,
+    });
+    onClose();
+  };
+
+  return (
+    <ModalShell title={`Submit proposal — ${rfq.id}`} onClose={onClose} maxWidth={640}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ padding: 14, background: 'rgba(177,202,215,0.04)', border: '1px solid rgba(177,202,215,0.1)', borderRadius: 10 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 2 }}>{rfq.title}</div>
+          <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>Deadline: {rfq.bidDeadline} · {lineItems.length} line item{lineItems.length === 1 ? '' : 's'}</div>
+        </div>
+
+        <div>
+          <div style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-faint)', letterSpacing: '0.06em', marginBottom: 8 }}>LINE ITEM PRICING</div>
+          {lineItems.length === 0 ? (
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: 12 }}>This tender has no line items to price.</div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, maxHeight: 260, overflowY: 'auto', paddingRight: 4 }}>
+              {lineItems.map((li: any) => (
+                <div key={li.id} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr', gap: 8, alignItems: 'end', padding: 10, background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-subtle)', borderRadius: 8 }}>
+                  <div>
+                    <div style={{ fontSize: 11, fontWeight: 700 }}>{li.itemName}</div>
+                    <div style={{ fontSize: 10, color: 'var(--text-faint)' }}>Qty: {li.quantity} {li.unit}</div>
+                  </div>
+                  <Field label="Unit price ($)">
+                    <input type="number" min="0" step="0.01" value={linePrices[li.id] || ''} onChange={e => setLinePrices({ ...linePrices, [li.id]: e.target.value })} style={inputStyle} placeholder="0.00" />
+                  </Field>
+                  <Field label="Lead time (days)">
+                    <input type="number" min="0" value={leadTimes[li.id] || ''} onChange={e => setLeadTimes({ ...leadTimes, [li.id]: e.target.value })} style={inputStyle} placeholder="14" />
+                  </Field>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <Field label="Payment terms">
+            <select value={paymentTerms} onChange={e => setPaymentTerms(e.target.value)} style={inputStyle}>
+              <option>Net 30</option><option>Net 45</option><option>Net 60</option>
+              <option>Immediate</option><option>50% Advance, 50% on Delivery</option>
+            </select>
+          </Field>
+          <Field label="Bid validity (days)">
+            <input type="number" min="1" value={validityDays} onChange={e => setValidityDays(e.target.value)} style={inputStyle} />
+          </Field>
+        </div>
+
+        <Field label="Technical & compliance">
+          <select value={techSpecCompliance} onChange={e => setTechSpecCompliance(e.target.value)} style={inputStyle}>
+            <option>Fully Compliant</option>
+            <option>Compliant with Deviations</option>
+            <option>Alternative Proposal</option>
+          </select>
+        </Field>
+
+        <Field label="Notes (optional)">
+          <textarea rows={2} value={notes} placeholder="Clarifications, deviations, or commercial notes…" onChange={e => setNotes(e.target.value)} style={{ ...inputStyle, resize: 'none' }} />
+        </Field>
+
+        <Field label="Attach your quotation document (optional)">
+          <div style={{ position: 'relative' }}>
+            <label style={{
+              display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
+              background: 'rgba(177,202,215,0.04)', border: '1px dashed var(--border-subtle)',
+              borderRadius: 8, cursor: 'pointer', transition: 'border-color 0.2s',
+            }}>
+              <Upload size={15} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+              <span style={{ fontSize: 12, color: quoteFile ? '#fff' : 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {quoteFile ? `${quoteFile.name} (${formatFileSize(quoteFile.size)})` : 'Upload your own quotation form / commercial offer (PDF, DOC, XLS)'}
+              </span>
+              {quoteFile && <CheckCircle2 size={14} style={{ color: '#4ade80', marginLeft: 'auto', flexShrink: 0 }} />}
+              <input
+                type="file"
+                accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
+                onChange={handleFileChange}
+                style={{ position: 'absolute', opacity: 0, inset: 0, cursor: 'pointer' }}
+              />
+            </label>
+          </div>
+        </Field>
+
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.15)', borderRadius: 8 }}>
+          <span style={{ fontSize: 11, color: 'var(--text-muted)' }}>Total proposal value</span>
+          <span style={{ fontSize: 16, fontWeight: 800 }}>${totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+        <button className="btn btn-ghost" style={{ flex: 1, justifyContent: 'center', fontSize: 12 }} onClick={onClose}>Cancel</button>
+        <button className="btn btn-primary" style={{ flex: 1, justifyContent: 'center', fontSize: 12 }} disabled={!isValid || submitting} onClick={handleSubmit}>
+          <Send size={13} /> Submit proposal
+        </button>
+      </div>
+    </ModalShell>
+  );
+}
+
+// FIX: "Acknowledge PO" used to be a single blind click that only stamped a timestamp.
+// This captures who confirmed it, whether it's accepted as-is or with exceptions, and the
+// actual confirmed delivery/completion date — all visible to the procurement team afterward.
+function AcknowledgePOModal({ po, supplierName, defaultContact, onClose, onSubmit }: {
+  po: any;
+  supplierName: string;
+  defaultContact: string;
+  onClose: () => void;
+  onSubmit: (details: { acknowledgedBy: string; status: 'Acknowledged' | 'Acknowledged with Exceptions'; confirmedDeliveryDate: string; notes: string }) => void;
+}) {
+  const [acknowledgedBy, setAcknowledgedBy] = useState(defaultContact || '');
+  const [status, setStatus] = useState<'Acknowledged' | 'Acknowledged with Exceptions'>('Acknowledged');
+  const [confirmedDeliveryDate, setConfirmedDeliveryDate] = useState(po.eta || '');
+  const [notes, setNotes] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+
+  const inputStyle: React.CSSProperties = {
+    width: '100%', padding: '9px 12px', borderRadius: 8,
+    background: 'rgba(0,0,0,0.2)', border: '1px solid var(--border-subtle)',
+    color: '#fff', fontSize: 12, outline: 'none', fontWeight: 600, boxSizing: 'border-box'
+  };
+
+  const dateChanged = confirmedDeliveryDate && po.eta && confirmedDeliveryDate !== po.eta;
+  const isValid = acknowledgedBy.trim().length > 0 && (status === 'Acknowledged' || notes.trim().length > 0);
+
+  const handleSubmit = () => {
+    if (!isValid || submitting) return;
+    setSubmitting(true);
+    onSubmit({ acknowledgedBy: acknowledgedBy.trim(), status, confirmedDeliveryDate, notes: notes.trim() });
+  };
+
+  return (
+    <ModalShell title={`Acknowledge PO — ${po.id}`} onClose={onClose}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ padding: 14, background: 'rgba(177,202,215,0.04)', border: '1px solid rgba(177,202,215,0.1)', borderRadius: 10 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{supplierName}</span>
+            <span style={{ fontSize: 16, fontWeight: 800 }}>${po.totalAmount?.toLocaleString()}</span>
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 4 }}>Requested date: {po.eta || '—'} · {po.items?.length || 0} line item(s)</div>
+        </div>
+
+        <Field label="Acknowledged by (name & role)">
+          <input value={acknowledgedBy} onChange={e => setAcknowledgedBy(e.target.value)} style={inputStyle} placeholder="e.g. John Smith, Operations Manager" />
+        </Field>
+
+        <Field label="Decision">
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              type="button"
+              onClick={() => setStatus('Acknowledged')}
+              style={{
+                flex: 1, padding: '9px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700,
+                border: `1px solid ${status === 'Acknowledged' ? '#4ade80' : 'var(--border-subtle)'}`,
+                background: status === 'Acknowledged' ? 'rgba(74,222,128,0.1)' : 'rgba(255,255,255,0.02)',
+                color: status === 'Acknowledged' ? '#4ade80' : 'var(--text-muted)',
+              }}
+            >
+              Accept as issued
+            </button>
+            <button
+              type="button"
+              onClick={() => setStatus('Acknowledged with Exceptions')}
+              style={{
+                flex: 1, padding: '9px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 700,
+                border: `1px solid ${status === 'Acknowledged with Exceptions' ? '#f59e0b' : 'var(--border-subtle)'}`,
+                background: status === 'Acknowledged with Exceptions' ? 'rgba(245,158,11,0.1)' : 'rgba(255,255,255,0.02)',
+                color: status === 'Acknowledged with Exceptions' ? '#f59e0b' : 'var(--text-muted)',
+              }}
+            >
+              Accept with exceptions
+            </button>
+          </div>
+        </Field>
+
+        <Field label="Confirmed delivery / completion date">
+          <input type="date" value={confirmedDeliveryDate} onChange={e => setConfirmedDeliveryDate(e.target.value)} style={inputStyle} />
+          {dateChanged && <div style={{ fontSize: 10, color: '#f59e0b', marginTop: 4 }}>Differs from the requested date ({po.eta}) — this will be flagged to procurement.</div>}
+        </Field>
+
+        <Field label={status === 'Acknowledged with Exceptions' ? 'Comments (required)' : 'Comments (optional)'}>
+          <textarea
+            rows={3}
+            value={notes}
+            onChange={e => setNotes(e.target.value)}
+            style={{ ...inputStyle, resize: 'none' }}
+            placeholder={status === 'Acknowledged with Exceptions' ? 'Explain the exception(s) — e.g. revised delivery date, quantity constraint, pricing query…' : 'Any additional notes for the procurement team…'}
+          />
+        </Field>
+      </div>
+      <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
+        <button className="btn btn-ghost" style={{ flex: 1, justifyContent: 'center', fontSize: 12 }} onClick={onClose}>Cancel</button>
+        <button className="btn btn-primary" style={{ flex: 1, justifyContent: 'center', fontSize: 12 }} disabled={!isValid || submitting} onClick={handleSubmit}>
+          <Check size={13} /> Confirm acknowledgement
+        </button>
+      </div>
+    </ModalShell>
+  );
+}
+
 // ─── Main Component ──────────────────────────────────────────────────────────
 
 export default function SupplierPortalPage({ standalone = false }: { standalone?: boolean }) {
   const router = useRouter();
   const {
     currentSupplier, purchaseOrders, rfqs, quotations, invoices,
-    complianceDocs, disputes, grns, poMessages, products,
+    complianceDocs, disputes, grns, poMessages, products, companyProfile,
     sendPOMessage, acknowledgePO, updateShipment, submitInvoice,
-    requestEarlyPayment, updateSupplierProfile, supplierLogout,
+    requestEarlyPayment, updateSupplierProfile, supplierLogout, addQuotation,
     mySupplierId, globalSearchQuery
   } = useApp() as any;
 
@@ -427,16 +733,39 @@ export default function SupplierPortalPage({ standalone = false }: { standalone?
   const pendingPOs = myPOs.filter((p: any) => !p.acknowledgedAt);
 
   const handleBatchAcknowledge = useCallback(() => {
-    if (selectedPOIds.size === 0) {
-      pendingPOs.forEach((p: any) => acknowledgePO(p.id));
-    } else {
-      selectedPOIds.forEach(id => acknowledgePO(id));
-      setSelectedPOIds(new Set());
-    }
-  }, [selectedPOIds, pendingPOs, acknowledgePO]);
+    // Quick-path bulk acknowledgement — accepts as issued, at the requested date, with no exceptions.
+    // Individual POs needing a different date/decision/comments should be acknowledged one at a time (captures full detail).
+    const ackDefaults = { acknowledgedBy: myData.contactPerson || myData.name, status: 'Acknowledged' as const };
+    const targets = selectedPOIds.size === 0 ? pendingPOs : pendingPOs.filter((p: any) => selectedPOIds.has(p.id));
+    targets.forEach((p: any) => acknowledgePO(p.id, { ...ackDefaults, confirmedDeliveryDate: p.eta }));
+    if (selectedPOIds.size > 0) setSelectedPOIds(new Set());
+  }, [selectedPOIds, pendingPOs, acknowledgePO, myData]);
 
   // PO Detail Drawer state
   const [drawerPO, setDrawerPO] = useState<any>(null);
+
+  // Acknowledgement modal state — which PO is currently being acknowledged in detail
+  const [ackPO, setAckPO] = useState<any>(null);
+  const handleAcknowledgeSubmit = useCallback((details: { acknowledgedBy: string; status: string; confirmedDeliveryDate: string; notes: string }) => {
+    if (!ackPO) return;
+    acknowledgePO(ackPO.id, details);
+    if (drawerPO?.id === ackPO.id) setDrawerPO(null);
+    setAckPO(null);
+  }, [ackPO, drawerPO, acknowledgePO]);
+
+  // PO PDF download
+  const [pdfLoading, setPdfLoading] = useState<string | null>(null);
+  const handleDownloadPO = useCallback(async (po: any) => {
+    try {
+      setPdfLoading(po.id);
+      await exportPOAsPDF(po, myData, undefined, companyProfile);
+    } catch (err) {
+      console.error('PO PDF download failed:', err);
+      alert('Failed to generate the PO PDF. Please try again.');
+    } finally {
+      setPdfLoading(null);
+    }
+  }, [myData, companyProfile]);
 
   // Invoice submission state
   const [invoicePO, setInvoicePO] = useState<any>(null);
@@ -885,7 +1214,7 @@ export default function SupplierPortalPage({ standalone = false }: { standalone?
                           </td>
                           <td style={{ padding: '13px 16px', fontSize: 12, color: 'var(--text-muted)' }}>{po.dateOfIssue}</td>
                           <td style={{ padding: '13px 16px', fontSize: 13, fontWeight: 700 }}>${po.totalAmount?.toLocaleString()}</td>
-                          <td style={{ padding: '13px 16px' }}><StatusPill status={!po.acknowledgedAt ? 'Pending Ack' : po.deliveryStatus} /></td>
+                          <td style={{ padding: '13px 16px' }}><StatusPill status={poStatusLabel(po)} /></td>
                           <td style={{ padding: '13px 16px' }}>
                             {po.trackingNumber
                               ? <span style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--accent-slate)' }}>{po.trackingNumber}</span>
@@ -894,8 +1223,13 @@ export default function SupplierPortalPage({ standalone = false }: { standalone?
                           <td style={{ padding: '13px 16px' }}>
                             <div style={{ display: 'flex', gap: 6 }}>
                               {!po.acknowledgedAt && (
-                                <button className="btn btn-primary" style={{ padding: '4px 10px', fontSize: 10 }} onClick={e => { e.stopPropagation(); acknowledgePO(po.id); }}>
+                                <button className="btn btn-primary" style={{ padding: '4px 10px', fontSize: 10 }} onClick={e => { e.stopPropagation(); setAckPO(po); }}>
                                   <Check size={11} /> Ack
+                                </button>
+                              )}
+                              {po.deliveryStatus !== 'Draft' && (
+                                <button className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 10 }} disabled={pdfLoading === po.id} onClick={e => { e.stopPropagation(); handleDownloadPO(po); }}>
+                                  <Download size={11} /> {pdfLoading === po.id ? '…' : 'PDF'}
                                 </button>
                               )}
                               <button className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 10 }} onClick={() => setDrawerPO(po)}>
@@ -922,7 +1256,7 @@ export default function SupplierPortalPage({ standalone = false }: { standalone?
                       >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <div style={{ fontSize: 14, fontWeight: 800 }}>{po.id}</div>
-                          <StatusPill status={!po.acknowledgedAt ? 'Pending Ack' : po.deliveryStatus} />
+                          <StatusPill status={poStatusLabel(po)} />
                         </div>
                         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
                           <span style={{ color: 'var(--text-muted)' }}>{po.dateOfIssue}</span>
@@ -930,8 +1264,13 @@ export default function SupplierPortalPage({ standalone = false }: { standalone?
                         </div>
                         <div style={{ display: 'flex', gap: 8 }}>
                           <button className="btn btn-ghost" style={{ flex: 1, justifyContent: 'center', fontSize: 11 }}>Details</button>
+                          {po.deliveryStatus !== 'Draft' && (
+                            <button className="btn btn-ghost" style={{ flex: 1, justifyContent: 'center', fontSize: 11 }} disabled={pdfLoading === po.id} onClick={e => { e.stopPropagation(); handleDownloadPO(po); }}>
+                              {pdfLoading === po.id ? '…' : 'PDF'}
+                            </button>
+                          )}
                           {!po.acknowledgedAt && (
-                            <button className="btn btn-primary" style={{ flex: 1, justifyContent: 'center', fontSize: 11 }} onClick={e => { e.stopPropagation(); acknowledgePO(po.id); }}>
+                            <button className="btn btn-primary" style={{ flex: 1, justifyContent: 'center', fontSize: 11 }} onClick={e => { e.stopPropagation(); setAckPO(po); }}>
                               Acknowledge
                             </button>
                           )}
@@ -1167,7 +1506,15 @@ export default function SupplierPortalPage({ standalone = false }: { standalone?
                             <div style={{ fontSize: 12, fontWeight: 800 }}>{rfq.lineItems?.length || 0} line items</div>
                           </div>
                         </div>
-                        <button className="btn btn-primary" style={{ width: '100%', fontSize: 11, justifyContent: 'center' }}>Submit proposal</button>
+                        {myBids.some((b: any) => b.rfqId === rfq.id) ? (
+                          <button className="btn btn-ghost" style={{ width: '100%', fontSize: 11, justifyContent: 'center' }} disabled>
+                            <Check size={13} /> Proposal submitted
+                          </button>
+                        ) : (
+                          <button className="btn btn-primary" style={{ width: '100%', fontSize: 11, justifyContent: 'center' }} onClick={() => setSelectedRFQId(rfq.id)}>
+                            Submit proposal
+                          </button>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -1595,10 +1942,23 @@ export default function SupplierPortalPage({ standalone = false }: { standalone?
         <PODetailDrawer
           po={drawerPO}
           onClose={() => setDrawerPO(null)}
-          onAcknowledge={acknowledgePO}
+          onAcknowledge={(p) => setAckPO(p)}
           onUpdateShipment={updateShipment}
           onSubmitInvoice={() => { setInvoicePO(drawerPO); setDrawerPO(null); }}
+          onDownloadPdf={handleDownloadPO}
+          pdfLoading={pdfLoading === drawerPO.id}
           isMobile={isMobile}
+        />
+      )}
+
+      {/* ── ACKNOWLEDGE PO MODAL ──────────────────────────────────────────── */}
+      {ackPO && (
+        <AcknowledgePOModal
+          po={ackPO}
+          supplierName={myData.name}
+          defaultContact={myData.contactPerson || myData.name}
+          onClose={() => setAckPO(null)}
+          onSubmit={handleAcknowledgeSubmit}
         />
       )}
 
@@ -1610,6 +1970,21 @@ export default function SupplierPortalPage({ standalone = false }: { standalone?
           onSubmit={(data) => submitInvoice({ poId: invoicePO.id, supplierId: myData.id, ...data, totalAmount: invoicePO.totalAmount })}
         />
       )}
+
+      {/* ── BID SUBMISSION MODAL ──────────────────────────────────────────── */}
+      {selectedRFQId && (() => {
+        const bidRFQ = rfqs.find((r: any) => r.id === selectedRFQId);
+        if (!bidRFQ) return null;
+        return (
+          <BidSubmissionModal
+            rfq={bidRFQ}
+            supplierId={myData.id}
+            supplierName={myData.name}
+            onClose={() => setSelectedRFQId(null)}
+            onSubmit={addQuotation}
+          />
+        );
+      })()}
 
       {/* ── STANDALONE LOGOUT ─────────────────────────────────────────────── */}
       {standalone && (
@@ -1795,14 +2170,14 @@ function ChangePasswordModal({ supplierData, onClose, updateSupplierProfile }: {
 }
 
 // ─── Shared helpers ─────────────────────────────────────────────────────────
-function ModalShell({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
+function ModalShell({ title, onClose, children, maxWidth = 500 }: { title: string; onClose: () => void; children: React.ReactNode; maxWidth?: number }) {
   return (
     <div
       style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(8px)' }}
       onClick={onClose}
     >
       <div
-        style={{ width: '95%', maxWidth: 500, background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)', overflow: 'hidden', boxShadow: '0 40px 80px rgba(0,0,0,0.5)' }}
+        style={{ width: '95%', maxWidth, maxHeight: '90vh', overflowY: 'auto', background: 'var(--bg-card)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--radius-standard)', boxShadow: '0 40px 80px rgba(0,0,0,0.5)' }}
         onClick={e => e.stopPropagation()}
       >
         <div style={{ padding: '16px 22px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

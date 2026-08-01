@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { useApp } from '@/context/AppContext';
 import { X, Upload, Plus, Trash2, MessageSquare, FileText, Building2, MapPin, Mail, Phone, Hash, Wrench, CheckSquare, Square, Landmark, Send, Calendar, AlertTriangle, ShieldCheck, Info } from 'lucide-react';
 import type { POStatus, PaymentStatus, DocumentCategory, POItem, ServiceBillingType, ServiceMilestone, AppDocument } from '@/types';
+import { formatFileSize } from '@/utils/formatFileSize';
 
 
 // ── All document categories (goods + services) ──
@@ -145,6 +146,7 @@ function NewPOModal() {
   // Each row now carries optional serviceDetails
   const [poItems, setPOItems] = useState<{
     itemId: string;
+    description: string;
     quantity: string;
     unitPrice: string;
     scopeOfWork: string;
@@ -154,7 +156,7 @@ function NewPOModal() {
     milestones: ServiceMilestone[];
     showServiceFields: boolean;
     isAsset: boolean;
-  }[]>([{ itemId: '', quantity: '', unitPrice: '', scopeOfWork: '', duration: '', slaTerms: '', billingType: 'Fixed Price', milestones: [], showServiceFields: false, isAsset: false }]);
+  }[]>([{ itemId: '', description: '', quantity: '', unitPrice: '', scopeOfWork: '', duration: '', slaTerms: '', billingType: 'Fixed Price', milestones: [], showServiceFields: false, isAsset: false }]);
 
   const selectedSupplier = suppliers.find(s => s.id === supplierId);
   const availableItems = supplierId
@@ -166,7 +168,7 @@ function NewPOModal() {
     return item?.category === 'Services';
   };
 
-  const addRow = () => setPOItems(prev => [...prev, { itemId: '', quantity: '', unitPrice: '', scopeOfWork: '', duration: '', slaTerms: '', billingType: 'Fixed Price', milestones: [], showServiceFields: false, isAsset: false }]);
+  const addRow = () => setPOItems(prev => [...prev, { itemId: '', description: '', quantity: '', unitPrice: '', scopeOfWork: '', duration: '', slaTerms: '', billingType: 'Fixed Price', milestones: [], showServiceFields: false, isAsset: false }]);
   const removeRow = (i: number) => setPOItems(prev => prev.filter((_, idx) => idx !== i));
 
   const updateRow = (i: number, field: string, value: unknown) => {
@@ -176,10 +178,12 @@ function NewPOModal() {
       // auto-detect service and toggle fields
       if (field === 'itemId') {
         const itm = items.find(x => x.id === value);
+        // Pre-fill the line description from the catalogue item; still freely editable per PO.
+        const prefilledDescription = itm?.description || '';
         if (itm?.category === 'Services') {
-          return { ...updated, showServiceFields: true, incoterms: 'N/A', billingType: itm.serviceDetails?.billingType || 'Fixed Price', scopeOfWork: itm.serviceDetails?.scopeOfWork || '', duration: itm.serviceDetails?.duration || '', slaTerms: itm.serviceDetails?.slaTerms || '', milestones: itm.serviceDetails?.milestones ? [...itm.serviceDetails.milestones] : [], unitPrice: itm.currentPrice.toString() };
+          return { ...updated, description: prefilledDescription, showServiceFields: true, incoterms: 'N/A', billingType: itm.serviceDetails?.billingType || 'Fixed Price', scopeOfWork: itm.serviceDetails?.scopeOfWork || '', duration: itm.serviceDetails?.duration || '', slaTerms: itm.serviceDetails?.slaTerms || '', milestones: itm.serviceDetails?.milestones ? [...itm.serviceDetails.milestones] : [], unitPrice: itm.currentPrice.toString() };
         }
-        return { ...updated, showServiceFields: false };
+        return { ...updated, description: prefilledDescription, showServiceFields: false };
       }
       return updated;
     }));
@@ -196,6 +200,7 @@ function NewPOModal() {
       const base: POItem = {
         itemId: pi.itemId,
         itemName: item?.name || pi.itemId,
+        description: pi.description.trim() || undefined,
         quantity: parseFloat(pi.quantity),
         unitPrice: parseFloat(pi.unitPrice),
         isAsset: pi.isAsset,
@@ -439,6 +444,21 @@ function NewPOModal() {
                 {poItems.length > 1 && <button type="button" className="btn btn-danger btn-sm" onClick={() => removeRow(i)}><Trash2 size={14} /></button>}
               </div>
 
+              {/* Line item description — shown once an item/service has been selected */}
+              {row.itemId && (
+                <div className="form-group" style={{ marginTop: 8, marginBottom: isSvc ? 8 : 0 }}>
+                  <label className="form-label">Description</label>
+                  <textarea
+                    className="form-input"
+                    rows={2}
+                    placeholder="Describe the exact scope of supply for this line (specs, standards, remarks)..."
+                    value={row.description}
+                    onChange={e => updateRow(i, 'description', e.target.value)}
+                    style={{ resize: 'vertical' }}
+                  />
+                </div>
+              )}
+
               {/* Service-specific fields */}
               {isSvc && (
                 <div>
@@ -596,6 +616,11 @@ function NewPOModal() {
                         {item.isService && <Wrench size={12} style={{ color: '#a78bfa', flexShrink: 0 }} />}
                         <span style={{ fontWeight: 600, color: '#f1f5f9' }}>{item.itemName}</span>
                       </div>
+                      {item.description && (
+                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 2, paddingLeft: 18, whiteSpace: 'pre-line' }}>
+                          {item.description}
+                        </div>
+                      )}
                       {item.isService && item.serviceDetails && (
                         <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2, paddingLeft: 18 }}>
                           {item.serviceDetails.billingType} · {item.serviceDetails.duration}
@@ -1180,18 +1205,29 @@ function LogMaintenanceModal() {
 // ────────────────────────────────────────────────
 // New Quotation Modal (Supplier Portal)
 // ────────────────────────────────────────────────
+// FIX: this modal used to be dead code (unreachable, hardcoded to a demo supplier). It's now the
+// "record a quotation received via email" flow — reachable from the RFQ Bid Inbox tab — so
+// procurement can manually log offers that don't come through the supplier portal.
 function NewQuotationModal() {
-  const { rfqs, selectedRFQId, addQuotation, quotations, setModalOpen } = useApp();
+  const { rfqs, selectedRFQId, addQuotation, quotations, suppliers, setModalOpen } = useApp();
   const targetRFQ = rfqs.find(r => r.id === selectedRFQId);
 
+  const [supplierId, setSupplierId] = useState('');
   const [unitPrices, setUnitPrices] = useState<Record<string, string>>({});
   const [leadTimes, setLeadTimes] = useState<Record<string, string>>({});
   const [paymentTerms, setPaymentTerms] = useState('Net 30');
   const [deliveryTerms, setDeliveryTerms] = useState('CIF');
   const [validUntil, setValidUntil] = useState('');
   const [notes, setNotes] = useState('');
+  const [quoteFile, setQuoteFile] = useState<File | null>(null);
 
   if (!targetRFQ) return <div className="p-4 text-center">RFQ Not Found</div>;
+
+  // Restrict to the suppliers this RFQ was actually sent to, unless it's an open tender (no fixed list).
+  const eligibleSuppliers = targetRFQ.invitedSupplierIds.length > 0
+    ? suppliers.filter(s => targetRFQ.invitedSupplierIds.includes(s.id))
+    : suppliers;
+  const selectedSupplier = suppliers.find(s => s.id === supplierId);
 
   const handlePriceChange = (lineId: string, val: string) => {
     setUnitPrices(prev => ({ ...prev, [lineId]: val }));
@@ -1214,15 +1250,17 @@ function NewQuotationModal() {
   }));
 
   const totalAmount = lineItems.reduce((s, i) => s + i.totalPrice, 0);
+  const isValid = !!selectedSupplier && !!validUntil && lineItems.some(l => l.unitPrice > 0);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const newQuotationId = `QUO-${String(quotations.length + 1).padStart(3, '0')}`;
+    if (!isValid || !selectedSupplier) return;
+    const newQuotationId = `QUO-${Date.now()}`;
     addQuotation({
       id: newQuotationId,
       rfqId: targetRFQ.id,
-      supplierId: 'SUP-001', // demo
-      supplierName: 'SteelMax Industries', // demo
+      supplierId: selectedSupplier.id,
+      supplierName: selectedSupplier.name,
       status: 'Received',
       dateReceived: new Date().toISOString().split('T')[0],
       validUntil,
@@ -1232,6 +1270,8 @@ function NewQuotationModal() {
       totalAmount,
       lineItems,
       notes,
+      quotationFileName: quoteFile?.name,
+      quotationFileSize: quoteFile ? formatFileSize(quoteFile.size) : undefined,
     });
     setModalOpen(null);
   };
@@ -1239,8 +1279,16 @@ function NewQuotationModal() {
   return (
     <form onSubmit={handleSubmit} style={{ width: '100%' }}>
       <div style={{ marginBottom: 20, padding: 12, background: 'rgba(99,102,241,0.06)', borderRadius: 10, border: '1px solid rgba(99,102,241,0.1)' }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Bidding for RFQ</div>
+        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: 4 }}>Recording Quotation For RFQ</div>
         <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--text-primary)' }}>{targetRFQ.title} ({targetRFQ.id})</div>
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">Supplier *</label>
+        <select className="form-select" value={supplierId} onChange={e => setSupplierId(e.target.value)} required>
+          <option value="">Select the supplier this quote is from</option>
+          {eligibleSuppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
       </div>
 
       <div style={{ marginBottom: 20 }}>
@@ -1287,7 +1335,29 @@ function NewQuotationModal() {
 
       <div className="form-group">
         <label className="form-label">Additional Notes</label>
-        <textarea className="form-input" rows={2} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Warranty details, technical specs..." />
+        <textarea className="form-input" rows={2} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Warranty details, technical specs, or how this was received (e.g. 'Received via email 12 Aug')..." />
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">Attach Quotation Document (Optional)</label>
+        <div style={{ position: 'relative' }}>
+          <label style={{
+            display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px',
+            background: 'rgba(99,102,241,0.04)', border: '1px dashed var(--border-color)',
+            borderRadius: 10, cursor: 'pointer',
+          }}>
+            <Upload size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+            <span style={{ fontSize: 13, color: quoteFile ? 'var(--text-primary)' : 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {quoteFile ? `${quoteFile.name} (${formatFileSize(quoteFile.size)})` : 'Attach the email attachment (PDF, DOC, XLS)'}
+            </span>
+            <input
+              type="file"
+              accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png"
+              onChange={e => setQuoteFile(e.target.files?.[0] || null)}
+              style={{ position: 'absolute', opacity: 0, inset: 0, cursor: 'pointer' }}
+            />
+          </label>
+        </div>
       </div>
 
       <div style={{ margin: '20px 0', padding: 16, background: 'rgba(99,102,241,0.08)', borderRadius: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -1297,7 +1367,7 @@ function NewQuotationModal() {
 
       <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
         <button type="button" className="btn btn-secondary" onClick={() => setModalOpen(null)}>Cancel</button>
-        <button type="submit" className="btn btn-primary"><Send size={16} /> Submit Quotation</button>
+        <button type="submit" className="btn btn-primary" disabled={!isValid}><Send size={16} /> Record Quotation</button>
       </div>
     </form>
   );
@@ -1576,7 +1646,7 @@ function ShipmentConfirmationModal() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (selectedPOId) updateShipment(selectedPOId, tracking, carrier);
+    if (selectedPOId) updateShipment(selectedPOId, { trackingNumber: tracking, carrier });
     setModalOpen(null);
   };
 
@@ -2002,6 +2072,114 @@ function AddContactModal() {
   );
 }
 
+// ── New Blanket Agreement Modal ───────────────────────────────
+// FIX: "New Blanket Agreement" opened an empty modal shell — 'newBlanket' had no case registered below.
+function AddBlanketModal() {
+  const { suppliers, blanketPOs, addBlanket, setModalOpen, fxRates } = useApp();
+  const [supplierId, setSupplierId] = useState('');
+  const [totalCeiling, setTotalCeiling] = useState('');
+  const [currency, setCurrency] = useState('AED');
+  const [validFrom, setValidFrom] = useState('');
+  const [validTo, setValidTo] = useState('');
+  const [category, setCategory] = useState('');
+  const [department, setDepartment] = useState('');
+  const [project, setProject] = useState('');
+
+  const selectedSupplier = suppliers.find(s => s.id === supplierId);
+  const ceilingValue = parseFloat(totalCeiling);
+  const isValid = !!supplierId && ceilingValue > 0 && !!validFrom && !!validTo && validTo >= validFrom;
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!isValid || !selectedSupplier) return;
+
+    const newId = `BLK-${String(blanketPOs.length + 1).padStart(3, '0')}`;
+    addBlanket({
+      id: newId,
+      supplierId,
+      supplierName: selectedSupplier.name,
+      totalCeiling: ceilingValue,
+      consumedAmount: 0,
+      validFrom,
+      validTo,
+      currency,
+      status: 'Active',
+      releaseOrderIds: [],
+      category: (category || undefined) as any,
+      department: department.trim() || undefined,
+      project: project.trim() || undefined,
+    });
+    setModalOpen(null);
+  };
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <div className="form-row">
+        <div className="form-group">
+          <label className="form-label">Supplier *</label>
+          <select className="form-select" value={supplierId} onChange={e => setSupplierId(e.target.value)} required>
+            <option value="">Select Supplier</option>
+            {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Category Scope (Optional)</label>
+          <select className="form-select" value={category} onChange={e => setCategory(e.target.value)}>
+            <option value="">All Categories</option>
+            <option>Piping</option><option>Valves</option><option>Fittings</option>
+            <option>Chemicals</option><option>Electrical</option><option>Instrumentation</option>
+            <option>Services</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="form-row">
+        <div className="form-group">
+          <label className="form-label">Total Ceiling *</label>
+          <input type="number" className="form-input" value={totalCeiling} onChange={e => setTotalCeiling(e.target.value)} min="0" step="0.01" required placeholder="0.00" />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Currency</label>
+          <select className="form-select" value={currency} onChange={e => setCurrency(e.target.value)}>
+            {Object.keys(fxRates).map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div className="form-row">
+        <div className="form-group">
+          <label className="form-label">Valid From *</label>
+          <input type="date" className="form-input" value={validFrom} onChange={e => setValidFrom(e.target.value)} required />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Valid To *</label>
+          <input type="date" className="form-input" value={validTo} onChange={e => setValidTo(e.target.value)} min={validFrom || undefined} required />
+        </div>
+      </div>
+
+      <div className="form-row">
+        <div className="form-group">
+          <label className="form-label">Department (Optional)</label>
+          <input type="text" className="form-input" value={department} onChange={e => setDepartment(e.target.value)} placeholder="e.g., Operations" />
+        </div>
+        <div className="form-group">
+          <label className="form-label">Project (Optional)</label>
+          <input type="text" className="form-input" value={project} onChange={e => setProject(e.target.value)} placeholder="e.g., PRJ-2026-004" />
+        </div>
+      </div>
+
+      {validTo && validFrom && validTo < validFrom && (
+        <div style={{ fontSize: 12, color: '#f43f5e', marginBottom: 8 }}>"Valid To" must be on or after "Valid From".</div>
+      )}
+
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16 }}>
+        <button type="button" className="btn btn-secondary" onClick={() => setModalOpen(null)}>Cancel</button>
+        <button type="submit" className="btn btn-primary" disabled={!isValid}><Plus size={14} /> Create Blanket Agreement</button>
+      </div>
+    </form>
+  );
+}
+
 // Modal Container
 // ────────────────────────────────────────────────
 export default function Modals() {
@@ -2014,7 +2192,7 @@ export default function Modals() {
     uploadDoc: 'Upload Document',
     newAsset: 'Register Capital Asset',
     logMaintenance: 'Log Maintenance Activity',
-    newQuotation: 'Submit New Quotation',
+    newQuotation: 'Record Quotation Received via Email',
     negotiation: 'Negotiation Thread',
     confirmShipment: 'Confirm Shipment',
     requestAmendment: 'Request PO Amendment',
@@ -2028,6 +2206,7 @@ export default function Modals() {
     earlyPayment: 'Request Early Settlement',
     addContact: 'Add Authorized Contact',
     bidSubmission: 'Initialize Official Bid Submission',
+    newBlanket: 'New Blanket Agreement',
   };
 
   return (
@@ -2060,6 +2239,7 @@ export default function Modals() {
           {modalOpen === 'uploadISOCert' && <ComplianceUploadModal forceCategory="ISO Certification" />}
           {modalOpen === 'earlyPayment' && <EarlyPaymentModal />}
           {modalOpen === 'addContact' && <AddContactModal />}
+          {modalOpen === 'newBlanket' && <AddBlanketModal />}
         </div>
       </div>
     </div>

@@ -237,14 +237,13 @@ export async function exportPOAsPDF(
     y += 14;
   }
 
-  // ── Line Items Table ─────────────────────────────────────────
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
-  doc.setTextColor(...DARK);
-  doc.text('LINE ITEMS', margin, y + 5);
-  y += 8;
+  // ── Pagination helpers ─────────────────────────────────────────
+  // Usable content bottom on every page (the indigo footer band is drawn at y=285 on all pages).
+  const CONTENT_TOP = 16;
+  const CONTENT_BOTTOM = 278;
+  const LINE_H = 3.6; // mm per wrapped text line at ~7-7.5pt
 
-  // Table header
+  // Table header is redrawn whenever the items table continues onto a new page.
   const cols = [
     { label: '#',          x: margin,                  w: 8,            align: 'left'  as const },
     { label: 'DESCRIPTION', x: margin + 8,             w: contentW - 75, align: 'left'  as const },
@@ -253,50 +252,116 @@ export async function exportPOAsPDF(
     { label: 'TOTAL',      x: margin + contentW - 25,  w: 25,           align: 'right' as const },
   ];
 
-  doc.setFillColor(...DARK);
-  doc.rect(margin, y, contentW, 7, 'F');
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7);
-  doc.setTextColor(...WHITE);
-  cols.forEach(col => {
-    doc.text(col.label, col.align === 'right' ? col.x + col.w : col.x + 2, y + 4.8, { align: col.align });
-  });
-  y += 7;
+  const drawItemsTableHeader = () => {
+    doc.setFillColor(...DARK);
+    doc.rect(margin, y, contentW, 7, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(...WHITE);
+    cols.forEach(col => {
+      doc.text(col.label, col.align === 'right' ? col.x + col.w : col.x + 2, y + 4.8, { align: col.align });
+    });
+    y += 7;
+  };
 
-  // Rows
+  // Starts a fresh page with a lightweight continuation header, resets y to the content top.
+  const startNewPage = () => {
+    doc.addPage();
+    y = CONTENT_TOP;
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(...MUTED);
+    doc.text(`Purchase Order ${po.id} — continued`, margin, y);
+    doc.setDrawColor(...BORDER);
+    doc.line(margin, y + 2, margin + contentW, y + 2);
+    y += 8;
+  };
+
+  // Ensures `neededH` mm of vertical space remains before the footer; else starts a new page.
+  // `redrawTableHeader` re-emits the line-items header row when a table row spills onto the next page.
+  const ensureSpace = (neededH: number, redrawTableHeader = false) => {
+    if (y + neededH > CONTENT_BOTTOM) {
+      startNewPage();
+      if (redrawTableHeader) drawItemsTableHeader();
+    }
+  };
+
+  // ── Line Items Table ─────────────────────────────────────────
+  ensureSpace(15);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(...DARK);
+  doc.text('LINE ITEMS', margin, y + 5);
+  y += 8;
+
+  drawItemsTableHeader();
+
+  // Rows — height is computed per row from wrapped item name / description / service info,
+  // so long descriptions no longer get truncated and rows are allowed to grow.
   po.items.forEach((item: any, i: number) => {
-    const rowH = 9;
+    const nameText = item.itemName + (item.isService ? ' [Service]' : '') + (item.isAsset ? ' [Asset]' : '');
+    const nameLines: string[] = doc.splitTextToSize(nameText, cols[1].w - 4);
+    const descLines: string[] = item.description ? doc.splitTextToSize(item.description, cols[1].w - 4) : [];
+    const svcInfoLines: string[] = (item.isService && item.serviceDetails)
+      ? doc.splitTextToSize(`${item.serviceDetails.billingType} · ${item.serviceDetails.duration}`, cols[1].w - 4)
+      : [];
+    const totalLines = nameLines.length + descLines.length + svcInfoLines.length;
+    const rowH = Math.max(9, totalLines * LINE_H + 6);
+
+    // Page break check — redraws the table header if the row moves to a new page.
+    ensureSpace(rowH, true);
+
     const isEven = i % 2 === 0;
     doc.setFillColor(isEven ? 255 : 248, isEven ? 255 : 250, isEven ? 255 : 252);
     doc.setDrawColor(...BORDER);
     doc.rect(margin, y, contentW, rowH, 'FD');
 
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.5);
-    doc.setTextColor(...DARK);
+    const firstLineY = y + 5.5;
 
     // Row #
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
     doc.setTextColor(...MUTED);
-    doc.text(String(i + 1), margin + 2, y + 5.5);
+    doc.text(String(i + 1), margin + 2, firstLineY);
 
-    // Item name
+    // Item name (full text, wrapped across multiple lines — no more truncation)
+    let textY = firstLineY;
     doc.setTextColor(...DARK);
     doc.setFont('helvetica', item.isService ? 'italic' : 'normal');
-    const nameText = item.itemName + (item.isService ? ' [Service]' : '') + (item.isAsset ? ' [Asset]' : '');
-    doc.text(doc.splitTextToSize(nameText, cols[1].w - 4)[0], margin + 10, y + 5.5);
+    nameLines.forEach((line, li) => doc.text(line, margin + 10, textY + li * LINE_H));
+    textY += nameLines.length * LINE_H;
+
+    // Description (free-text scope entered at PO creation)
+    if (descLines.length) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(6.8);
+      doc.setTextColor(...MUTED);
+      descLines.forEach((line, li) => doc.text(line, margin + 10, textY + li * LINE_H));
+      textY += descLines.length * LINE_H;
+      doc.setFontSize(7.5);
+    }
+
+    // Service billing/duration summary
+    if (svcInfoLines.length) {
+      doc.setFont('helvetica', 'italic');
+      doc.setFontSize(6.8);
+      doc.setTextColor(...INDIGO);
+      svcInfoLines.forEach((line, li) => doc.text(line, margin + 10, textY + li * LINE_H));
+      doc.setFontSize(7.5);
+    }
 
     // Qty
     doc.setFont('helvetica', 'normal');
     doc.setTextColor(...MUTED);
-    doc.text(item.quantity.toLocaleString(), margin + contentW - 67 + 18, y + 5.5, { align: 'right' });
+    doc.text(item.quantity.toLocaleString(), margin + contentW - 67 + 18, firstLineY, { align: 'right' });
 
     // Unit price
     doc.setTextColor(...DARK);
-    doc.text(`$${item.unitPrice.toFixed(2)}`, margin + contentW - 49 + 24, y + 5.5, { align: 'right' });
+    doc.text(`$${item.unitPrice.toFixed(2)}`, margin + contentW - 49 + 24, firstLineY, { align: 'right' });
 
     // Total
     doc.setFont('helvetica', 'bold');
-    doc.text(`$${(item.quantity * item.unitPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}`, margin + contentW, y + 5.5, { align: 'right' });
+    doc.text(`$${(item.quantity * item.unitPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}`, margin + contentW, firstLineY, { align: 'right' });
 
     y += rowH;
   });
@@ -311,6 +376,7 @@ export async function exportPOAsPDF(
     { label: 'Outstanding', value: `$${(po.totalAmount * 1.05 - po.amountPaid).toLocaleString(undefined, { minimumFractionDigits: 2 })}`, color: [244, 63, 94] as [number,number,number] },
   ];
 
+  ensureSpace(totalRows.length * 7 + 2);
   totalRows.forEach(row => {
     const rowW = 80;
     const rx = margin + contentW - rowW;
@@ -338,6 +404,7 @@ export async function exportPOAsPDF(
     doc.setDrawColor(...INDIGO);
     const remarkLines = doc.splitTextToSize(po.remarks, contentW - 12);
     const remarkH = remarkLines.length * 4.5 + 10;
+    ensureSpace(remarkH);
     doc.rect(margin, y, contentW, remarkH, 'FD');
 
     doc.setFillColor(...INDIGO);
@@ -358,6 +425,7 @@ export async function exportPOAsPDF(
   // ── Signature blocks ─────────────────────────────────────────
   const sigW = (contentW - 8) / 2;
 
+  ensureSpace(22);
   ['PREPARED BY — PROCUREMENT DEPT.', 'APPROVED BY — ' + (po.approvalAuthority?.toUpperCase() || 'AUTHORIZED SIGNATORY')].forEach((label, i) => {
     const sx2 = margin + i * (sigW + 8);
     doc.setFillColor(...LIGHT_BG);
@@ -378,16 +446,18 @@ export async function exportPOAsPDF(
     doc.text(`Date: ${new Date().toLocaleDateString('en-AE')}`, sx2 + sigW - 5, y + 19, { align: 'right' });
   });
 
-  y += 28;
-
-  // ── Footer ───────────────────────────────────────────────────
-  doc.setFillColor(...INDIGO);
-  doc.rect(0, 285, pageW, 12, 'F');
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
-  doc.setTextColor(200, 202, 255);
-  doc.text(`This Purchase Order is legally binding. Issued by ${company.name} on ${new Date().toLocaleDateString('en-AE')}`, margin, 292);
-  doc.text(`Page 1 of 1  |  ${po.id}`, pageW - margin, 292, { align: 'right' });
+  // ── Footer (drawn on every page once the final page count is known) ──
+  const totalPages = doc.internal.getNumberOfPages();
+  for (let p = 1; p <= totalPages; p++) {
+    doc.setPage(p);
+    doc.setFillColor(...INDIGO);
+    doc.rect(0, 285, pageW, 12, 'F');
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(200, 202, 255);
+    doc.text(`This Purchase Order is legally binding. Issued by ${company.name} on ${new Date().toLocaleDateString('en-AE')}`, margin, 292);
+    doc.text(`Page ${p} of ${totalPages}  |  ${po.id}`, pageW - margin, 292, { align: 'right' });
+  }
 
   // ── Save ────────────────────────────────────────────────────
   const fileName = `PO_${po.id}_${po.supplierName.replace(/\s+/g, '_')}.pdf`;

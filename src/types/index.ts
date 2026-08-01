@@ -269,6 +269,7 @@ export interface ServicePOLineDetails {
 export interface POItem {
   itemId: string;
   itemName: string;
+  description?: string;         // Free-text scope/description for this line item
   quantity: number;
   unitPrice: number;
   isService?: boolean;
@@ -303,10 +304,30 @@ export interface PurchaseOrder {
   
   // Supplier Portal Extension
   acknowledgedAt?: string;
+  acknowledgedBy?: string;                     // Supplier-side contact who confirmed the PO
+  acknowledgementStatus?: AcknowledgementStatus;
+  acknowledgedDeliveryDate?: string;            // Supplier-confirmed delivery/completion date (may differ from the requested ETA)
+  acknowledgementNotes?: string;                // Exceptions/comments raised by the supplier at acknowledgement
   trackingNumber?: string;
   carrier?: string;
   shippedAt?: string;
+  shipmentEta?: string;          // Carrier-confirmed delivery date, set when shipment details are submitted
   amendmentRequest?: POAmendmentRequest;
+}
+
+export type AcknowledgementStatus = 'Acknowledged' | 'Acknowledged with Exceptions';
+
+export interface AcknowledgePODetails {
+  acknowledgedBy?: string;
+  status?: AcknowledgementStatus;
+  confirmedDeliveryDate?: string;
+  notes?: string;
+}
+
+export interface UpdateShipmentDetails {
+  trackingNumber: string;
+  carrier: string;
+  estimatedDelivery?: string;
 }
 
 export interface POAmendmentRequest {
@@ -404,6 +425,8 @@ export interface Quotation {
   notes?: string;
   feedback?: string;       // Official feedback from the buyer
   negotiationCount?: number;
+  quotationFileName?: string;   // Vendor's own quotation document, attached at submission
+  quotationFileSize?: string;
 }
 
 export interface NegotiationMessage {
@@ -635,6 +658,7 @@ export interface Invoice {
   id: string;
   invoiceNumber: string;
   poId: string;
+  grnId?: string;               // GRN this invoice was billed against, for traceability
   supplierId: string;
   supplierName: string;
   date: string;
@@ -745,7 +769,7 @@ export interface PurchaseOrder {
 // ── Notifications ────────────────────────────────────────────
 
 export type NotificationType = 'alert' | 'success' | 'info' | 'warning';
-export type NotificationSource = 'PO' | 'Payment' | 'Document' | 'Budget' | 'Contract' | 'GRN';
+export type NotificationSource = 'PO' | 'Payment' | 'Document' | 'Budget' | 'Contract' | 'GRN' | 'Supplier';
 
 export interface AppNotification {
   id: string;

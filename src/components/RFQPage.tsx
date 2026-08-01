@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { useApp } from '@/context/AppContext';
 import { can } from '@/types';
 import type { RFQ, RFQLineItem, RFQStatus, TenderType } from '@/types';
-import { Search, Plus, Send, ArrowLeft, Eye, X, CheckCircle2, Award, Lock } from 'lucide-react';
+import { Search, Plus, Send, ArrowLeft, Eye, X, CheckCircle2, Award, Lock, Paperclip, Mail } from 'lucide-react';
 
 const STATUS_META: Record<RFQStatus, { color: string; bg: string }> = {
   Draft:     { color: '#94a3b8', bg: 'rgba(148,163,184,0.1)' },
@@ -92,7 +92,7 @@ function ComparisonMatrix({ rfqs, quotations, selection, onClose }: { rfqs: any[
 
 // ── RFQ Detail / View ──
 function RFQDetail({ rfqId }: { rfqId: string }) {
-  const { rfqs, quotations, suppliers, items, currentUser, sendRFQ, closeRFQ, awardRFQ, publishRFQ, setSelectedRFQId, setActivePage, negotiationMessages, addNegotiationMessage } = useApp();
+  const { rfqs, quotations, suppliers, items, currentUser, sendRFQ, closeRFQ, awardRFQ, publishRFQ, setSelectedRFQId, setActivePage, negotiationMessages, addNegotiationMessage, setModalOpen } = useApp();
   const [activeTab, setActiveTab] = useState<'overview' | 'inbox' | 'matrix' | 'nego'>('overview');
   const [selectedQuoteId, setSelectedQuoteId] = useState<string | null>(null);
   const [matrixSelection, setMatrixSelection] = useState<string[]>([]);
@@ -189,6 +189,14 @@ function RFQDetail({ rfqId }: { rfqId: string }) {
 
       {activeTab === 'inbox' && (
         <div className="card">
+          <div className="card-header">
+            <div className="card-title">Bid Inbox</div>
+            {can(currentUser, 'create_rfq') && (
+              <button className="btn btn-secondary btn-sm" style={{ marginLeft: 'auto' }} onClick={() => setModalOpen('newQuotation')}>
+                <Mail size={13} /> Add Quotation Manually
+              </button>
+            )}
+          </div>
           <div className="data-table-wrapper">
             <table className="data-table">
               <thead><tr><th>Select</th><th>Supplier</th><th>Amount</th><th>Score</th><th>Status</th><th>Actions</th></tr></thead>
@@ -196,7 +204,10 @@ function RFQDetail({ rfqId }: { rfqId: string }) {
                 {rfqQuotations.map(q => (
                   <tr key={q.id}>
                     <td><input type="checkbox" checked={matrixSelection.includes(q.id)} onChange={() => setMatrixSelection(p => p.includes(q.id) ? p.filter(x => x !== q.id) : [...p, q.id])} /></td>
-                    <td style={{ fontWeight: 600 }}>{q.supplierName}</td>
+                    <td style={{ fontWeight: 600 }}>
+                      {q.supplierName}
+                      {q.quotationFileName && <Paperclip size={11} style={{ marginLeft: 6, color: 'var(--text-muted)', verticalAlign: 'middle' }} />}
+                    </td>
                     <td className="font-mono" style={{ fontWeight: 600 }}>${q.totalAmount.toLocaleString()}</td>
                     <td>
                       <div style={{ width: 80, height: 8, background: 'rgba(255,255,255,0.05)', borderRadius: 4, overflow: 'hidden', marginTop: 4 }}>
@@ -507,7 +518,7 @@ export default function RFQPage() {
       </div>
 
       {/* Quick Access Bubbles - Premium Design */}
-      <div className="grid grid-4" style={{ gap: 16, marginBottom: 24 }}>
+      <div className="grid-4" style={{ marginBottom: 24 }}>
         {[
           { label: 'Active RFQs', value: stats.sent, icon: <Send size={20} />, color: 'var(--accent-indigo)', bg: 'rgba(99,102,241,0.08)' },
           { label: 'Bids Received', value: quotations.length, icon: <ArrowLeft size={20} />, color: 'var(--accent-slate)', bg: 'rgba(177,202,215,0.08)' },

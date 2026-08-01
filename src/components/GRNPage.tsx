@@ -2,8 +2,10 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '@/context/AppContext';
 import { can } from '@/types';
-import type { GRN, GRNStatus, GRNLineItem } from '@/types';
-import { ArrowLeft, Plus, Search, Check, X, Lock, Truck, PackageCheck, AlertTriangle } from 'lucide-react';
+import type { GRN, GRNStatus, GRNLineItem, DocumentCategory, AppDocument } from '@/types';
+import { ArrowLeft, Plus, Search, Check, X, Lock, Truck, PackageCheck, AlertTriangle, Paperclip } from 'lucide-react';
+import { formatFileSize } from '@/utils/formatFileSize';
+import DocumentAttachmentsEditor, { AttachmentDraft, newAttachmentId } from './DocumentAttachmentsEditor';
 
 const STATUS_META: Record<GRNStatus, { color: string; bg: string; label: string }> = {
   Draft:     { color: '#94a3b8', bg: 'rgba(148,163,184,0.1)', label: 'Draft' },
@@ -13,13 +15,21 @@ const STATUS_META: Record<GRNStatus, { color: string; bg: string; label: string 
   Partial:   { color: '#f59e0b', bg: 'rgba(245,158,11,0.1)',  label: 'Partial' },
 };
 
+// Commercial & shipping document categories relevant to a goods receipt
+const RECEIPT_DOC_CATEGORIES: DocumentCategory[] = ['Delivery Note', 'Packing List', 'BL/AWB', 'MTC', 'COO', 'Invoice', 'Internal Inspection Report'];
+
+// A general "covers the whole delivery" sentinel — receipt-level documents (e.g. a Bill of Lading)
+// aren't tied to a single catalogue item the way per-item documents are.
+const WHOLE_SHIPMENT_ITEM_ID = 'ALL';
+
 // ── GRN Detail ──
 function GRNDetail({ grnId }: { grnId: string }) {
-  const { grns, purchaseOrders, currentUser, submitGRN, approveGRN, rejectGRN, setSelectedGRNId } = useApp();
+  const { grns, purchaseOrders, documents, currentUser, submitGRN, approveGRN, rejectGRN, setSelectedGRNId } = useApp();
   const [rejectReason, setRejectReason] = useState('');
   const [showReject, setShowReject] = useState(false);
   const grn = grns.find(g => g.id === grnId);
   if (!grn) return null;
+  const linkedDocs = documents.filter(d => d.poId === grn.poId);
   const po = purchaseOrders.find(p => p.id === grn.poId);
   const s = STATUS_META[grn.status];
 
@@ -135,18 +145,39 @@ function GRNDetail({ grnId }: { grnId: string }) {
         )}
         {grn.notes && <p style={{ marginTop: 12, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{grn.notes}</p>}
       </div>
+
+      {/* Attached commercial & shipping documents (linked to the PO this receipt is against) */}
+      <div className="card">
+        <div className="card-header"><div className="card-title">Attached Documents</div></div>
+        {linkedDocs.length === 0 ? (
+          <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>No documents attached for this PO yet.</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {linkedDocs.map(doc => (
+              <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8, background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)' }}>
+                <Paperclip size={14} style={{ color: 'var(--accent-indigo)', flexShrink: 0 }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>{doc.name}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{doc.category} · {doc.fileSize} · {doc.uploadDate}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
 // ── New GRN Modal ──
 function NewGRNModal({ onClose }: { onClose: () => void }) {
-  const { grns, purchaseOrders, addGRN, currentUser } = useApp();
+  const { grns, purchaseOrders, addGRN, addDocument, currentUser } = useApp();
   const [poId, setPoId] = useState('');
   const [dn, setDN] = useState('');
   const [vehicle, setVehicle] = useState('');
   const [notes, setNotes] = useState('');
   const [lines, setLines] = useState<Partial<GRNLineItem>[]>([]);
+  const [attachments, setAttachments] = useState<AttachmentDraft[]>([]);
 
   const eligiblePOs = purchaseOrders.filter(po =>
     ['Approved', 'Shipped'].includes(po.deliveryStatus)
@@ -199,6 +230,23 @@ function NewGRNModal({ onClose }: { onClose: () => void }) {
       notes: notes || undefined, lineItems: validLines,
       totalAccepted: totalAcc, totalRejected: totalRej, stockUpdated: false,
     });
+
+    const today = new Date().toISOString().split('T')[0];
+    attachments.filter(a => a.file).forEach(a => {
+      const file = a.file as File;
+      const ext = file.name.split('.').pop()?.toUpperCase() || 'FILE';
+      addDocument({
+        id: `DOC-${newAttachmentId()}`,
+        name: file.name,
+        category: a.category,
+        poId,
+        itemId: WHOLE_SHIPMENT_ITEM_ID,
+        uploadDate: today,
+        fileSize: formatFileSize(file.size),
+        fileType: ext,
+      } as AppDocument);
+    });
+
     onClose();
   };
 
@@ -271,6 +319,13 @@ function NewGRNModal({ onClose }: { onClose: () => void }) {
             <label className="form-label">Notes</label>
             <textarea className="form-input" rows={2} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Any observations during receipt inspection…" />
           </div>
+
+          <DocumentAttachmentsEditor
+            attachments={attachments}
+            categories={RECEIPT_DOC_CATEGORIES}
+            onChange={setAttachments}
+            label="Commercial & Shipping Documents"
+          />
 
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16 }}>
             <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>

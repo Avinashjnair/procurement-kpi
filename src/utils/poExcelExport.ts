@@ -120,7 +120,7 @@ export async function exportPOAsExcel(
     item.quantity,
     item.unitPrice,
     item.quantity * item.unitPrice,
-    item.serviceDetails?.scopeOfWork || '',
+    item.description || item.serviceDetails?.scopeOfWork || '',
   ]);
 
   const subtotal = po.totalAmount;

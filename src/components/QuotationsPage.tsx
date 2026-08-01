@@ -2,8 +2,8 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '@/context/AppContext';
 import { can, EVAL_WEIGHTS, calcEvalScore } from '@/types';
-import type { Quotation, QuotationEvaluation, RFQ } from '@/types';
-import { Award, BarChart2, ChevronDown, ChevronUp, Star, Lock, X, Check, MessageSquare } from 'lucide-react';
+import type { Quotation, QuotationEvaluation, RFQ, RFQStatus } from '@/types';
+import { Award, BarChart2, ChevronDown, ChevronUp, Star, Lock, X, Check, MessageSquare, Paperclip, Search } from 'lucide-react';
 import { RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer } from 'recharts';
 
 const CRITERIA: { key: keyof Omit<QuotationEvaluation, 'totalScore' | 'evaluatedBy' | 'evaluatedAt' | 'recommendation'>; label: string; weight: number }[] = [
@@ -120,9 +120,41 @@ export default function QuotationsPage() {
   const [evaluating, setEvaluating] = useState<Quotation | null>(null);
   const [expandedQuo, setExpandedQuo] = useState<string | null>(null);
 
-  const rfqsWithQuotes = useMemo(() => 
+  // Search / filter / sort for the RFQ list view — search matches RFQ # or title.
+  const [rfqSearch, setRfqSearch] = useState('');
+  const [rfqStatusFilter, setRfqStatusFilter] = useState('All');
+  const [sortField, setSortField] = useState<'id' | 'title' | 'deadlineDate' | 'quotes'>('id');
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc');
+
+  const toggleSort = (field: typeof sortField) => {
+    if (sortField === field) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortField(field); setSortDir('asc'); }
+  };
+
+  const rfqsWithQuotes = useMemo(() =>
     rfqs.filter(r => quotations.some(q => q.rfqId === r.id))
   , [rfqs, quotations]);
+
+  const filteredSortedRfqs = useMemo(() => {
+    const filtered = rfqsWithQuotes.filter(r => {
+      const matchesSearch = !rfqSearch ||
+        r.id.toLowerCase().includes(rfqSearch.toLowerCase()) ||
+        r.title.toLowerCase().includes(rfqSearch.toLowerCase());
+      const matchesStatus = rfqStatusFilter === 'All' || r.status === rfqStatusFilter;
+      return matchesSearch && matchesStatus;
+    });
+    const dir = sortDir === 'asc' ? 1 : -1;
+    return [...filtered].sort((a, b) => {
+      if (sortField === 'quotes') {
+        const ca = quotations.filter(q => q.rfqId === a.id).length;
+        const cb = quotations.filter(q => q.rfqId === b.id).length;
+        return (ca - cb) * dir;
+      }
+      const va = a[sortField] || '';
+      const vb = b[sortField] || '';
+      return va.localeCompare(vb) * dir;
+    });
+  }, [rfqsWithQuotes, rfqSearch, rfqStatusFilter, sortField, sortDir, quotations]);
 
   const activeRFQ = rfqs.find(r => r.id === selectedRFQId);
   const rfqQuotes = useMemo(() =>
@@ -145,6 +177,7 @@ export default function QuotationsPage() {
   // 1. RFQ List View
   // ─────────────────────────────────────────────────────────────
   if (viewMode === 'rfqs') {
+    const sortArrow = (field: typeof sortField) => sortField === field ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '';
     return (
       <div>
         <div className="page-header">
@@ -152,21 +185,38 @@ export default function QuotationsPage() {
           <p>Select an RFQ to review received supplier quotations</p>
         </div>
 
+        <div className="filters-bar" style={{ marginBottom: 16 }}>
+          <div className="search-wrapper">
+            <Search size={16} />
+            <input
+              type="text"
+              className="search-input"
+              placeholder="Search by RFQ # or title..."
+              value={rfqSearch}
+              onChange={e => setRfqSearch(e.target.value)}
+            />
+          </div>
+          <select className="filter-select" value={rfqStatusFilter} onChange={e => setRfqStatusFilter(e.target.value)}>
+            <option value="All">All Statuses</option>
+            {(['Draft', 'Published', 'Sent', 'Closed', 'Awarded', 'Cancelled'] as RFQStatus[]).map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+
         <div className="card">
           <div className="data-table-wrapper">
             <table className="data-table">
               <thead>
                 <tr>
-                  <th>RFQ #</th>
-                  <th>Title</th>
+                  <th onClick={() => toggleSort('id')} style={{ cursor: 'pointer' }}>RFQ #{sortArrow('id')}</th>
+                  <th onClick={() => toggleSort('title')} style={{ cursor: 'pointer' }}>Title{sortArrow('title')}</th>
                   <th>Status</th>
-                  <th>Closing Date</th>
-                  <th>Quotes Received</th>
+                  <th onClick={() => toggleSort('deadlineDate')} style={{ cursor: 'pointer' }}>Closing Date{sortArrow('deadlineDate')}</th>
+                  <th onClick={() => toggleSort('quotes')} style={{ cursor: 'pointer' }}>Quotes Received{sortArrow('quotes')}</th>
                   <th>Action</th>
                 </tr>
               </thead>
               <tbody>
-                {rfqsWithQuotes.map(r => {
+                {filteredSortedRfqs.map(r => {
                   const count = quotations.filter(q => q.rfqId === r.id).length;
                   return (
                     <tr key={r.id}>
@@ -190,6 +240,9 @@ export default function QuotationsPage() {
               </tbody>
             </table>
           </div>
+          {filteredSortedRfqs.length === 0 && (
+            <div className="empty-state"><Search size={40} /><h3>No RFQs found</h3><p>Try adjusting your search or status filter.</p></div>
+          )}
         </div>
       </div>
     );
@@ -238,6 +291,14 @@ export default function QuotationsPage() {
                   <strong>Payment:</strong> {q.paymentTerms}<br/>
                   <strong>Delivery:</strong> {q.deliveryTerms}
                 </div>
+
+                {q.quotationFileName && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, padding: '6px 10px', background: 'rgba(99,102,241,0.06)', border: '1px solid rgba(99,102,241,0.15)', borderRadius: 6, fontSize: 11, color: 'var(--accent-indigo)' }}>
+                    <Paperclip size={12} style={{ flexShrink: 0 }} />
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{q.quotationFileName}</span>
+                    {q.quotationFileSize && <span style={{ color: 'var(--text-muted)', flexShrink: 0 }}>({q.quotationFileSize})</span>}
+                  </div>
+                )}
               </div>
 
               <div style={{ padding: '12px 16px', borderTop: '1px solid var(--border-color)', background: 'rgba(99,102,241,0.02)', display: 'flex', gap: 8 }}>
