@@ -4,14 +4,14 @@ import { useApp } from '@/context/AppContext';
 import {
   DollarSign, FileText, Package, Users, Clock, TrendingUp,
   ArrowRight, AlertCircle, TrendingDown, Activity, ShieldCheck,
-  Zap, Target, X, ExternalLink, ChevronRight, Eye,
+  Zap, Target, X, ExternalLink, ChevronRight,
 } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell, BarChart, Bar,
   LineChart, Line,
 } from 'recharts';
-import { dashboardMetrics, spendByCategory, monthlySpend, poCycleData } from '@/data/mockData';
+
 
 const PIE_COLORS = ['#b1cad7', '#7c94a0', '#e9c176', '#a5b4fc', '#42484b'];
 
@@ -198,16 +198,116 @@ function KPICard({
 }
 
 export default function DashboardPage() {
-  const { purchaseOrders, suppliers, budgets, setActivePage, setSelectedSupplierId, setSelectedPOId } = useApp();
+  const { purchaseOrders, suppliers, budgets, setActivePage, setSelectedSupplierId, setSelectedPOId, companyProfile } = useApp();
   const [dateRange, setDateRange] = useState<DateRange>('all');
   const [drillDown, setDrillDown] = useState<{ title: string, type: 'po' | 'supplier' | 'generic', data: any[] } | null>(null);
 
+  // Compute live metrics from database context
+  const metrics = useMemo(() => {
+    const totalSpend = purchaseOrders
+      .filter(po => po.deliveryStatus !== 'Cancelled')
+      .reduce((sum, po) => sum + po.totalAmount, 0);
+
+    const costReduction = purchaseOrders
+      .filter(po => po.deliveryStatus !== 'Cancelled')
+      .reduce((sum, po) => sum + (po.savingsAmount || 0), 0);
+
+    const unpaidAmount = purchaseOrders
+      .filter(po => po.paymentStatus !== 'Paid' && po.deliveryStatus !== 'Cancelled')
+      .reduce((sum, po) => sum + (po.totalAmount - po.amountPaid), 0);
+
+    const avgDeliveryPerformance = suppliers.length
+      ? Math.round(suppliers.reduce((sum, s) => sum + (s.kpis.deliveryPerformance || 0), 0) / suppliers.length)
+      : 0;
+
+    const preferredSpend = purchaseOrders
+      .filter(po => po.deliveryStatus !== 'Cancelled' && suppliers.find(s => s.id === po.supplierId)?.preferred)
+      .reduce((sum, po) => sum + po.totalAmount, 0);
+    const spendUnderManagement = totalSpend > 0 ? Math.round((preferredSpend / totalSpend) * 100) : 100;
+
+    const serviceSpend = purchaseOrders
+      .filter(po => po.deliveryStatus !== 'Cancelled')
+      .reduce((sum, po) => {
+        const poItems = Array.isArray(po.items) ? po.items : [];
+        const svcSum = poItems.filter((i: any) => i.isService).reduce((s: number, i: any) => s + (i.quantity * i.price), 0);
+        return sum + svcSum;
+      }, 0);
+
+    const emergencyCount = purchaseOrders.filter(po => po.incoterms === 'Express' || po.remarks?.toLowerCase().includes('urgent')).length;
+    const emergencyPORatio = purchaseOrders.length ? Math.round((emergencyCount / purchaseOrders.length) * 100) : 0;
+
+    return {
+      totalSpend: totalSpend,
+      totalPOs: purchaseOrders.length,
+      pendingPOs: purchaseOrders.filter(po => ['Pending', 'Approved', 'Shipped'].includes(po.deliveryStatus)).length,
+      avgDeliveryPerformance: avgDeliveryPerformance,
+      unpaidAmount: unpaidAmount,
+      totalSuppliers: suppliers.length,
+      costReduction: costReduction,
+      avgPOCycleTime: 0, // Requires delivery timestamps — future feature
+      emergencyPORatio: emergencyPORatio,
+      spendUnderManagement: spendUnderManagement,
+      preferredSuppliers: suppliers.filter(s => s.preferred).length,
+      serviceSpend: serviceSpend,
+    };
+  }, [purchaseOrders, suppliers]);
+
+  // Compute monthly spend trend dynamically
+  const computedMonthlySpend = useMemo(() => {
+    const monthlyMap: Record<string, number> = {};
+    purchaseOrders.forEach(po => {
+      if (po.deliveryStatus === 'Cancelled') return;
+      const date = new Date(po.dateOfIssue);
+      if (isNaN(date.getTime())) return;
+      const monthLabel = date.toLocaleString('default', { month: 'short' });
+      monthlyMap[monthLabel] = (monthlyMap[monthLabel] || 0) + po.totalAmount;
+    });
+    const monthOrder = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    return Object.entries(monthlyMap)
+      .map(([month, amount]) => ({ month, amount }))
+      .sort((a, b) => monthOrder.indexOf(a.month) - monthOrder.indexOf(b.month));
+  }, [purchaseOrders]);
+
   // Filter monthly spend data by range
   const filteredMonthly = useMemo(() => {
-    if (dateRange === 'all') return monthlySpend;
+    if (dateRange === 'all') return computedMonthlySpend;
     const months = dateRange === '30' ? 1 : dateRange === '90' ? 3 : 6;
-    return monthlySpend.slice(-months);
-  }, [dateRange]);
+    return computedMonthlySpend.slice(-months);
+  }, [computedMonthlySpend, dateRange]);
+
+  // Compute category spend dynamically
+  const computedSpendByCategory = useMemo(() => {
+    const categories: Record<string, number> = {};
+    purchaseOrders.forEach(po => {
+      if (po.deliveryStatus === 'Cancelled') return;
+      const items = Array.isArray(po.items) ? po.items : [];
+      items.forEach((item: any) => {
+        const cat = item.category || 'Other';
+        categories[cat] = (categories[cat] || 0) + (item.quantity * item.price);
+      });
+    });
+    return Object.entries(categories).map(([category, amount]) => ({ category, amount }));
+  }, [purchaseOrders]);
+
+  // Compute PO cycle time trend dynamically (issue date → ETA, grouped by month)
+  const computedCycleData = useMemo(() => {
+    const monthlyMap: Record<string, { total: number; count: number }> = {};
+    purchaseOrders.forEach(po => {
+      if (!po.dateOfIssue || !po.eta) return;
+      const issue = new Date(po.dateOfIssue);
+      const eta = new Date(po.eta);
+      if (isNaN(issue.getTime()) || isNaN(eta.getTime())) return;
+      const cycledays = Math.max(0, Math.round((eta.getTime() - issue.getTime()) / 86400000));
+      const monthLabel = issue.toLocaleString('default', { month: 'short', year: '2-digit' });
+      if (!monthlyMap[monthLabel]) monthlyMap[monthLabel] = { total: 0, count: 0 };
+      monthlyMap[monthLabel].total += cycledays;
+      monthlyMap[monthLabel].count += 1;
+    });
+    return Object.entries(monthlyMap).map(([month, { total, count }]) => ({
+      month,
+      avgDays: Math.round(total / count),
+    }));
+  }, [purchaseOrders]);
 
   const pendingPOs = purchaseOrders.filter(po =>
     ['Pending', 'Approved', 'Shipped'].includes(po.deliveryStatus)
@@ -222,7 +322,7 @@ export default function DashboardPage() {
     delivery: s.kpis.deliveryPerformance,
   }));
 
-  const emergencyAlert = dashboardMetrics.emergencyPORatio > 15;
+  const emergencyAlert = metrics.emergencyPORatio > 15;
 
   return (
     <div>
@@ -257,7 +357,7 @@ export default function DashboardPage() {
         }}>
           <Zap size={18} style={{ color: '#f43f5e', flexShrink: 0 }} />
           <span style={{ fontSize: 13, color: '#f43f5e', fontWeight: 500 }}>
-            Emergency PO ratio is {dashboardMetrics.emergencyPORatio}% — above the 15% threshold. Review urgent orders to reduce procurement risk.
+            Emergency PO ratio is {metrics.emergencyPORatio}% — above the 15% threshold. Review urgent orders to reduce procurement risk.
           </span>
         </div>
       )}
@@ -290,7 +390,7 @@ export default function DashboardPage() {
       <div className="metrics-grid">
         <KPICard 
           icon={DollarSign} 
-          value={`$${(dashboardMetrics.totalSpend / 1000).toFixed(0)}K`}
+          value={`$${(metrics.totalSpend / 1000).toFixed(0)}K`}
           label="Total Procurement Spend"
           colorClass="indigo"
           trend={{ val: '+12%', up: true }}
@@ -298,21 +398,21 @@ export default function DashboardPage() {
         />
         <KPICard 
           icon={FileText} 
-          value={dashboardMetrics.totalPOs}
+          value={metrics.totalPOs}
           label="Total Purchase Orders"
           colorClass="cyan"
           onClick={() => setDrillDown({ title: 'Standard Purchase Orders', type: 'po', data: purchaseOrders.filter(p => !p.items.some(i => i.isService)) })}
         />
         <KPICard 
           icon={Clock} 
-          value={dashboardMetrics.pendingPOs}
+          value={metrics.pendingPOs}
           label="Pending / In-Transit"
           colorClass="amber"
           onClick={() => setDrillDown({ title: 'In-Transit Orders', type: 'po', data: purchaseOrders.filter(p => ['Pending', 'Approved', 'Shipped'].includes(p.deliveryStatus)) })}
         />
         <KPICard 
           icon={TrendingUp} 
-          value={`${dashboardMetrics.avgDeliveryPerformance}%`}
+          value={`${metrics.avgDeliveryPerformance}%`}
           label="Avg Delivery Performance"
           colorClass="emerald"
           trend={{ val: '+2.1%', up: true }}
@@ -320,35 +420,35 @@ export default function DashboardPage() {
         />
         <KPICard 
           icon={AlertCircle} 
-          value={`$${(dashboardMetrics.unpaidAmount / 1000).toFixed(0)}K`}
+          value={`$${(metrics.unpaidAmount / 1000).toFixed(0)}K`}
           label="Outstanding Payments"
           colorClass="rose"
           onClick={() => setDrillDown({ title: 'Outstanding Accounts Payable', type: 'po', data: purchaseOrders.filter(p => p.paymentStatus !== 'Paid' && p.deliveryStatus !== 'Cancelled') })}
         />
         <KPICard 
           icon={Users} 
-          value={dashboardMetrics.totalSuppliers}
+          value={metrics.totalSuppliers}
           label="Active Suppliers"
           colorClass="violet"
           onClick={() => setDrillDown({ title: 'Approved Supplier Roster', type: 'supplier', data: suppliers })}
         />
         <KPICard 
           icon={TrendingDown} 
-          value={`$${(dashboardMetrics.costReduction / 1000).toFixed(1)}K`}
+          value={`$${(metrics.costReduction / 1000).toFixed(1)}K`}
           label="Cost Reduction (savings)"
           colorClass="emerald"
           onClick={() => setDrillDown({ title: 'Sourcing Savings & Reductions', type: 'po', data: purchaseOrders.slice(0, 5).map(po => ({ ...po, status: 'Savings Captured', amount: po.totalAmount * 0.05 })) })}
         />
         <KPICard 
           icon={Activity} 
-          value={`${dashboardMetrics.avgPOCycleTime}d`}
+          value={`${metrics.avgPOCycleTime}d`}
           label="Avg PO Cycle Time"
           colorClass="cyan"
           onClick={() => setDrillDown({ title: 'Order Execution Efficiency', type: 'po', data: purchaseOrders.filter(p => p.deliveryStatus === 'Delivered').slice(0, 10) })}
         />
         <KPICard 
           icon={Zap} 
-          value={`${dashboardMetrics.emergencyPORatio}%`}
+          value={`${metrics.emergencyPORatio}%`}
           label="Emergency PO Ratio"
           colorClass={emergencyAlert ? 'rose' : 'amber'}
           priority={emergencyAlert}
@@ -356,21 +456,21 @@ export default function DashboardPage() {
         />
         <KPICard 
           icon={ShieldCheck} 
-          value={`${dashboardMetrics.spendUnderManagement}%`}
+          value={`${metrics.spendUnderManagement}%`}
           label="Spend Under Management"
           colorClass="indigo"
           onClick={() => setDrillDown({ title: 'Spend Consolidation Analysis', type: 'supplier', data: suppliers.filter(s => s.preferred) })}
         />
         <KPICard 
           icon={Target} 
-          value={dashboardMetrics.preferredSuppliers}
+          value={metrics.preferredSuppliers}
           label="Preferred Suppliers"
           colorClass="violet"
           onClick={() => setDrillDown({ title: 'Preferred Vendor List', type: 'supplier', data: suppliers.filter(s => s.preferred) })}
         />
         <KPICard 
           icon={Package} 
-          value={`$${(dashboardMetrics.serviceSpend / 1000).toFixed(0)}K`}
+          value={`$${(metrics.serviceSpend / 1000).toFixed(0)}K`}
           label="Services Spend"
           colorClass="amber"
           onClick={() => setDrillDown({ title: 'Service & Maintenance Spend', type: 'po', data: purchaseOrders.filter(p => p.items.some(i => i.isService)) })}
@@ -379,31 +479,46 @@ export default function DashboardPage() {
 
       {/* ── Row 1: Budget and Spend Focus ── */}
       <div className="grid-2" style={{ marginBottom: 28 }}>
-        <div className="card">
+        <div className="card" style={{ position: 'relative' }}>
           <div className="card-header">
             <div>
               <div className="card-title">Budget Utilization</div>
               <div className="card-subtitle">Tracking by department & project</div>
             </div>
-            <button className="btn btn-sm btn-secondary" onClick={() => setActivePage('budgets')}>Manage</button>
+            {companyProfile?.subscriptionTier !== 'essential' && (
+              <button className="btn btn-sm btn-secondary" onClick={() => setActivePage('budgets')}>Manage</button>
+            )}
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            {budgets.slice(0, 3).map(b => {
-              const utilization = Math.round(((b.spentAmount + b.committedAmount) / b.totalAmount) * 100);
-              const statusColor = utilization >= 100 ? '#f43f5e' : utilization >= 80 ? '#f59e0b' : '#10b981';
-              return (
-                <div key={b.id}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
-                    <span style={{ fontSize: 12, fontWeight: 600, color: '#f1f5f9' }}>{b.name}</span>
-                    <span style={{ fontSize: 11, color: statusColor, fontWeight: 700 }}>{utilization}%</span>
+          {companyProfile?.subscriptionTier === 'essential' ? (
+            <div style={{ 
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', 
+              padding: '24px 12px', textAlign: 'center', gap: 8, height: 'calc(100% - 60px)', minHeight: 120 
+            }}>
+              <span style={{ fontSize: 18 }}>🔒</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>Premium Feature</span>
+              <span style={{ fontSize: 11, color: 'var(--text-muted)', maxWidth: 220 }}>
+                Upgrade to Professional to unlock Budget Control and real-time utilization tracking.
+              </span>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {budgets.slice(0, 3).map(b => {
+                const utilization = Math.round(((b.spentAmount + b.committedAmount) / b.totalAmount) * 100);
+                const statusColor = utilization >= 100 ? '#f43f5e' : utilization >= 80 ? '#f59e0b' : '#10b981';
+                return (
+                  <div key={b.id}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
+                      <span style={{ fontSize: 12, fontWeight: 600, color: '#f1f5f9' }}>{b.name}</span>
+                      <span style={{ fontSize: 11, color: statusColor, fontWeight: 700 }}>{utilization}%</span>
+                    </div>
+                    <div style={{ height: 6, background: 'rgba(255,255,255,0.05)', borderRadius: 3, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: `${Math.min(utilization, 100)}%`, background: statusColor, borderRadius: 3 }} />
+                    </div>
                   </div>
-                  <div style={{ height: 6, background: 'rgba(255,255,255,0.05)', borderRadius: 3, overflow: 'hidden' }}>
-                    <div style={{ height: '100%', width: `${Math.min(utilization, 100)}%`, background: statusColor, borderRadius: 3 }} />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         <div className="card">
@@ -414,7 +529,7 @@ export default function DashboardPage() {
             </div>
           </div>
           <div style={{ height: 160, marginTop: -10 }}>
-            <SpendGauge pct={dashboardMetrics.spendUnderManagement} />
+            <SpendGauge pct={metrics.spendUnderManagement} />
           </div>
         </div>
       </div>
@@ -457,15 +572,15 @@ export default function DashboardPage() {
           </div>
           <ResponsiveContainer width="100%" height={240}>
             <PieChart>
-              <Pie data={spendByCategory} cx="50%" cy="50%" innerRadius={60} outerRadius={95}
+              <Pie data={computedSpendByCategory} cx="50%" cy="50%" innerRadius={60} outerRadius={95}
                 dataKey="amount" nameKey="category" stroke="none" paddingAngle={3}>
-                {spendByCategory.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                {computedSpendByCategory.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
               </Pie>
               <Tooltip content={<CustomTooltip />} />
             </PieChart>
           </ResponsiveContainer>
           <div style={{ display: 'flex', justifyContent: 'center', gap: 12, flexWrap: 'wrap', marginTop: 4 }}>
-            {spendByCategory.map((cat, i) => (
+            {computedSpendByCategory.map((cat, i) => (
               <div key={cat.category} style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 11, color: '#94a3b8' }}>
                 <div style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: PIE_COLORS[i] }} />
                 {cat.category}
@@ -485,7 +600,7 @@ export default function DashboardPage() {
             </div>
           </div>
           <ResponsiveContainer width="100%" height={240}>
-            <LineChart data={poCycleData}>
+            <LineChart data={computedCycleData}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="month" tick={{ fill: '#64748b', fontSize: 11 }} />
               <YAxis tick={{ fill: '#64748b', fontSize: 11 }} unit="d" />
@@ -506,16 +621,16 @@ export default function DashboardPage() {
           </div>
           <div style={{ marginTop: 8, display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
             <div style={{ textAlign: 'center', padding: '12px 18px', background: 'rgba(99,102,241,0.06)', borderRadius: 12, flex: 1, minWidth: 120 }}>
-              <div style={{ fontSize: 20, fontWeight: 700, color: '#f1f5f9' }}>{dashboardMetrics.preferredSuppliers}</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: '#f1f5f9' }}>{metrics.preferredSuppliers}</div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Preferred vendors</div>
             </div>
             <div style={{ textAlign: 'center', padding: '12px 18px', background: 'rgba(99,102,241,0.06)', borderRadius: 12, flex: 1, minWidth: 120 }}>
-              <div style={{ fontSize: 20, fontWeight: 700, color: '#f1f5f9' }}>{dashboardMetrics.totalSuppliers - dashboardMetrics.preferredSuppliers}</div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: '#f1f5f9' }}>{metrics.totalSuppliers - metrics.preferredSuppliers}</div>
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Standard pool</div>
             </div>
           </div>
           <div style={{ textAlign: 'center', marginTop: 16, fontSize: 12.5, color: 'var(--text-secondary)', padding: '0 10px', lineHeight: 1.5 }}>
-            Efficiently managing <b>${((dashboardMetrics.totalSpend * dashboardMetrics.spendUnderManagement) / 100 / 1000).toFixed(0)}K</b> through pre-vetted contracts.
+            Efficiently managing <b>${((metrics.totalSpend * metrics.spendUnderManagement) / 100 / 1000).toFixed(0)}K</b> through pre-vetted contracts.
           </div>
         </div>
       </div>

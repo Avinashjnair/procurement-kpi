@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { useApp } from '@/context/AppContext';
 import { X, Upload, Plus, Trash2, MessageSquare, FileText, Building2, MapPin, Mail, Phone, Hash, Wrench, CheckSquare, Square, Landmark, Send, Calendar, AlertTriangle, ShieldCheck, Info } from 'lucide-react';
 import type { POStatus, PaymentStatus, DocumentCategory, POItem, ServiceBillingType, ServiceMilestone, AppDocument } from '@/types';
-import { companyInfo } from '@/data/mockData';
+
 
 // ── All document categories (goods + services) ──
 const DOC_CATEGORIES: DocumentCategory[] = [
@@ -120,7 +120,7 @@ function MilestoneEditor({
 // New PO Modal – 3-Step Wizard (service-aware)
 // ────────────────────────────────────────────────
 function NewPOModal() {
-  const { suppliers, items, addPurchaseOrder, setModalOpen, purchaseOrders } = useApp();
+  const { suppliers, items, addPurchaseOrder, setModalOpen, purchaseOrders, companyProfile } = useApp();
   const [step, setStep] = useState<1 | 2 | 3>(1);
 
   const [supplierId, setSupplierId] = useState('');
@@ -541,11 +541,11 @@ function NewPOModal() {
         <div className="draft-po-parties">
           <div className="draft-po-party">
             <h4 className="draft-po-party-title"><Building2 size={14} /> From (Buyer)</h4>
-            <p className="draft-po-party-name">{companyInfo.name}</p>
-            <p className="draft-po-party-line"><MapPin size={12} /> {companyInfo.address}</p>
-            <p className="draft-po-party-line"><Mail size={12} /> {companyInfo.email}</p>
-            <p className="draft-po-party-line"><Phone size={12} /> {companyInfo.phone}</p>
-            <p className="draft-po-party-line"><Hash size={12} /> TRN: {companyInfo.taxRegNumber}</p>
+            <p className="draft-po-party-name">{companyProfile?.name || '—'}</p>
+            <p className="draft-po-party-line"><MapPin size={12} /> {companyProfile?.address || '—'}</p>
+            <p className="draft-po-party-line"><Mail size={12} /> {companyProfile?.email || '—'}</p>
+            <p className="draft-po-party-line"><Phone size={12} /> {companyProfile?.phone || '—'}</p>
+            {companyProfile?.taxRegNumber && <p className="draft-po-party-line"><Hash size={12} /> TRN: {companyProfile.taxRegNumber}</p>}
           </div>
           <div className="draft-po-party">
             <h4 className="draft-po-party-title"><Building2 size={14} /> To (Supplier)</h4>

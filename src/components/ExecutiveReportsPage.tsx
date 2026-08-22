@@ -33,7 +33,7 @@ export default function ExecutiveReportsPage() {
     doc.rect(0, 0, 210, 40, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(22);
-    doc.text('ProcureIQ - Executive KPI Report', 15, 25);
+    doc.text('ProcureBuddy - Executive KPI Report', 15, 25);
     doc.setFontSize(10);
     doc.text(`Generated on: ${new Date().toLocaleString()} | Period: ${period}`, 15, 33);
 
@@ -80,7 +80,7 @@ export default function ExecutiveReportsPage() {
       doc.text(`Confidential - For Internal Executive Review Only | Page ${i} of ${pageCount}`, 105, 287, { align: 'center' });
     }
 
-    doc.save(`ProcureIQ_Executive_Report_${new Date().toISOString().split('T')[0]}.pdf`);
+    doc.save(`ProcureBuddy_Executive_Report_${new Date().toISOString().split('T')[0]}.pdf`);
     setIsExporting(false);
   };
 

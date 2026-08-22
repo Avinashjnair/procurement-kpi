@@ -5,12 +5,25 @@
  *
  * Generates a styled PO PDF using jsPDF loaded via CDN.
  * Usage: import { exportPOAsPDF } from '@/utils/poPdfExport';
- *        await exportPOAsPDF(po, supplier, companyInfo);
+ *        await exportPOAsPDF(po, supplier, undefined, companyProfile);
  */
 
-import type { PurchaseOrder } from '@/data/mockData';
-import type { Supplier } from '@/data/mockData';
-import { companyInfo } from '@/data/mockData';
+import type { PurchaseOrder } from '@/types';
+import type { Supplier } from '@/types';
+import type { CompanyProfile } from '@/types';
+
+const DEFAULT_COMPANY: CompanyProfile = {
+  id: '',
+  name: 'Your Company Name',
+  address: 'Your Company Address',
+  email: 'procurement@yourcompany.com',
+  phone: '+000 000 0000',
+  taxRegNumber: '',
+  logoUrl: '',
+  currency: 'USD',
+  country: '',
+  subscriptionTier: 'essential',
+};
 
 // Dynamically load jsPDF from CDN (no npm install needed)
 async function getJsPDF(): Promise<any> {
@@ -37,8 +50,10 @@ function hexToRgb(hex: string): [number, number, number] {
 export async function exportPOAsPDF(
   po: PurchaseOrder,
   supplier: Supplier | undefined,
-  onProgress?: (msg: string) => void
+  onProgress?: (msg: string) => void,
+  companyProfile?: CompanyProfile | null
 ): Promise<void> {
+  const company = companyProfile ?? DEFAULT_COMPANY;
   onProgress?.('Loading PDF engine...');
   const JsPDF: any = await getJsPDF();
   if (!JsPDF) { alert('PDF library could not be loaded.'); return; }
@@ -69,14 +84,14 @@ export async function exportPOAsPDF(
   doc.setTextColor(...WHITE);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(16);
-  doc.text(companyInfo.name, margin, 14);
+  doc.text(company.name, margin, 14);
 
   // Tagline
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8);
   doc.setTextColor(200, 202, 255);
-  doc.text(companyInfo.address, margin, 20);
-  doc.text(`${companyInfo.email}  |  ${companyInfo.phone}  |  TRN: ${companyInfo.taxRegNumber}`, margin, 25);
+  doc.text(company.address, margin, 20);
+  doc.text(`${company.email}  |  ${company.phone}${company.taxRegNumber ? '  |  TRN: ' + company.taxRegNumber : ''}`, margin, 25);
 
   // PO title (right side)
   doc.setFont('helvetica', 'bold');
@@ -122,15 +137,15 @@ export async function exportPOAsPDF(
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
   doc.setTextColor(...DARK);
-  doc.text(companyInfo.name, margin + 6, y + 12);
+  doc.text(company.name, margin + 6, y + 12);
 
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7.5);
   doc.setTextColor(...MUTED);
-  const buyerLines = doc.splitTextToSize(companyInfo.address, colW - 10);
+  const buyerLines = doc.splitTextToSize(company.address, colW - 10);
   doc.text(buyerLines.slice(0, 2), margin + 6, y + 18);
-  doc.text(companyInfo.email, margin + 6, y + 27);
-  doc.text(companyInfo.phone, margin + 6, y + 31);
+  doc.text(company.email, margin + 6, y + 27);
+  doc.text(company.phone, margin + 6, y + 31);
 
   // Supplier block
   const sx = margin + colW + 4;
@@ -371,7 +386,7 @@ export async function exportPOAsPDF(
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7);
   doc.setTextColor(200, 202, 255);
-  doc.text(`This Purchase Order is legally binding. Issued by ${companyInfo.name} on ${new Date().toLocaleDateString('en-AE')}`, margin, 292);
+  doc.text(`This Purchase Order is legally binding. Issued by ${company.name} on ${new Date().toLocaleDateString('en-AE')}`, margin, 292);
   doc.text(`Page 1 of 1  |  ${po.id}`, pageW - margin, 292, { align: 'right' });
 
   // ── Save ────────────────────────────────────────────────────

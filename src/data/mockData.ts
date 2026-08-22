@@ -18,9 +18,9 @@ export type {
 // Company Info
 // ============================================================
 export const companyInfo = {
-  name: 'ProcureIQ Industries LLC',
+  name: 'ProcureBuddy Industries LLC',
   address: 'P.O. Box 28436, Office 1204, Al Shafar Tower 1, Dubai Internet City, Dubai, UAE',
-  email: 'procurement@procureiq.ae',
+  email: 'procurement@procurebuddy.ae',
   phone: '+971 4 555 8800',
   taxRegNumber: 'TRN-100234567800003',
 };

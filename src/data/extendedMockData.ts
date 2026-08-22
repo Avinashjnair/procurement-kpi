@@ -1,5 +1,5 @@
 // ============================================================
-// ProcureIQ v2 — Extended Mock Data
+// ProcureBuddy v2 — Extended Mock Data
 // ============================================================
 import type {
   User, RFQ, Quotation, StockItem, StockMovement, GRN, Asset,
@@ -9,38 +9,38 @@ import type {
 
 export const users: User[] = [
   {
-    id: 'USR-001', name: 'Aisha Al-Mansoori', email: 'aisha@procureiq.ae',
+    id: 'USR-001', name: 'Aisha Al-Mansoori', email: 'aisha@procurebuddy.ae',
     passwordHash: 'manager123', role: 'manager',
     department: 'Procurement Management', avatarInitials: 'AA', active: true,
   },
   {
-    id: 'USR-002', name: 'Mohammed Al-Farsi', email: 'mfarsi@procureiq.ae',
+    id: 'USR-002', name: 'Mohammed Al-Farsi', email: 'mfarsi@procurebuddy.ae',
     passwordHash: 'manager123', role: 'manager',
     department: 'Supply Chain', avatarInitials: 'MF', active: true,
   },
   {
-    id: 'USR-003', name: 'James Okafor', email: 'james@procureiq.ae',
+    id: 'USR-003', name: 'James Okafor', email: 'james@procurebuddy.ae',
     passwordHash: 'engineer123', role: 'engineer',
     department: 'Mechanical Engineering', avatarInitials: 'JO', active: true,
   },
   {
-    id: 'USR-004', name: 'Priya Nair', email: 'priya@procureiq.ae',
+    id: 'USR-004', name: 'Priya Nair', email: 'priya@procurebuddy.ae',
     passwordHash: 'engineer123', role: 'engineer',
     department: 'Process Engineering', avatarInitials: 'PN', active: true,
   },
   {
-    id: 'USR-005', name: 'Carlos Reyes', email: 'carlos@procureiq.ae',
+    id: 'USR-005', name: 'Carlos Reyes', email: 'carlos@procurebuddy.ae',
     passwordHash: 'engineer123', role: 'engineer',
     department: 'Electrical Engineering', avatarInitials: 'CR', active: true,
   },
   // ── Finance & Accounts ──────────────────────────────────────
   {
-    id: 'USR-006', name: 'Fatima Al-Zaabi', email: 'fatima@procureiq.ae',
+    id: 'USR-006', name: 'Fatima Al-Zaabi', email: 'fatima@procurebuddy.ae',
     passwordHash: 'finance123', role: 'finance',
     department: 'Finance & Accounts', avatarInitials: 'FZ', active: true,
   },
   {
-    id: 'USR-007', name: 'Rohan Mehta', email: 'rohan@procureiq.ae',
+    id: 'USR-007', name: 'Rohan Mehta', email: 'rohan@procurebuddy.ae',
     passwordHash: 'finance123', role: 'finance',
     department: 'Finance & Accounts', avatarInitials: 'RM', active: true,
   },

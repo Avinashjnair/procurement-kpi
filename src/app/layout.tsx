@@ -3,7 +3,7 @@ import "./globals.css";
 import "./light-mode.css";
 
 export const metadata: Metadata = {
-  title: "ProcureIQ — Procurement KPI Tracking & Management",
+  title: "ProcureBuddy — Procurement KPI Tracking & Management",
   description:
     "A modern, interactive web application for procurement KPI tracking, supplier management, purchase order management, and document management.",
 };

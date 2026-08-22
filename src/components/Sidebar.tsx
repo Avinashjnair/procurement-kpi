@@ -9,25 +9,25 @@ import {
   Banknote, BarChart, BarChart3, Building2,
 } from 'lucide-react';
 
-const navItems: { id: string; label: string; icon: any; permission: string; section: string; accent?: string }[] = [
+const navItems: { id: string; label: string; icon: any; permission: string; section: string; tier?: string }[] = [
   { id: 'dashboard',       label: 'Operational Dashboard', icon: LayoutDashboard, permission: 'view_dashboard',        section: 'Core' },
-  { id: 'portal',          label: 'Supplier Self-Service', icon: Building2,       permission: 'view_dashboard',        section: 'Core' },
+  { id: 'portal',          label: 'Supplier Self-Service', icon: Building2,       permission: 'view_dashboard',        section: 'Core',        tier: 'enterprise' },
   { id: 'items',           label: 'Materials & Services',  icon: Boxes,           permission: 'view_items',            section: 'Procurement' },
   { id: 'suppliers',       label: 'Suppliers',           icon: Users,           permission: 'view_suppliers',        section: 'Catalogue' },
-  { id: 'rfq',             label: 'RFQ / PR',            icon: Send,            permission: 'view_rfqs',             section: 'Sourcing' },
-  { id: 'quotations',      label: 'Quotations',          icon: BarChart2,       permission: 'view_quotations',       section: 'Sourcing' },
+  { id: 'rfq',             label: 'RFQ / PR',            icon: Send,            permission: 'view_rfqs',             section: 'Sourcing',    tier: 'professional' },
+  { id: 'quotations',      label: 'Quotations',          icon: BarChart2,       permission: 'view_quotations',       section: 'Sourcing',    tier: 'professional' },
   { id: 'purchase-orders', label: 'Purchase Orders',     icon: FileText,        permission: 'view_pos',              section: 'Procurement' },
   { id: 'invoices',        label: 'Invoices',            icon: FolderOpen,      permission: 'view_pos',              section: 'Procurement' },
   { id: 'grn',             label: 'Goods Receipt',       icon: PackageCheck,    permission: 'view_grn',              section: 'Procurement' },
-  { id: 'inventory',       label: 'Inventory',           icon: Boxes,           permission: 'view_inventory',        section: 'Procurement' },
-  { id: 'blanket-pos',     label: 'Blanket POs',         icon: FileText,        permission: 'view_pos',              section: 'Procurement' },
-  { id: 'assets',          label: 'Fixed Assets',        icon: Landmark,        permission: 'view_assets',           section: 'Procurement' },
-  { id: 'contracts',       label: 'Contracts',           icon: ShieldCheck,     permission: 'view_suppliers',        section: 'Procurement' },
-  { id: 'budgets',         label: 'Budget Envelopes',    icon: Landmark,        permission: 'view_dashboard',        section: 'Finance' },
-  { id: 'finance',         label: 'Finance & Payments',  icon: Banknote,        permission: 'view_payments',         section: 'Finance' },
-  { id: 'analytics',       label: 'Spend Analytics',     icon: BarChart,        permission: 'view_dashboard',        section: 'Finance' },
-  { id: 'reports',         label: 'Executive KPI Reports', icon: BarChart3,       permission: 'view_finance_reports',  section: 'Finance' },
-  { id: 'notifications',   label: 'Alerts & rules',      icon: Bell,            permission: 'view_dashboard',        section: 'Records' },
+  { id: 'inventory',       label: 'Inventory',           icon: Boxes,           permission: 'view_inventory',        section: 'Procurement', tier: 'professional' },
+  { id: 'blanket-pos',     label: 'Blanket POs',         icon: FileText,        permission: 'view_pos',              section: 'Procurement', tier: 'enterprise' },
+  { id: 'assets',          label: 'Fixed Assets',        icon: Landmark,        permission: 'view_assets',           section: 'Procurement', tier: 'enterprise' },
+  { id: 'contracts',       label: 'Contracts',           icon: ShieldCheck,     permission: 'view_suppliers',        section: 'Procurement', tier: 'enterprise' },
+  { id: 'budgets',         label: 'Budget Envelopes',    icon: Landmark,        permission: 'view_dashboard',        section: 'Finance',     tier: 'professional' },
+  { id: 'finance',         label: 'Finance & Payments',  icon: Banknote,        permission: 'view_payments',         section: 'Finance',     tier: 'professional' },
+  { id: 'analytics',       label: 'Spend Analytics',     icon: BarChart,        permission: 'view_dashboard',        section: 'Finance',     tier: 'professional' },
+  { id: 'reports',         label: 'Executive KPI Reports', icon: BarChart3,       permission: 'view_finance_reports',  section: 'Finance',     tier: 'professional' },
+  { id: 'notifications',   label: 'Alerts & rules',      icon: Bell,            permission: 'view_dashboard',        section: 'Records',     tier: 'enterprise' },
   { id: 'documents',       label: 'Documents',           icon: FolderOpen,      permission: 'view_documents',        section: 'Records' },
 ];
 
@@ -48,7 +48,8 @@ export default function Sidebar() {
     activePage, setActivePage, setModalOpen, darkMode, toggleDarkMode,
     currentUser, logout, notifications, markNotificationRead, markAllNotificationsRead,
     isSupplierPortal, setSupplierPortal,
-    isMobileSidebarOpen, setMobileSidebarOpen
+    isMobileSidebarOpen, setMobileSidebarOpen,
+    companyProfile
   } = useApp();
   const [notifOpen,  setNotifOpen]  = React.useState(false);
   const [shortcutOpen, setShortcutOpen] = React.useState(false);
@@ -69,7 +70,18 @@ export default function Sidebar() {
   const unreadNotifications = notifications.filter(n => !n.read);
   const notifCount = unreadNotifications.length;
 
-  const visibleNavItems = navItems.filter(item => can(currentUser, item.permission));
+  const currentTier = companyProfile?.subscriptionTier || 'essential';
+  const tierLevel: Record<string, number> = { essential: 1, professional: 2, enterprise: 3 };
+
+  const visibleNavItems = navItems.filter(item => {
+    // 1. Check user permission
+    if (!can(currentUser, item.permission)) return false;
+    
+    // 2. Check subscription tier
+    const requiredTier = item.tier || 'essential';
+    return (tierLevel[currentTier] >= tierLevel[requiredTier]);
+  });
+  
   const grouped = visibleNavItems.reduce<Record<string, typeof navItems>>((acc, item) => {
     if (!acc[item.section]) acc[item.section] = [];
     acc[item.section].push(item);
@@ -84,7 +96,7 @@ export default function Sidebar() {
         <div className="sidebar-header">
           <div className="sidebar-logo">
             <div className="sidebar-logo-icon" style={{ background: 'var(--gradient-primary)' }}>📊</div>
-            <div><h1>ProcureIQ</h1><span>Stealth OS</span></div>
+            <div><h1>ProcureBuddy</h1><span>Stealth OS</span></div>
           </div>
         </div>
 

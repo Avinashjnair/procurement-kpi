@@ -11,9 +11,22 @@
  * Uses SheetJS (xlsx) loaded via CDN.
  */
 
-import type { PurchaseOrder } from '@/data/mockData';
-import type { Supplier } from '@/data/mockData';
-import { companyInfo } from '@/data/mockData';
+import type { PurchaseOrder } from '@/types';
+import type { Supplier } from '@/types';
+import type { CompanyProfile } from '@/types';
+
+const DEFAULT_COMPANY: CompanyProfile = {
+  id: '',
+  name: 'Your Company Name',
+  address: 'Your Company Address',
+  email: 'procurement@yourcompany.com',
+  phone: '+000 000 0000',
+  taxRegNumber: '',
+  logoUrl: '',
+  currency: 'USD',
+  country: '',
+  subscriptionTier: 'essential',
+};
 
 async function getXLSX(): Promise<any> {
   if (typeof window === 'undefined') return null;
@@ -56,8 +69,10 @@ function makeCellStyle(wb: any, opts: {
 export async function exportPOAsExcel(
   po: PurchaseOrder,
   supplier: Supplier | undefined,
-  onProgress?: (msg: string) => void
+  onProgress?: (msg: string) => void,
+  companyProfile?: CompanyProfile | null
 ): Promise<void> {
+  const company = companyProfile ?? DEFAULT_COMPANY;
   onProgress?.('Loading Excel engine...');
   const XLSX: any = await getXLSX();
   if (!XLSX) { alert('Excel library could not be loaded.'); return; }
@@ -68,15 +83,15 @@ export async function exportPOAsExcel(
   // ── Sheet 1: PO Summary ──────────────────────────────────────
   const summaryData: any[][] = [
     ['PURCHASE ORDER', '', '', '', po.id],
-    [companyInfo.name],
+    [company.name],
     [''],
     // Buyer
     ['FROM (BUYER)', '', '', 'TO (SUPPLIER)'],
-    [companyInfo.name, '', '', supplier?.name || po.supplierName],
-    [companyInfo.address, '', '', supplier?.address || ''],
-    [companyInfo.email, '', '', supplier?.email || ''],
-    [companyInfo.phone, '', '', supplier?.phone || ''],
-    [companyInfo.taxRegNumber ? `TRN: ${companyInfo.taxRegNumber}` : '', '', '', supplier?.taxRegNumber ? `TRN: ${supplier.taxRegNumber}` : ''],
+    [company.name, '', '', supplier?.name || po.supplierName],
+    [company.address, '', '', supplier?.address || ''],
+    [company.email, '', '', supplier?.email || ''],
+    [company.phone, '', '', supplier?.phone || ''],
+    [company.taxRegNumber ? `TRN: ${company.taxRegNumber}` : '', '', '', supplier?.taxRegNumber ? `TRN: ${supplier.taxRegNumber}` : ''],
     [''],
     ['KEY DETAILS'],
     ['Issue Date',      po.dateOfIssue,    '', 'Due Date',           po.dueDate],

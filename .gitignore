@@ -39,3 +39,19 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# SQLite databases & journals
+/databases/
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+
+# IDE / AI Agent rules files
+AGENTS.md
+CLAUDE.md
+
+# Deployment artifacts & tiers doc
+feature_tier_breakdown.docx
+procurebuddy-stg.zip
+procurebuddy-prod.zip

@@ -543,7 +543,7 @@ export default function VendorRegistrationForm({ onCancel }: { onCancel: () => v
       </div>
 
       <div className="mt-8 text-center text-gray-500 text-[10px] uppercase tracking-[0.2em]">
-        Verified by <span className="text-blue-400 font-bold">ProcureIQ Trust Engine</span>
+        Verified by <span className="text-blue-400 font-bold">ProcureBuddy Trust Engine</span>
       </div>
     </div>
   );

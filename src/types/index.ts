@@ -1,5 +1,5 @@
 // ============================================================
-// ProcureIQ — Unified Types & Interfaces
+// ProcureBuddy — Unified Types & Interfaces
 // ============================================================
 
 // ── Auth / User Roles ────────────────────────────────────────
@@ -74,6 +74,22 @@ export function can(user: User | null, permission: string): boolean {
 }
 
 // ── Master Data ──────────────────────────────────────────────
+
+export type SubscriptionTier = 'essential' | 'professional' | 'enterprise';
+
+// Company / Tenant Profile (stored in DB, one row per tenant)
+export interface CompanyProfile {
+  id: string;
+  name: string;
+  address: string;
+  email: string;
+  phone: string;
+  taxRegNumber: string;
+  logoUrl: string;
+  currency: string;
+  country: string;
+  subscriptionTier: SubscriptionTier;
+}
 
 export interface SupplierNote {
   id: string;
