@@ -41,7 +41,8 @@ yarn-error.log*
 next-env.d.ts
 
 # SQLite databases & journals
-/databases/
+/databases/*
+!/databases/company_default.db
 *.db
 *.db-journal
 *.db-shm

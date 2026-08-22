@@ -692,6 +692,8 @@ interface Contract {
   linkedPOIds: string[];
   documents?: string[];          // Document IDs
   notes?: string;
+  linkedBlanketPoId?: string;
+  description?: string;
 }
 
 type ContractStatus = 'Draft' | 'Active' | 'Expiring Soon' | 'Expired' | 'Terminated';
@@ -717,6 +719,7 @@ interface BlanketPO {
   endDate: string;
   terms?: string;
   linkedPOIds: string[];         // Release orders drawn against this blanket
+  description?: string;
 }
 
 type BlanketStatus = 'Draft' | 'Active' | 'Expired' | 'Closed';

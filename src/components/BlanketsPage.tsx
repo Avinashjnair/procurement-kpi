@@ -134,6 +134,12 @@ export default function BlanketsPage() {
                 </div>
               </div>
             </div>
+            {selectedBlanket.description && (
+              <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border-color)' }}>
+                <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.7px', display: 'block', marginBottom: 6 }}>Detailed Agreement Text</label>
+                <p style={{ fontSize: 13, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.5, margin: 0 }}>{selectedBlanket.description}</p>
+              </div>
+            )}
           </div>
 
           <div className="card glass">

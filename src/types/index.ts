@@ -620,6 +620,8 @@ export interface Contract {
   renewalWindowDays: number;
   linkedPoIds: string[];
   docId?: string;
+  linkedBlanketPoId?: string;
+  description?: string;
 }
 
 export type BlanketStatus = 'Draft' | 'Active' | 'Expired' | 'Closed';
@@ -638,6 +640,7 @@ export interface BlanketPO {
   category?: ItemCategory;
   department?: string;
   project?: string;
+  description?: string;
 }
 
 // ── Invoices & Matching ──────────────────────────────────────

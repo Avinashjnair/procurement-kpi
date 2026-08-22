@@ -21,9 +21,10 @@ ProcureBuddy uses a **dynamic database-per-tenant architecture** utilizing SQLit
 
 For step-by-step guides on getting the project running, refer to the dedicated guides:
 
-* **Local Machine Setup**: Follow [README_LOCAL.md](file:///d:/New%20folder/procurement-kpi/README_LOCAL.md) to install dependencies, push database schemas, seed data, and run verification test cases on your local system.
-* **cPanel Shared Hosting (Recommended)**: Follow [README_CPANEL.md](file:///d:/New%20folder/procurement-kpi/README_CPANEL.md) to host the application directly on your existing cPanel server with fully persistent SQLite databases.
-* **Vercel + Turso Cloud (Alternative)**: Follow [README_PRODUCTION.md](file:///d:/New%20folder/procurement-kpi/README_PRODUCTION.md) to split the frontend (Vercel) and database layer (Turso cloud edge) using Git branches.
+* **Local Machine Setup**: Follow [README_LOCAL.md](file:///d:/New%20folder/procurement-kpi/docs/guides/README_LOCAL.md) to install dependencies, push database schemas, seed data, and run verification test cases on your local system.
+* **GCP Compute VM (Recommended/Staging)**: Follow [README_GCP_VM.md](file:///d:/New%20folder/procurement-kpi/docs/guides/README_GCP_VM.md) to build locally, deploy to a VM, and run PM2 and sqlite migrations automatically.
+* **cPanel Shared Hosting**: Follow [README_CPANEL.md](file:///d:/New%20folder/procurement-kpi/docs/guides/README_CPANEL.md) to host the application directly on your existing cPanel server with fully persistent SQLite databases.
+* **Vercel + Turso Cloud (Alternative)**: Follow [README_PRODUCTION.md](file:///d:/New%20folder/procurement-kpi/docs/guides/README_PRODUCTION.md) to split the frontend (Vercel) and database layer (Turso cloud edge) using Git branches.
 
 ---
 

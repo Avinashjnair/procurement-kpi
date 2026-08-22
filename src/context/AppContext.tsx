@@ -103,6 +103,11 @@ interface AppContextType extends AppState {
   submitGRN: (id: string) => Promise<void>;
   approveGRN: (id: string) => Promise<void>;
   rejectGRN: (id: string, reason: string) => Promise<void>;
+  updateGRN: (id: string, updates: Partial<GRN>) => Promise<void>;
+  deleteGRN: (id: string) => Promise<void>;
+  deleteItem: (id: string) => Promise<void>;
+  updatePO: (id: string, updates: Partial<PurchaseOrder>) => Promise<void>;
+  deletePO: (id: string) => Promise<void>;
   adjustStock: (stockItemId: string, delta: number, reason: string) => Promise<void>;
   addAsset: (asset: Asset) => Promise<void>;
   updateAssetStatus: (id: string, status: AssetStatus) => Promise<void>;
@@ -461,6 +466,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState(p => ({ ...p, items: p.items.map(i => i.id === id ? result : i) }));
   }, [runMutation]);
 
+  const deleteItem = useCallback(async (id: string) => {
+    await runMutation('DELETE_ITEM', { id });
+    setState(p => ({ ...p, items: p.items.filter(i => i.id !== id) }));
+  }, [runMutation]);
+
   const addItemPriceHistory = useCallback(async (itemId: string, point: PricePoint) => {
     const result = await runMutation('ADD_ITEM_PRICE_HISTORY', { itemId, point });
     setState(p => ({ ...p, items: p.items.map(i => i.id === itemId ? result : i) }));
@@ -566,6 +576,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const duplicatePO = useCallback(async (poId: string) => {
     const result = await runMutation('DUPLICATE_PO', { poId });
     setState(p => ({ ...p, purchaseOrders: [result, ...p.purchaseOrders] }));
+  }, [runMutation]);
+
+  const updatePO = useCallback(async (id: string, updates: Partial<PurchaseOrder>) => {
+    const result = await runMutation('UPDATE_PO', { id, updates });
+    setState(p => ({ ...p, purchaseOrders: p.purchaseOrders.map(po => po.id === id ? result : po) }));
+  }, [runMutation]);
+
+  const deletePO = useCallback(async (id: string) => {
+    await runMutation('DELETE_PO', { id });
+    setState(p => ({ ...p, purchaseOrders: p.purchaseOrders.filter(po => po.id !== id) }));
   }, [runMutation]);
 
   const acknowledgePO = useCallback(async (poId: string, details?: AcknowledgePODetails) => {
@@ -691,6 +711,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const rejectGRN = useCallback(async (id: string, reason: string) => {
     const result = await runMutation('REJECT_GRN', { id, reason });
     setState(p => ({ ...p, grns: p.grns.map(g => g.id === id ? result : g) }));
+  }, [runMutation]);
+
+  const updateGRN = useCallback(async (id: string, updates: Partial<GRN>) => {
+    const result = await runMutation('UPDATE_GRN', { id, updates });
+    setState(p => ({ ...p, grns: p.grns.map(g => g.id === id ? result : g) }));
+  }, [runMutation]);
+
+  const deleteGRN = useCallback(async (id: string) => {
+    await runMutation('DELETE_GRN', { id });
+    setState(p => ({ ...p, grns: p.grns.filter(g => g.id !== id) }));
   }, [runMutation]);
 
   // ── Stock Adjustments ─────────────────────────────────────
@@ -883,14 +913,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActivePage, setSelectedItemId, setSelectedSupplierId, setSelectedPOId,
       setSelectedRFQId, setSelectedGRNId, setFabOpen, setModalOpen, toggleDarkMode,
       login, logout,
-      addItem, updateItem, archiveItem, unarchiveItem, addItemPriceHistory,
+      addItem, updateItem, archiveItem, unarchiveItem, addItemPriceHistory, deleteItem,
       addSupplier, updateSupplier, updateSupplierKPIs, togglePreferredSupplier, addSupplierNote,
-      addPurchaseOrder, updatePOStatus, updatePOPayment, approvePO, rejectPO, cancelPO, duplicatePO,
+      addPurchaseOrder, updatePOStatus, updatePOPayment, approvePO, rejectPO, cancelPO, duplicatePO, updatePO, deletePO,
       recordPayment, approvePaymentRecord,
       addDocument, uploadNewDocVersion,
       addRFQ, updateRFQ, sendRFQ, closeRFQ, awardRFQ, publishRFQ,
       addQuotation, updateQuotation, submitEvaluation,
-      addGRN, submitGRN, approveGRN, rejectGRN,
+      addGRN, submitGRN, approveGRN, rejectGRN, updateGRN, deleteGRN,
       adjustStock,
       addAsset, updateAssetStatus, addAssetCategory, logMaintenance, calculateCurrentAssetValue,
       getSupplierById, getItemById, getPOById, getRFQById, getStockByItemId,

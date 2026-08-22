@@ -25,7 +25,7 @@ fi
 echo "=== 2. Clearing Application Folder ==="
 # Explicitly delete only the folders/files that will be overwritten by the ZIP
 # This avoids traversing node_modules or databases, making cleanup instant (0.01s)
-rm -rf "$APP_DIR/src" "$APP_DIR/public" "$APP_DIR/prisma" "$APP_DIR/server.js" "$APP_DIR/package.json" "$APP_DIR/package-lock.json" "$APP_DIR/next.config.ts" "$APP_DIR/tsconfig.json" "$APP_DIR/postcss.config.mjs" "$APP_DIR/eslint.config.mjs"
+rm -rf "$APP_DIR/src" "$APP_DIR/.next" "$APP_DIR/scripts" "$APP_DIR/public" "$APP_DIR/prisma" "$APP_DIR/server.js" "$APP_DIR/package.json" "$APP_DIR/package-lock.json" "$APP_DIR/next.config.ts" "$APP_DIR/tsconfig.json" "$APP_DIR/postcss.config.mjs" "$APP_DIR/eslint.config.mjs"
 
 echo "=== 3. Extracting Archive ==="
 unzip -o "$ZIP_FILE" -d $APP_DIR || true
@@ -48,10 +48,11 @@ npm install
 echo "=== 6. Generating database client engines ==="
 npx prisma generate
 
-echo "=== 6.5. Compiling Application (Next Build) ==="
-# Running compilation natively on the server.
-# Because type-checking and linting are ignored (configured in next.config), this completes in 20-30 seconds!
-npm run build
+echo "=== 6.3. Running Database Schema Migrations ==="
+node scripts/migrate.js
+
+echo "=== 6.5. Skipping Next Build (Pre-compiled locally) ==="
+# Build is precompiled locally and shipped via the ZIP archive to save time.
 
 echo "=== 7. Starting/Restarting Application via PM2 ==="
 pm2 describe procurebuddy > /dev/null 2>&1

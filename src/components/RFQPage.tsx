@@ -309,7 +309,7 @@ const WEIGHT_LABELS: Record<string, string> = {
 
 // ── New RFQ Modal ──
 function NewRFQModal({ onClose }: { onClose: () => void }) {
-  const { addRFQ, rfqs, items, suppliers, currentUser } = useApp();
+  const { addRFQ, rfqs, items, suppliers, currentUser, setModalOpen } = useApp();
   const [title, setTitle] = useState('');
   const [tenderType, setTenderType] = useState<TenderType>('selective');
   const [bidDeadline, setBidDeadline] = useState('');
@@ -328,23 +328,25 @@ function NewRFQModal({ onClose }: { onClose: () => void }) {
 
   const toggleSup = (id: string) => setSelectedSuppliers(p => p.includes(id) ? p.filter(s => s !== id) : [...p, id]);
 
-  const updateLine = (i: number, field: keyof RFQLineItem, val: string | number) =>
-    setLineItems(prev => prev.map((l, idx) => idx === i ? { ...l, [field]: val } : l));
+  const updateLine = (idx: number, key: string, val: any) => {
+    setLineItems(prev => prev.map((l, i) => i === idx ? { ...l, [key]: val } : l));
+  };
 
-  const removeLine = (i: number) => setLineItems(prev => prev.filter((_, idx) => idx !== i));
+  const removeLine = (idx: number) => {
+    setLineItems(prev => prev.filter((_, i) => i !== idx));
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !bidDeadline) return;
-    if (tenderType === 'selective' && selectedSuppliers.length === 0) return;
-    
-    const validLines = lineItems.filter(l => l.itemId && l.quantity) as RFQLineItem[];
-    if (!validLines.length) return;
+    const validLines = lineItems.filter(l => l.itemId && l.quantity);
+    if (!title || validLines.length === 0 || (!bidDeadline)) return;
 
-    // Normalize weights to sum to 1.0
-    const sum = Object.values(weights).reduce((a, b) => a + b, 0);
-    const normalizedWeights: Record<string, number> = {};
-    Object.keys(weights).forEach(k => normalizedWeights[k] = weights[k] / sum);
+    // Total weights sum
+    const totalW = Object.values(weights).reduce((a, b) => a + b, 0);
+    const normalizedWeights = Object.keys(weights).reduce((acc, k) => {
+      acc[k] = totalW > 0 ? (weights[k] / totalW) : (1 / Object.keys(weights).length);
+      return acc;
+    }, {} as Record<string, number>);
 
     const newId = `RFQ-${String(rfqs.length + 1).padStart(3, '0')}`;
     addRFQ({
@@ -355,7 +357,7 @@ function NewRFQModal({ onClose }: { onClose: () => void }) {
       bidDeadline, 
       clarificationDeadline: clarificationDeadline || bidDeadline,
       projectReference: projRef || undefined, notes: notes || undefined,
-      lineItems: validLines.map((l, i) => ({ ...l, id: `RLI-${newId}-${i}`, category: items.find(item => item.id === l.itemId)?.category || '' })),
+      lineItems: validLines.map((l, i) => ({ ...l, id: `RLI-${newId}-${i}`, category: items.find(item => item.id === l.itemId)?.category || '' })) as any,
       invitedSupplierIds: tenderType === 'open' ? [] : selectedSuppliers,
       tenderType,
       evaluationWeights: normalizedWeights
@@ -423,28 +425,46 @@ function NewRFQModal({ onClose }: { onClose: () => void }) {
           <div>
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-indigo)', textTransform: 'uppercase', letterSpacing: '0.8px', margin: '12px 0 10px' }}>Scope of Supply</div>
             {lineItems.map((line, i) => (
-              <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8, marginBottom: 8, alignItems: 'flex-end' }}>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <select className="form-select" value={line.itemId || ''} onChange={e => {
-                    const item = items.find(it => it.id === e.target.value);
-                    updateLine(i, 'itemId', e.target.value);
-                    updateLine(i, 'itemName', item?.name || '');
-                    updateLine(i, 'unit', item?.unit || '');
-                    updateLine(i, 'description', item?.description || '');
-                  }}>
-                    <option value="">Select item…</option>
-                    {items.filter(it => !it.archived).map(it => <option key={it.id} value={it.id}>{it.name}</option>)}
-                  </select>
+              <div key={i} style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px dashed var(--border-color)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8, marginBottom: 6, alignItems: 'flex-end' }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <select className="form-select" value={line.itemId || ''} onChange={e => {
+                      if (e.target.value === 'CREATE_NEW_ITEM') {
+                        setModalOpen('newItem');
+                        e.target.value = '';
+                        return;
+                      }
+                      const item = items.find(it => it.id === e.target.value);
+                      updateLine(i, 'itemId', e.target.value);
+                      updateLine(i, 'itemName', item?.name || '');
+                      updateLine(i, 'unit', item?.unit || '');
+                      updateLine(i, 'description', item?.description || '');
+                    }}>
+                      <option value="">Select item…</option>
+                      {items.filter(it => !it.archived).map(it => <option key={it.id} value={it.id}>{it.name}</option>)}
+                      <option value="CREATE_NEW_ITEM" style={{ color: 'var(--accent-indigo)', fontWeight: 'bold' }}>+ Quick Add New Item...</option>
+                    </select>
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <input type="number" className="form-input" placeholder="Qty" value={line.quantity || ''} onChange={e => updateLine(i, 'quantity', parseInt(e.target.value))} min="1" />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <input type="text" className="form-input" value={line.unit || ''} onChange={e => updateLine(i, 'unit', e.target.value)} placeholder="Unit" />
+                  </div>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => removeLine(i)} style={{ color: 'var(--accent-rose)', marginBottom: 0 }}>
+                    <X size={14} />
+                  </button>
                 </div>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <input type="number" className="form-input" placeholder="Qty" value={line.quantity || ''} onChange={e => updateLine(i, 'quantity', parseInt(e.target.value))} min="1" />
+                <div style={{ display: 'flex', paddingLeft: 2 }}>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Enter item description or custom specifications for the RFQ..."
+                    value={line.description || ''}
+                    onChange={e => updateLine(i, 'description', e.target.value)}
+                    style={{ fontSize: 12, padding: '6px 12px' }}
+                  />
                 </div>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <input type="text" className="form-input" value={line.unit || ''} onChange={e => updateLine(i, 'unit', e.target.value)} placeholder="Unit" />
-                </div>
-                <button type="button" className="btn btn-ghost btn-sm" onClick={() => removeLine(i)} style={{ color: 'var(--accent-rose)', marginBottom: 0 }}>
-                  <X size={14} />
-                </button>
               </div>
             ))}
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => setLineItems(p => [...p, {}])}>

@@ -199,6 +199,13 @@ export async function POST(req: Request) {
         });
         break;
       }
+      case 'DELETE_ITEM': {
+        result = await db.item.delete({
+          where: { id: payload.id },
+        });
+        await logAudit('Item', payload.id, 'Delete', `Deleted item: ${payload.id}`);
+        break;
+      }
 
       // ── Suppliers ──────────────────────────────────────────
       case 'ADD_SUPPLIER': {
@@ -343,6 +350,21 @@ export async function POST(req: Request) {
         }
 
         await logAudit('PO', payload.id, 'Create', `Created${payload.blanketPoId ? ' Release' : ''} PO: ${payload.id}`);
+        break;
+      }
+      case 'UPDATE_PO': {
+        const original = await db.purchaseOrder.findUnique({ where: { id: payload.id } });
+        if (!original) throw new Error('PO not found');
+        result = await db.purchaseOrder.update({
+          where: { id: payload.id },
+          data: payload.updates,
+        });
+        await logAudit('PO', payload.id, 'Update', `Updated PO: ${payload.id}`);
+        break;
+      }
+      case 'DELETE_PO': {
+        result = await db.purchaseOrder.delete({ where: { id: payload.id } });
+        await logAudit('PO', payload.id, 'Delete', `Deleted PO: ${payload.id}`);
         break;
       }
       case 'UPDATE_PO_STATUS': {
@@ -712,6 +734,21 @@ export async function POST(req: Request) {
             lineItems: payload.lineItems || [],
           },
         });
+        break;
+      }
+      case 'UPDATE_GRN': {
+        const original = await db.gRN.findUnique({ where: { id: payload.id } });
+        if (!original) throw new Error('GRN not found');
+        result = await db.gRN.update({
+          where: { id: payload.id },
+          data: payload.updates,
+        });
+        await logAudit('GRN', payload.id, 'Update', `Updated GRN: ${payload.id}`);
+        break;
+      }
+      case 'DELETE_GRN': {
+        result = await db.gRN.delete({ where: { id: payload.id } });
+        await logAudit('GRN', payload.id, 'Delete', `Deleted GRN: ${payload.id}`);
         break;
       }
       case 'SUBMIT_GRN': {

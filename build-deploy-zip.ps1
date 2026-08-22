@@ -20,6 +20,9 @@ if (Test-Path $ZipName) {
 # Define files and folders to include
 $FilesToZip = @(
     "src",
+    ".next",
+    "scripts",
+    "docs",
     "databases",
     "prisma",
     "public",

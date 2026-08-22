@@ -25,7 +25,7 @@ rm -rf .next/dev
 echo "Cleaned dev and cache folders from .next"
 
 # Zip folders and files (excluding node_modules, .git, etc.)
-zip -r "$ZIP_NAME" .next databases prisma public package.json package-lock.json server.js
+zip -r "$ZIP_NAME" .next databases prisma public package.json package-lock.json server.js scripts docs
 
 if [ $? -eq 0 ]; then
   echo "=== 3. Done! ==="

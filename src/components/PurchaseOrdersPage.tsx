@@ -134,11 +134,19 @@ function PaymentModal({ poId, totalAmount, amountPaid, onClose }: {
 
 // ── PO Detail page ──
 function PODetail({ poId }: { poId: string }) {
-  const { purchaseOrders, items, suppliers, setSelectedPOId, updatePOStatus, duplicatePO, processApprovalStep, currentUser, companyProfile } = useApp();
+  const { purchaseOrders, items, suppliers, setSelectedPOId, updatePOStatus, duplicatePO, processApprovalStep, currentUser, companyProfile, updatePO, deletePO } = useApp();
   const [cancelModal, setCancelModal] = useState(false);
   const [paymentModal, setPaymentModal] = useState(false);
   const [exportLoading, setExportLoading] = useState<string | null>(null);
   const [approvalComment, setApprovalComment] = useState('');
+
+  // Editing state
+  const [isEditing, setIsEditing] = useState(false);
+  const [editPaymentTerms, setEditPaymentTerms] = useState('');
+  const [editIncoterms, setEditIncoterms] = useState('');
+  const [editDueDate, setEditDueDate] = useState('');
+  const [editEta, setEditEta] = useState('');
+  const [editRemarks, setEditRemarks] = useState('');
 
   const po = purchaseOrders.find(p => p.id === poId);
   const supplier = suppliers.find(s => s.id === po?.supplierId);
@@ -179,6 +187,79 @@ function PODetail({ poId }: { poId: string }) {
   const handleSubmitForApproval = () => {
     updatePOStatus(po.id, 'Pending');
   };
+
+  const startEditing = () => {
+    setEditPaymentTerms(po.paymentTerms);
+    setEditIncoterms(po.incoterms);
+    setEditDueDate(po.dueDate);
+    setEditEta(po.eta);
+    setEditRemarks(po.remarks || '');
+    setIsEditing(true);
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await updatePO(po.id, {
+      paymentTerms: editPaymentTerms,
+      incoterms: editIncoterms,
+      dueDate: editDueDate,
+      eta: editEta,
+      remarks: editRemarks,
+    });
+    setIsEditing(false);
+  };
+
+  const handleDeletePO = async () => {
+    if (window.confirm(`Are you sure you want to permanently delete Purchase Order ${po.id}? This action cannot be undone.`)) {
+      await deletePO(po.id);
+      setSelectedPOId(null);
+    }
+  };
+
+  if (isEditing) {
+    return (
+      <div>
+        <button className="detail-back" onClick={() => setIsEditing(false)}>
+          <ArrowLeft size={16} /> Cancel Editing
+        </button>
+
+        <div className="page-header">
+          <h2>Edit Purchase Order: {po.id}</h2>
+        </div>
+
+        <form onSubmit={handleSaveEdit} className="card stack-md" style={{ padding: 24, maxWidth: 600 }}>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Payment Terms</label>
+              <input type="text" className="form-input" value={editPaymentTerms} onChange={e => setEditPaymentTerms(e.target.value)} required />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Incoterms</label>
+              <input type="text" className="form-input" value={editIncoterms} onChange={e => setEditIncoterms(e.target.value)} required />
+            </div>
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Due Date</label>
+              <input type="date" className="form-input" value={editDueDate} onChange={e => setEditDueDate(e.target.value)} required />
+            </div>
+            <div className="form-group">
+              <label className="form-label">ETA / Completion Date</label>
+              <input type="date" className="form-input" value={editEta} onChange={e => setEditEta(e.target.value)} required />
+            </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Remarks / Instructions</label>
+            <textarea className="form-input" rows={3} value={editRemarks} onChange={e => setEditRemarks(e.target.value)} />
+          </div>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 12 }}>
+            <button type="button" className="btn btn-secondary" onClick={() => setIsEditing(false)}>Cancel</button>
+            <button type="submit" className="btn btn-primary">Save Changes</button>
+          </div>
+        </form>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -223,6 +304,9 @@ function PODetail({ poId }: { poId: string }) {
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button className="btn btn-secondary btn-sm" onClick={startEditing}>
+            Edit PO
+          </button>
           {isDraft && (
             <button className="btn btn-primary btn-sm" onClick={handleSubmitForApproval}>
               Submit for Approval
@@ -250,6 +334,9 @@ function PODetail({ poId }: { poId: string }) {
               <XCircle size={13} /> Cancel
             </button>
           )}
+          <button className="btn btn-ghost btn-sm" style={{ color: 'var(--accent-rose)', marginLeft: 'auto' }} onClick={handleDeletePO}>
+            Delete PO
+          </button>
         </div>
       </div>
 

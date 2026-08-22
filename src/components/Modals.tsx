@@ -703,6 +703,8 @@ function NewItemModal() {
   const { suppliers, addItem, setModalOpen, items } = useApp();
   const [name, setName] = useState('');
   const [category, setCategory] = useState<string>('Piping');
+  const [customCategory, setCustomCategory] = useState('');
+  const [isCustomCategory, setIsCustomCategory] = useState(false);
   const [description, setDescription] = useState('');
   const [unit, setUnit] = useState('piece');
   const [currentPrice, setCurrentPrice] = useState('');
@@ -718,11 +720,18 @@ function NewItemModal() {
 
   // Auto-switch unit when category changes
   const handleCategoryChange = (val: string) => {
-    setCategory(val);
-    if (val === 'Services') {
-      setUnit('lump sum');
-    } else {
+    if (val === 'ADD_CUSTOM_CATEGORY') {
+      setIsCustomCategory(true);
+      setCategory('');
       setUnit('piece');
+    } else {
+      setIsCustomCategory(false);
+      setCategory(val);
+      if (val === 'Services') {
+        setUnit('lump sum');
+      } else {
+        setUnit('piece');
+      }
     }
   };
 
@@ -737,11 +746,14 @@ function NewItemModal() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !currentPrice) return;
+    const finalCategory = isCustomCategory ? customCategory.trim() : category;
+    if (!finalCategory) return;
+
     const newId = `ITM-${String(items.length + 1).padStart(3, '0')}`;
     addItem({
       id: newId,
       name,
-      category: category as import('@/data/mockData').ItemCategory,
+      category: finalCategory as any,
       description,
       unit,
       currentPrice: parseFloat(currentPrice),
@@ -768,15 +780,47 @@ function NewItemModal() {
       <div className="form-row">
         <div className="form-group">
           <label className="form-label">Category</label>
-          <select className="form-select" value={category} onChange={e => handleCategoryChange(e.target.value)}>
-            <optgroup label="── Goods ──">
-              <option>Piping</option><option>Valves</option><option>Fittings</option>
-              <option>Chemicals</option><option>Electrical</option><option>Instrumentation</option>
-            </optgroup>
-            <optgroup label="── Services ──">
-              <option value="Services">Services</option>
-            </optgroup>
-          </select>
+          {!isCustomCategory ? (
+            <select className="form-select" value={category} onChange={e => handleCategoryChange(e.target.value)}>
+              <optgroup label="── Goods ──">
+                <option value="Piping">Piping</option>
+                <option value="Valves">Valves</option>
+                <option value="Fittings">Fittings</option>
+                <option value="Chemicals">Chemicals</option>
+                <option value="Electrical">Electrical</option>
+                <option value="Instrumentation">Instrumentation</option>
+              </optgroup>
+              <optgroup label="── Services ──">
+                <option value="Services">Services</option>
+              </optgroup>
+              <optgroup label="── Custom ──">
+                <option value="ADD_CUSTOM_CATEGORY">+ Add Custom Category...</option>
+              </optgroup>
+            </select>
+          ) : (
+            <div style={{ display: 'flex', gap: 6 }}>
+              <input
+                type="text"
+                className="form-input"
+                value={customCategory}
+                onChange={e => setCustomCategory(e.target.value)}
+                placeholder="Enter custom category..."
+                required
+              />
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => {
+                  setIsCustomCategory(false);
+                  setCustomCategory('');
+                  setCategory('Piping');
+                }}
+                style={{ padding: '0 10px', fontSize: 11 }}
+              >
+                Cancel
+              </button>
+            </div>
+          )}
         </div>
         <div className="form-group">
           <label className="form-label">Unit / Billing Unit</label>
@@ -2084,6 +2128,7 @@ function AddBlanketModal() {
   const [category, setCategory] = useState('');
   const [department, setDepartment] = useState('');
   const [project, setProject] = useState('');
+  const [description, setDescription] = useState('');
 
   const selectedSupplier = suppliers.find(s => s.id === supplierId);
   const ceilingValue = parseFloat(totalCeiling);
@@ -2108,6 +2153,7 @@ function AddBlanketModal() {
       category: (category || undefined) as any,
       department: department.trim() || undefined,
       project: project.trim() || undefined,
+      description: description.trim() || undefined,
     });
     setModalOpen(null);
   };
@@ -2166,6 +2212,11 @@ function AddBlanketModal() {
           <label className="form-label">Project (Optional)</label>
           <input type="text" className="form-input" value={project} onChange={e => setProject(e.target.value)} placeholder="e.g., PRJ-2026-004" />
         </div>
+      </div>
+
+      <div className="form-group">
+        <label className="form-label">Detailed Agreement Text / Description</label>
+        <textarea className="form-input" rows={4} value={description} onChange={e => setDescription(e.target.value)} placeholder="Enter details of the blanket agreement, special terms, etc..." />
       </div>
 
       {validTo && validFrom && validTo < validFrom && (
