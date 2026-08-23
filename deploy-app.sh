@@ -60,8 +60,7 @@ node scripts/migrate.js
 # Next Build is pre-compiled in CI and copied over inside the archive. Skipping native build.
 
 echo "=== 7. Starting/Restarting Application via PM2 ==="
-pm2 describe "$PROCESS_NAME" > /dev/null 2>&1
-if [ $? -eq 0 ]; then
+if pm2 describe "$PROCESS_NAME" > /dev/null 2>&1; then
     echo "Restarting active PM2 process..."
     PORT=$PORT pm2 restart "$PROCESS_NAME" --update-env
 else
