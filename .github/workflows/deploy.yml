@@ -13,18 +13,33 @@ on:
           - prod
 
 jobs:
-  deploy:
+  build-and-deploy:
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Create Deployment Archive
-        run: |
-          zip -r deploy.zip src scripts databases prisma public package.json package-lock.json server.js next.config.ts tsconfig.json postcss.config.mjs eslint.config.mjs deploy-app.sh
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
 
-      - name: Copy Archive to VM via SFTP
+      - name: Install Dependencies (CI)
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npx prisma generate
+
+      - name: Compile Application Natively (GitHub Runner)
+        run: npm run build
+
+      - name: Create Deployment Archive (Including pre-compiled .next folder)
+        run: |
+          zip -r deploy.zip .next src scripts databases prisma public package.json package-lock.json server.js next.config.ts tsconfig.json postcss.config.mjs eslint.config.mjs deploy-app.sh
+
+      - name: Copy Pre-compiled Archive to VM via SFTP
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VM_HOST }}
@@ -41,12 +56,12 @@ jobs:
           username: ${{ secrets.VM_USERNAME }}
           key: ${{ secrets.VM_SSH_KEY }}
           port: 22
-          command_timeout: 30m
+          command_timeout: 5m
           script: |
             # 1. Select destination folder based on environment choice
             TARGET_DIR="/var/www/procurebuddy-${{ github.event.inputs.target_env }}"
             
-            # 2. Extract files (directory ownership pre-granted on VM)
+            # 2. Extract pre-compiled files
             mkdir -p $TARGET_DIR
             unzip -o /home/${{ secrets.VM_USERNAME }}/deploy.zip -d $TARGET_DIR
             
