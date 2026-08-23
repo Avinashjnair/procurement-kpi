@@ -35,9 +35,12 @@ jobs:
       - name: Compile Application Natively (GitHub Runner)
         run: npm run build
 
-      - name: Create Deployment Archive (Including pre-compiled .next folder)
+      - name: Rebuild Native Bindings (GitHub Runner)
+        run: npm rebuild better-sqlite3
+
+      - name: Create Deployment Archive (Including pre-compiled .next and node_modules folders)
         run: |
-          zip -r deploy.zip .next src scripts databases prisma public package.json package-lock.json server.js next.config.ts tsconfig.json postcss.config.mjs eslint.config.mjs deploy-app.sh
+          zip -r deploy.zip .next node_modules src scripts databases prisma public package.json package-lock.json server.js next.config.ts tsconfig.json postcss.config.mjs eslint.config.mjs deploy-app.sh
 
       - name: Copy Pre-compiled Archive to VM via SFTP
         uses: appleboy/scp-action@v0.1.7
