@@ -61,7 +61,7 @@ echo "=== 6.3. Running Database Schema Migrations ==="
 node scripts/migrate.js
 
 echo "=== 6.5. Running Next Build (Native compilation) ==="
-npm run build
+NODE_OPTIONS="--max-old-space-size=512" npm run build
 
 echo "=== 7. Starting/Restarting Application via PM2 ==="
 pm2 describe "$PROCESS_NAME" > /dev/null 2>&1
