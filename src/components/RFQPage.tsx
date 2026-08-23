@@ -146,7 +146,7 @@ function RFQDetail({ rfqId }: { rfqId: string }) {
               <Send size={13} /> Send Invitations
             </button>
           )}
-          {rfq.status === 'Sent' && <button className="btn btn-secondary btn-sm" onClick={() => closeRFQ(rfq.id)}>Close RFQ</button>}
+          {(rfq.status === 'Sent' || rfq.status === 'Published') && <button className="btn btn-secondary btn-sm" onClick={() => closeRFQ(rfq.id)}>Close RFQ</button>}
         </div>
       </div>
 
@@ -348,7 +348,11 @@ function NewRFQModal({ onClose }: { onClose: () => void }) {
       return acc;
     }, {} as Record<string, number>);
 
-    const newId = `RFQ-${String(rfqs.length + 1).padStart(3, '0')}`;
+    const maxId = rfqs.reduce((max, r) => {
+      const num = parseInt(r.id.replace('RFQ-', ''));
+      return !isNaN(num) && num > max ? num : max;
+    }, 0);
+    const newId = `RFQ-${String(maxId + 1).padStart(3, '0')}`;
     addRFQ({
       id: newId, title, status: 'Draft',
       createdBy: currentUser?.id || 'USR-001', createdByName: currentUser?.name || 'Unknown',

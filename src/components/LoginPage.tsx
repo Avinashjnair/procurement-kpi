@@ -4,13 +4,6 @@ import { useRouter } from 'next/navigation';
 import { useApp } from '@/context/AppContext';
 import { Lock, Mail, Eye, EyeOff, ChevronRight, ShieldCheck, Globe } from 'lucide-react';
 
-const DEMO_ACCOUNTS = [
-  { email: 'admin@veltrixlabs.in', password: 'admin123',  label: 'Veltrix Test Client (Admin/Manager)',   role: 'manager',  initials: 'VA', color: '#b1cad7' },
-  { email: 'requester@veltrixlabs.in', password: 'requester123',  label: 'Veltrix Test Client (Requester)',   role: 'engineer',  initials: 'VR', color: '#38bdf8' },
-  { email: 'buyer@veltrixlabs.in', password: 'buyer123',  label: 'Veltrix Test Client (Buyer)',   role: 'engineer',  initials: 'VB', color: '#fb7185' },
-  { email: 'finance@veltrixlabs.in', password: 'finance123',  label: 'Veltrix Test Client (Finance)',   role: 'finance',  initials: 'VF', color: '#34d399' },
-];
-
 const ROLE_LABELS: Record<string, string> = {
   manager:  'Admin',
   engineer: 'Operations',
@@ -29,6 +22,7 @@ export default function LoginPage() {
   const router = useRouter();
   const { login, supplierLogin, suppliers } = useApp();
   const [loginType, setLoginType] = useState<'internal' | 'supplier'>('internal');
+  const [selectedTier, setSelectedTier] = useState<'essential' | 'professional' | 'enterprise'>('enterprise');
   const [email,    setEmail]    = useState('');
   const [supplierId, setSupplierId] = useState('');
   const [password, setPassword] = useState('');
@@ -36,6 +30,15 @@ export default function LoginPage() {
   const [error,    setError]    = useState('');
   const [loading,  setLoading]  = useState(false);
   const [showRegistration, setShowRegistration] = useState(false);
+
+  const getDemoAccounts = () => {
+    return [
+      { email: `admin@veltrix-${selectedTier}.in`, password: 'admin123',  label: `Veltrix ${selectedTier.toUpperCase()} (Admin/Manager)`,   role: 'manager',  initials: 'VA', color: '#b1cad7' },
+      { email: `requester@veltrix-${selectedTier}.in`, password: 'requester123',  label: `Veltrix ${selectedTier.toUpperCase()} (Requester)`,   role: 'engineer',  initials: 'VR', color: '#38bdf8' },
+      { email: `buyer@veltrix-${selectedTier}.in`, password: 'buyer123',  label: `Veltrix ${selectedTier.toUpperCase()} (Buyer)`,   role: 'engineer',  initials: 'VB', color: '#fb7185' },
+      { email: `finance@veltrix-${selectedTier}.in`, password: 'finance123',  label: `Veltrix ${selectedTier.toUpperCase()} (Finance)`,   role: 'finance',  initials: 'VF', color: '#34d399' },
+    ];
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,7 +74,7 @@ export default function LoginPage() {
     );
   }
 
-  const fillDemo = (acc: typeof DEMO_ACCOUNTS[0]) => {
+  const fillDemo = (acc: ReturnType<typeof getDemoAccounts>[number]) => {
     setLoginType('internal');
     setEmail(acc.email);
     setPassword(acc.password);
@@ -80,7 +83,7 @@ export default function LoginPage() {
 
   const fillSupplierDemo = () => {
     setLoginType('supplier');
-    setSupplierId('SUP-001');
+    setSupplierId(`SUP-${selectedTier.toUpperCase()}-001`);
     setPassword('vendor123');
     setError('');
   };
@@ -119,6 +122,36 @@ export default function LoginPage() {
             >
               Vendor Portal
             </button>
+          </div>
+
+          {/* Subscription Tier selector */}
+          <div style={{ marginBottom: 20 }}>
+            <label className="form-label" style={{ display: 'block', marginBottom: 8, fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--text-muted)' }}>Target Environment Tier</label>
+            <div style={{ display: 'flex', gap: 6 }}>
+              {(['essential', 'professional', 'enterprise'] as const).map(tier => (
+                <button
+                  key={tier}
+                  type="button"
+                  onClick={() => { setSelectedTier(tier); setError(''); }}
+                  style={{
+                    flex: 1,
+                    padding: '8px 10px',
+                    borderRadius: 8,
+                    border: '1px solid',
+                    borderColor: selectedTier === tier ? 'var(--accent-indigo)' : 'var(--border-color)',
+                    background: selectedTier === tier ? 'rgba(99, 102, 241, 0.1)' : 'transparent',
+                    color: selectedTier === tier ? '#fff' : 'var(--text-muted)',
+                    fontSize: 11,
+                    fontWeight: 700,
+                    textTransform: 'uppercase',
+                    cursor: 'pointer',
+                    transition: 'all 0.15s'
+                  }}
+                >
+                  {tier}
+                </button>
+              ))}
+            </div>
           </div>
 
           <h2 style={{ fontSize: 18, fontWeight: 700, color: 'var(--text-primary)', margin: '0 0 22px' }}>
@@ -207,7 +240,7 @@ export default function LoginPage() {
               <div style={{ flex: 1, height: 1, background: 'var(--border-color)' }} />
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {DEMO_ACCOUNTS.map(acc => (
+              {getDemoAccounts().map(acc => (
                 <button key={acc.email} onClick={() => fillDemo(acc)}
                   style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px', borderRadius: 12, border: '1px solid var(--border-color)', background: 'var(--bg-card)', cursor: 'pointer', textAlign: 'left', transition: 'all 0.15s', width: '100%', fontFamily: 'inherit' }}>
                   <div style={{ width: 38, height: 38, borderRadius: 10, background: `${acc.color}20`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, color: acc.color, flexShrink: 0 }}>
@@ -231,8 +264,8 @@ export default function LoginPage() {
                   VV
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Veltrix Test Vendor (Portal)</div>
-                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>Access the standalone supplier self-service portal</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-primary)' }}>Veltrix {selectedTier.toUpperCase()} Vendor (Portal)</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 1 }}>Access the vendor portal for the {selectedTier} environment</div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '3px 8px', borderRadius: 6, background: 'rgba(59,130,246,0.1)', color: '#60a5fa', fontSize: 11, fontWeight: 700, flexShrink: 0 }}>
                   <Globe size={10} />

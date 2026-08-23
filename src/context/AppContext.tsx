@@ -272,7 +272,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // ── Session Initialization ───────────────────────────────────
   useEffect(() => {
     const savedToken = localStorage.getItem('procurebuddy_token');
-    const savedTenant = localStorage.getItem('procurebuddy_tenant_id') || 'steelmax';
+    const savedTenant = localStorage.getItem('procurebuddy_tenant_id') || 'veltrix';
 
     if (savedToken) {
       setAuthToken(savedToken);
@@ -320,7 +320,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Auth logins
   const login = useCallback(async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      const resolvedTenant = 'veltrix';
+      let resolvedTenant = 'veltrix';
+      const emailLower = email.toLowerCase();
+      if (emailLower.includes('essential')) {
+        resolvedTenant = 'veltrix_essential';
+      } else if (emailLower.includes('professional')) {
+        resolvedTenant = 'veltrix_professional';
+      } else if (emailLower.includes('enterprise')) {
+        resolvedTenant = 'veltrix_enterprise';
+      }
       
       const res = await fetch('/api/auth/login', {
         method: 'POST',
@@ -357,7 +365,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const supplierLogin = useCallback(async (supplierId: string, passwordHash: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      const resolvedTenant = 'veltrix';
+      let resolvedTenant = 'veltrix';
+      const supplierIdUpper = supplierId.toUpperCase();
+      if (supplierIdUpper.includes('ESSENTIAL')) {
+        resolvedTenant = 'veltrix_essential';
+      } else if (supplierIdUpper.includes('PROFESSIONAL')) {
+        resolvedTenant = 'veltrix_professional';
+      } else if (supplierIdUpper.includes('ENTERPRISE')) {
+        resolvedTenant = 'veltrix_enterprise';
+      }
 
       const res = await fetch('/api/auth/supplier-login', {
         method: 'POST',

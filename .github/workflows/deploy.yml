@@ -1,51 +1,59 @@
-# Deploy Next.js static site to GitHub Pages
-name: Deploy to GitHub Pages
+name: Manual Build & Deploy ProcureBuddy
 
 on:
-  push:
-    branches: ['main']
   workflow_dispatch:
-
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: 'pages'
-  cancel-in-progress: false
+    inputs:
+      target_env:
+        description: 'Target Environment'
+        required: true
+        default: 'stg'
+        type: choice
+        options:
+          - stg
+          - prod
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Create Deployment Archive
+        run: |
+          zip -r deploy.zip src scripts databases prisma public package.json package-lock.json server.js next.config.ts tsconfig.json postcss.config.mjs eslint.config.mjs deploy-app.sh
+
+      - name: Copy Archive to VM via SFTP
+        uses: appleboy/scp-action@v0.1.7
         with:
-          node-version: '20'
-          cache: 'npm'
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USERNAME }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          port: 22
+          source: "deploy.zip"
+          target: "/home/${{ secrets.VM_USERNAME }}/"
 
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build
-        run: npm run build
-
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Extract & Run Deploy Script on VM
+        uses: appleboy/ssh-action@v1.0.3
         with:
-          path: ./out
-
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          host: ${{ secrets.VM_HOST }}
+          username: ${{ secrets.VM_USERNAME }}
+          key: ${{ secrets.VM_SSH_KEY }}
+          port: 22
+          script: |
+            # 1. Select destination folder based on environment choice
+            TARGET_DIR="/var/www/procurebuddy-${{ github.event.inputs.target_env }}"
+            
+            # 2. Extract files
+            sudo mkdir -p $TARGET_DIR
+            sudo chown -R ${{ secrets.VM_USERNAME }}:${{ secrets.VM_USERNAME }} $TARGET_DIR
+            unzip -o /home/${{ secrets.VM_USERNAME }}/deploy.zip -d $TARGET_DIR
+            
+            # 3. Clean up Windows carriage returns
+            sed -i 's/\r$//' $TARGET_DIR/deploy-app.sh
+            
+            # 4. Trigger deployment script inside target folder
+            cd $TARGET_DIR
+            chmod +x deploy-app.sh
+            ./deploy-app.sh ${{ github.event.inputs.target_env }}

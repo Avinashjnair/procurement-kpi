@@ -652,6 +652,44 @@ export async function POST(req: Request) {
           data: { status: 'Rejected' },
         });
 
+        // ── Auto-generate Purchase Order from Awarded Quotation ──
+        const poId = `PO-${Date.now()}`;
+        const quotationItems = Array.isArray(quotation.lineItems) ? quotation.lineItems : [];
+        const poItems = quotationItems.map((qi: any) => ({
+          itemId: qi.itemId || '',
+          itemName: qi.itemName || 'Item',
+          description: qi.description || qi.itemName || 'Item',
+          quantity: qi.quantity || 1,
+          unitPrice: qi.unitPrice || 0,
+          deliveredQty: 0,
+          isAsset: false,
+        }));
+
+        await db.purchaseOrder.create({
+          data: {
+            id: poId,
+            dateOfIssue: new Date().toISOString().split('T')[0],
+            dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], // 30 days from now
+            supplierId: quotation.supplierId,
+            supplierName: quotation.supplierName,
+            items: poItems,
+            totalAmount: quotation.totalAmount,
+            currency: quotation.currency || 'USD',
+            paymentTerms: quotation.paymentTerms || 'Net 30',
+            deliveryStatus: 'Draft',
+            paymentStatus: 'Unpaid',
+            eta: '',
+            incoterms: 'CIF',
+            remarks: `Automatically generated from RFQ ${payload.rfqId} / Quotation ${payload.quotationId}`,
+            approvalSteps: [
+              { step: 1, role: 'manager', status: 'Pending', approvedBy: '', approvedAt: '' },
+              { step: 2, role: 'finance', status: 'Pending', approvedBy: '', approvedAt: '' }
+            ],
+          }
+        });
+
+        await logAudit('PO', poId, 'Create', `Automatically generated PO from RFQ award: ${payload.rfqId}`);
+
         result = quotation;
         break;
       }
@@ -770,7 +808,27 @@ export async function POST(req: Request) {
 
         // Dynamic stock level increases & movement logging
         for (const line of lineItems as any[]) {
-          const stock = await db.stockItem.findUnique({ where: { itemId: line.itemId } });
+          let stock = await db.stockItem.findUnique({ where: { itemId: line.itemId } });
+          if (!stock) {
+            // Find the item details from materials catalogue
+            const itemDetails = await db.item.findUnique({ where: { id: line.itemId } });
+            stock = await db.stockItem.create({
+              data: {
+                itemId: line.itemId,
+                itemName: line.itemName || itemDetails?.name || 'Unknown Item',
+                category: itemDetails?.category || 'General',
+                unit: itemDetails?.unit || 'pcs',
+                currentStock: 0,
+                reservedStock: 0,
+                reorderPoint: 10,
+                maxStock: 500,
+                location: 'Main Warehouse',
+                lastUpdated: today,
+                lastGRNId: grn.id,
+              }
+            });
+          }
+
           if (stock) {
             const newBalance = stock.currentStock + line.acceptedQty;
             await db.stockItem.update({
@@ -785,7 +843,7 @@ export async function POST(req: Request) {
               data: {
                 stockItemId: stock.id,
                 itemId: line.itemId,
-                itemName: line.itemName,
+                itemName: line.itemName || stock.itemName,
                 movementType: 'GRN',
                 quantity: line.acceptedQty,
                 referenceId: grn.id,

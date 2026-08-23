@@ -53,6 +53,72 @@ files.forEach(file => {
       }
     }
 
+    // Migrate PurchaseOrder
+    const poColumns = [
+      { name: 'acknowledgedAt', type: 'TEXT DEFAULT ""' },
+      { name: 'acknowledgedBy', type: 'TEXT DEFAULT ""' },
+      { name: 'acknowledgementStatus', type: 'TEXT DEFAULT ""' },
+      { name: 'acknowledgedDeliveryDate', type: 'TEXT DEFAULT ""' },
+      { name: 'acknowledgementNotes', type: 'TEXT DEFAULT ""' },
+      { name: 'trackingNumber', type: 'TEXT DEFAULT ""' },
+      { name: 'carrier', type: 'TEXT DEFAULT ""' },
+      { name: 'shippedAt', type: 'TEXT DEFAULT ""' },
+      { name: 'shipmentEta', type: 'TEXT DEFAULT ""' },
+      { name: 'amendmentRequest', type: 'TEXT DEFAULT NULL' }
+    ];
+
+    poColumns.forEach(col => {
+      try {
+        db.prepare(`ALTER TABLE PurchaseOrder ADD COLUMN ${col.name} ${col.type}`).run();
+        console.log(`  - Added ${col.name} to PurchaseOrder`);
+      } catch (e) {
+        if (e.message.includes('duplicate column name')) {
+          // Expected
+        } else {
+          console.error(`  - Error migrating PurchaseOrder (${col.name}):`, e.message);
+        }
+      }
+    });
+
+    // Migrate Quotation
+    const quotColumns = [
+      { name: 'quotationFileName', type: 'TEXT DEFAULT ""' },
+      { name: 'quotationFileSize', type: 'TEXT DEFAULT ""' }
+    ];
+
+    quotColumns.forEach(col => {
+      try {
+        db.prepare(`ALTER TABLE Quotation ADD COLUMN ${col.name} ${col.type}`).run();
+        console.log(`  - Added ${col.name} to Quotation`);
+      } catch (e) {
+        if (e.message.includes('duplicate column name')) {
+          // Expected
+        } else {
+          console.error(`  - Error migrating Quotation (${col.name}):`, e.message);
+        }
+      }
+    });
+
+    // Migrate Invoice
+    const invColumns = [
+      { name: 'grnId', type: 'TEXT DEFAULT ""' },
+      { name: 'expectedPaymentDate', type: 'TEXT DEFAULT ""' },
+      { name: 'invoiceFileName', type: 'TEXT DEFAULT ""' }
+    ];
+
+    invColumns.forEach(col => {
+      try {
+        db.prepare(`ALTER TABLE Invoice ADD COLUMN ${col.name} ${col.type}`).run();
+        console.log(`  - Added ${col.name} to Invoice`);
+      } catch (e) {
+        if (e.message.includes('duplicate column name')) {
+          // Expected
+        } else {
+          console.error(`  - Error migrating Invoice (${col.name}):`, e.message);
+        }
+      }
+    });
+
     db.close();
   } catch (err) {
     console.error('Failed to open/migrate database:', file, err.message);

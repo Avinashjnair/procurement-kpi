@@ -159,9 +159,7 @@ function NewPOModal() {
   }[]>([{ itemId: '', description: '', quantity: '', unitPrice: '', scopeOfWork: '', duration: '', slaTerms: '', billingType: 'Fixed Price', milestones: [], showServiceFields: false, isAsset: false }]);
 
   const selectedSupplier = suppliers.find(s => s.id === supplierId);
-  const availableItems = supplierId
-    ? items.filter(i => i.linkedSupplierIds.includes(supplierId))
-    : items;
+  const availableItems = items;
 
   const isServiceItem = (itemId: string) => {
     const item = items.find(i => i.id === itemId);
@@ -248,7 +246,7 @@ function NewPOModal() {
       projectReference: projectReference.trim() || undefined,
       requestNumber: requestNumber.trim() || undefined,
       approvalAuthority: approvalAuthority.trim() || undefined,
-      
+
       // Roadmap extensions
       currency,
       fxRate,
@@ -430,10 +428,10 @@ function NewPOModal() {
                 </select>
                 <input type="number" className="form-input" placeholder={isSvc ? 'Qty / Units' : 'Qty'} value={row.quantity} onChange={e => updateRow(i, 'quantity', e.target.value)} min="1" required />
                 <input type="number" className="form-input" placeholder="Unit Price" value={row.unitPrice} onChange={e => updateRow(i, 'unitPrice', e.target.value)} min="0" step="0.01" required />
-                
-                <button 
-                  type="button" 
-                  className={`btn-asset-toggle ${row.isAsset ? 'active' : ''}`} 
+
+                <button
+                  type="button"
+                  className={`btn-asset-toggle ${row.isAsset ? 'active' : ''}`}
                   onClick={() => updateRow(i, 'isAsset', !row.isAsset)}
                   title={row.isAsset ? "Marked as Capital Asset" : "Mark as Capital Asset"}
                 >
@@ -749,7 +747,11 @@ function NewItemModal() {
     const finalCategory = isCustomCategory ? customCategory.trim() : category;
     if (!finalCategory) return;
 
-    const newId = `ITM-${String(items.length + 1).padStart(3, '0')}`;
+    const maxId = items.reduce((max, item) => {
+      const num = parseInt(item.id.replace('ITM-', ''));
+      return !isNaN(num) && num > max ? num : max;
+    }, 0);
+    const newId = `ITM-${String(maxId + 1).padStart(3, '0')}`;
     addItem({
       id: newId,
       name,
@@ -1073,7 +1075,7 @@ function NewAssetModal() {
     }
   };
 
-  const filteredPOs = supplierId 
+  const filteredPOs = supplierId
     ? purchaseOrders.filter(p => p.supplierId === supplierId && (p.deliveryStatus === 'Delivered' || p.deliveryStatus === 'Approved'))
     : purchaseOrders.filter(p => p.deliveryStatus === 'Delivered' || p.deliveryStatus === 'Approved');
 
@@ -1216,7 +1218,7 @@ function LogMaintenanceModal() {
       <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
         Logging maintenance for: <strong style={{ color: '#f1f5f9' }}>{asset?.name} ({asset?.id})</strong>
       </p>
-      
+
       <div className="form-group">
         <label className="form-label">Maintenance Activity</label>
         <input type="text" className="form-input" value={activity} onChange={e => setActivity(e.target.value)} required placeholder="e.g. Pump Seal Replacement" />
@@ -1365,7 +1367,7 @@ function NewQuotationModal() {
         <div className="form-group">
           <label className="form-label">Payment Terms</label>
           <select className="form-select" value={paymentTerms} onChange={e => setPaymentTerms(e.target.value)}>
-             <option>Net 30</option><option>Net 45</option><option>Net 60</option><option>Immediate</option>
+            <option>Net 30</option><option>Net 45</option><option>Net 60</option><option>Immediate</option>
           </select>
         </div>
       </div>
@@ -1373,7 +1375,7 @@ function NewQuotationModal() {
       <div className="form-group">
         <label className="form-label">Delivery Terms (Incoterms)</label>
         <select className="form-select" value={deliveryTerms} onChange={e => setDeliveryTerms(e.target.value)}>
-           <option>CIF</option><option>FOB</option><option>EXW</option><option>DDP</option><option>DAP</option>
+          <option>CIF</option><option>FOB</option><option>EXW</option><option>DDP</option><option>DAP</option>
         </select>
       </div>
 
@@ -1421,11 +1423,11 @@ function NewQuotationModal() {
 // Negotiation Modal (Messaging)
 // ────────────────────────────────────────────────
 function NegotiationModal() {
-  const { 
-    selectedQuotationId, quotations, negotiationMessages, 
-    addNegotiationMessage, currentUser, setModalOpen 
+  const {
+    selectedQuotationId, quotations, negotiationMessages,
+    addNegotiationMessage, currentUser, setModalOpen
   } = useApp();
-  
+
   const [text, setText] = useState('');
   const quotation = quotations.find(q => q.id === selectedQuotationId);
   const messages = negotiationMessages.filter(m => m.quotationId === selectedQuotationId);
@@ -1435,7 +1437,7 @@ function NegotiationModal() {
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
     if (!text.trim()) return;
-    
+
     addNegotiationMessage({
       quotationId: quotation.id,
       senderId: currentUser?.id || 'USR-001',
@@ -1471,9 +1473,9 @@ function NegotiationModal() {
         ) : (
           messages.map(m => {
             const isBuyer = m.role === 'buyer';
-            
+
             return (
-              <div key={m.id} style={{ 
+              <div key={m.id} style={{
                 alignSelf: isBuyer ? 'flex-start' : 'flex-end',
                 maxWidth: '85%',
                 padding: '10px 14px',
@@ -1497,11 +1499,11 @@ function NegotiationModal() {
       </div>
 
       <form onSubmit={handleSend} style={{ display: 'flex', gap: 10 }}>
-        <input 
-          type="text" 
-          className="form-input" 
-          placeholder="Type your message..." 
-          value={text} 
+        <input
+          type="text"
+          className="form-input"
+          placeholder="Type your message..."
+          value={text}
           onChange={e => setText(e.target.value)}
           style={{ margin: 0 }}
         />
@@ -1517,7 +1519,7 @@ function BidSubmissionModal() {
   const [step, setStep] = useState(1);
   const [linePrices, setLinePrices] = useState<Record<string, number>>({});
   const [leadTimes, setLeadTimes] = useState<Record<string, number>>({});
-  
+
   // Evaluation Details
   const [paymentTerms, setPaymentTerms] = useState('Net 30');
   const [validityDays, setValidityDays] = useState(30);
@@ -1534,7 +1536,7 @@ function BidSubmissionModal() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     const quotationItems = rfq.lineItems.map(item => ({
       rfqLineItemId: item.id,
       itemId: item.itemId,
@@ -1594,10 +1596,10 @@ function BidSubmissionModal() {
                     <td>{item.itemName}<div className="text-xs text-muted">ID: {item.itemId}</div></td>
                     <td>{item.quantity} {item.unit}</td>
                     <td>
-                      <input 
-                        type="number" 
-                        className="form-input" 
-                        style={{ width: 100, margin: 0 }} 
+                      <input
+                        type="number"
+                        className="form-input"
+                        style={{ width: 100, margin: 0 }}
                         placeholder="0.00"
                         value={linePrices[item.id] || ''}
                         onChange={e => setLinePrices({ ...linePrices, [item.id]: parseFloat(e.target.value) })}
@@ -1605,10 +1607,10 @@ function BidSubmissionModal() {
                       />
                     </td>
                     <td>
-                      <input 
-                        type="number" 
-                        className="form-input" 
-                        style={{ width: 80, margin: 0 }} 
+                      <input
+                        type="number"
+                        className="form-input"
+                        style={{ width: 80, margin: 0 }}
                         placeholder="14"
                         value={leadTimes[item.id] || ''}
                         onChange={e => setLeadTimes({ ...leadTimes, [item.id]: parseInt(e.target.value) })}
@@ -1627,53 +1629,53 @@ function BidSubmissionModal() {
 
         {step === 2 && (
           <div className="stack-lg">
-             <div className="grid grid-2">
-               <div className="form-group">
-                 <label className="label">Payment Terms Offered</label>
-                 <select className="form-select" value={paymentTerms} onChange={e => setPaymentTerms(e.target.value)}>
-                   <option>Immediate</option>
-                   <option>Net 30</option>
-                   <option>Net 60</option>
-                   <option>50% Advance, 50% on Delivery</option>
-                 </select>
-               </div>
-               <div className="form-group">
-                 <label className="label">Validity (Days)</label>
-                 <input type="number" className="form-input" value={validityDays} onChange={e => setValidityDays(parseInt(e.target.value))} />
-               </div>
-             </div>
+            <div className="grid grid-2">
+              <div className="form-group">
+                <label className="label">Payment Terms Offered</label>
+                <select className="form-select" value={paymentTerms} onChange={e => setPaymentTerms(e.target.value)}>
+                  <option>Immediate</option>
+                  <option>Net 30</option>
+                  <option>Net 60</option>
+                  <option>50% Advance, 50% on Delivery</option>
+                </select>
+              </div>
+              <div className="form-group">
+                <label className="label">Validity (Days)</label>
+                <input type="number" className="form-input" value={validityDays} onChange={e => setValidityDays(parseInt(e.target.value))} />
+              </div>
+            </div>
 
-             <div className="form-group">
-               <label className="label">Technical Compliance Level</label>
-               <div style={{ display: 'flex', gap: 10 }}>
-                 {['Fully Compliant', 'Compliant with Deviations', 'Alternative Proposal'].map(level => (
-                   <button 
-                     key={level}
-                     type="button"
-                     className={`btn btn-xs ${techSpecCompliance === level ? 'btn-primary' : 'btn-outline'}`}
-                     onClick={() => setTechSpecCompliance(level)}
-                   >
-                     {level}
-                   </button>
-                 ))}
-               </div>
-             </div>
+            <div className="form-group">
+              <label className="label">Technical Compliance Level</label>
+              <div style={{ display: 'flex', gap: 10 }}>
+                {['Fully Compliant', 'Compliant with Deviations', 'Alternative Proposal'].map(level => (
+                  <button
+                    key={level}
+                    type="button"
+                    className={`btn btn-xs ${techSpecCompliance === level ? 'btn-primary' : 'btn-outline'}`}
+                    onClick={() => setTechSpecCompliance(level)}
+                  >
+                    {level}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-             <div className="form-group">
-               <label className="label">Specific Qualifications / Notes</label>
-               <textarea 
-                  className="form-input" 
-                  rows={4} 
-                  placeholder="Mention any specific deviation or value-add features..."
-                  value={notes}
-                  onChange={e => setNotes(e.target.value)}
-                />
-             </div>
+            <div className="form-group">
+              <label className="label">Specific Qualifications / Notes</label>
+              <textarea
+                className="form-input"
+                rows={4}
+                placeholder="Mention any specific deviation or value-add features..."
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+              />
+            </div>
 
-             <div className="flex justify-between pt-12" style={{ borderTop: '1px solid var(--border-subtle)' }}>
-               <button type="button" className="btn btn-ghost" onClick={handleBack}>← Back</button>
-               <button type="submit" className="btn btn-primary shadow-neon">Submit Official Proposal</button>
-             </div>
+            <div className="flex justify-between pt-12" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+              <button type="button" className="btn btn-ghost" onClick={handleBack}>← Back</button>
+              <button type="submit" className="btn btn-primary shadow-neon">Submit Official Proposal</button>
+            </div>
           </div>
         )}
       </form>
@@ -1718,7 +1720,7 @@ function ShipmentConfirmationModal() {
 function POAmendmentModal() {
   const { selectedPOId, purchaseOrders, requestAmendment, setModalOpen } = useApp();
   const po = purchaseOrders.find(p => p.id === selectedPOId);
-  
+
   const [qtyChanges, setQtyChanges] = useState<Record<string, number>>({});
   const [dueDate, setDueDate] = useState(po?.dueDate || '');
   const [reason, setReason] = useState('');
@@ -1741,7 +1743,7 @@ function POAmendmentModal() {
       <div style={{ marginBottom: 16, fontSize: 13, color: 'var(--text-secondary)' }}>
         Request changes to quantities or delivery dates. These must be approved by the buyer.
       </div>
-      
+
       {po.items.map(item => (
         <div key={item.itemId} style={{ marginBottom: 12, padding: 12, borderRadius: 8, background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8 }}>
@@ -1750,9 +1752,9 @@ function POAmendmentModal() {
           </div>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label" style={{ fontSize: 11 }}>Requested Quantity</label>
-            <input 
-              type="number" 
-              className="form-input" 
+            <input
+              type="number"
+              className="form-input"
               placeholder={String(item.quantity)}
               onChange={e => setQtyChanges(p => ({ ...p, [item.itemId]: Number(e.target.value) }))}
             />
@@ -1810,9 +1812,9 @@ function PartialDeliveryModal() {
           </div>
           <div className="form-group" style={{ marginBottom: 0 }}>
             <label className="form-label" style={{ fontSize: 11 }}>Quantity Delivered Now</label>
-            <input 
-              type="number" 
-              className="form-input" 
+            <input
+              type="number"
+              className="form-input"
               placeholder="0"
               max={item.quantity - (item.deliveredQty || 0)}
               onChange={e => setDeliveries(p => ({ ...p, [item.itemId]: Number(e.target.value) }))}
@@ -2036,7 +2038,7 @@ function EarlyPaymentModal() {
           <div style={{ fontSize: 12 }}>Receive payment in <b>72 hours</b> by offering a small discount on the invoice value.</div>
         </div>
       </div>
-      
+
       <div style={{ padding: 16, borderRadius: 12, background: 'rgba(255,255,255,0.03)', border: '1px solid var(--border-subtle)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 16 }}>
           <span className="text-muted">Invoice Value</span>
@@ -2046,9 +2048,9 @@ function EarlyPaymentModal() {
           <label className="label">Discount Offered (%)</label>
           <div style={{ display: 'flex', gap: 8 }}>
             {[1, 2, 3, 5].map(rate => (
-              <button 
-                key={rate} 
-                type="button" 
+              <button
+                key={rate}
+                type="button"
                 className={`btn btn-xs ${discountRate === rate ? 'btn-primary' : 'btn-outline'}`}
                 onClick={() => setDiscountRate(rate)}
               >
@@ -2060,7 +2062,7 @@ function EarlyPaymentModal() {
         <div style={{ marginTop: 20, paddingTop: 16, borderTop: '1px solid var(--border-subtle)' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 14 }}>
             <span>Settlement Amount</span>
-            <span className="text-success" style={{ fontWeight: 800 }}>${(po.totalAmount * (1 - discountRate/100)).toLocaleString()}</span>
+            <span className="text-success" style={{ fontWeight: 800 }}>${(po.totalAmount * (1 - discountRate / 100)).toLocaleString()}</span>
           </div>
           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
             Processing Fee: $0.00 (Waived for Priority Vendors)
@@ -2262,7 +2264,7 @@ export default function Modals() {
 
   return (
     <div className="modal-overlay" onClick={() => setModalOpen(null)}>
-      <div className="modal" onClick={e => e.stopPropagation()} style={{ 
+      <div className="modal" onClick={e => e.stopPropagation()} style={{
         width: (modalOpen === 'bidSubmission' || modalOpen === 'negotiation') ? 800 : 500,
         maxWidth: '95vw'
       }}>
