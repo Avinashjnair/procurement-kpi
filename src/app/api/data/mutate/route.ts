@@ -47,6 +47,47 @@ export async function POST(req: Request) {
     }
 
     let result: any = null;
+    const newNotifications: any[] = [];
+
+    const createAppNotification = async (
+      type: 'info' | 'warning' | 'alert' | 'success',
+      source: string,
+      title: string,
+      message: string,
+      entityId: string,
+      entityType: string
+    ) => {
+      try {
+        let eventType = `${source.toLowerCase()}_alert`;
+        if (source === 'PO' && type === 'alert') eventType = 'po_approval';
+        if (source === 'GRN' && type === 'alert') eventType = 'grn_alert';
+        if (source === 'Invoice' && type === 'alert') eventType = 'invoice_alert';
+        if (source === 'Supplier' && type === 'alert') eventType = 'supplier_alert';
+        if (source === 'RFQ' && type === 'alert') eventType = 'rfq_alert';
+        if (source === 'Payment' && type === 'alert') eventType = 'payment_alert';
+
+        const rule = await db.notificationRule.findFirst({
+          where: { eventType }
+        });
+        if (rule && !rule.enabled) return;
+
+        const notif = await db.appNotification.create({
+          data: {
+            type,
+            source,
+            title,
+            message,
+            timestamp: new Date().toISOString(),
+            read: false,
+            entityId,
+            entityType,
+          },
+        });
+        newNotifications.push(notif);
+      } catch (err) {
+        console.error('Failed to create notification:', err);
+      }
+    };
 
     // Helper to log audit trail
     const logAudit = async (entityType: string, entityId: string, auditAction: string, description: string) => {
@@ -133,6 +174,17 @@ export async function POST(req: Request) {
             where: { id: invoice.id },
             data: { matchStatus: lastStatus, status: lastStatus === 'Full Match' ? 'Matched' : 'Variance' },
           });
+
+          if (lastStatus === 'Variance') {
+            await createAppNotification(
+              'alert',
+              'Invoice',
+              '3-Way Match Variance',
+              `3-Way Match Failed: Price/Quantity variance on Invoice #${invoice.id} for PO #${poId}.`,
+              invoice.id,
+              'Invoice'
+            );
+          }
         }
 
         // Recompute the PO-level aggregate from every invoice on the PO (not just the one(s) just
@@ -224,6 +276,16 @@ export async function POST(req: Request) {
           },
         });
         await logAudit('Supplier', payload.id, 'Create', `Registered supplier: ${payload.name}`);
+        if (payload.status === 'Pending' || result.status === 'Pending') {
+          await createAppNotification(
+            'alert',
+            'Supplier',
+            'Vendor Registration Pending',
+            `New Vendor Onboarding: '${result.name}' submitted onboarding request.`,
+            result.id,
+            'Supplier'
+          );
+        }
         break;
       }
       case 'UPDATE_SUPPLIER': {
@@ -350,6 +412,14 @@ export async function POST(req: Request) {
         }
 
         await logAudit('PO', payload.id, 'Create', `Created${payload.blanketPoId ? ' Release' : ''} PO: ${payload.id}`);
+        await createAppNotification(
+          'alert',
+          'PO',
+          'PO Approval Required',
+          `PO #${payload.id} ($${payload.totalAmount.toLocaleString()}) from ${payload.supplierName || 'Supplier'} submitted for approval by ${session.name}.`,
+          payload.id,
+          'PO'
+        );
         break;
       }
       case 'UPDATE_PO': {
@@ -477,6 +547,17 @@ export async function POST(req: Request) {
           'StatusChange',
           `Supplier acknowledged PO (${ackStatus})${payload.acknowledgedBy ? ' by ' + payload.acknowledgedBy : ''}${payload.notes ? ' — ' + payload.notes : ''}`
         );
+
+        if (ackStatus === 'Acknowledged with Exceptions') {
+          await createAppNotification(
+            'warning',
+            'PO',
+            'PO Ack with Exceptions',
+            `${result.supplierName} acknowledged PO #${payload.poId} with exceptions: ${payload.notes || 'Date/Scope changes'}.`,
+            payload.poId,
+            'PO'
+          );
+        }
         break;
       }
       case 'UPDATE_SHIPMENT': {
@@ -496,6 +577,14 @@ export async function POST(req: Request) {
           'StatusChange',
           `Shipment confirmed by supplier — carrier: ${payload.carrier || '—'}, tracking: ${payload.trackingNumber || '—'}${payload.estimatedDelivery ? `, ETA: ${payload.estimatedDelivery}` : ''}`
         );
+        await createAppNotification(
+          'info',
+          'PO',
+          'PO Shipment Dispatched',
+          `${result.supplierName} dispatched shipment for PO #${payload.poId} via ${payload.carrier || 'Carrier'} (Tracking: ${payload.trackingNumber || '—'}).`,
+          payload.poId,
+          'PO'
+        );
         break;
       }
       case 'REQUEST_AMENDMENT': {
@@ -509,6 +598,14 @@ export async function POST(req: Request) {
           where: { id: payload.poId },
           data: { amendmentRequest: amendment },
         });
+        await createAppNotification(
+          'alert',
+          'PO',
+          'PO Amendment Requested',
+          `${result.supplierName} requested amendment on PO #${payload.poId}: ${payload.request.reason || 'Qty/Date change'}.`,
+          payload.poId,
+          'PO'
+        );
         break;
       }
       case 'UPDATE_DELIVERED_QTY': {
@@ -561,6 +658,17 @@ export async function POST(req: Request) {
             where: { id: payload.record.poId },
             data: { paymentRecords: newRecords },
           });
+        }
+
+        if (payload.record.status === 'Pending Approval' || payload.record.status === 'Pending') {
+          await createAppNotification(
+            'alert',
+            'Payment',
+            'Payment Approval Required',
+            `Payment of $${payload.record.amount.toLocaleString()} for PO #${payload.record.poId} recorded by ${session.name} requires approval.`,
+            payload.record.poId,
+            'Payment'
+          );
         }
         break;
       }
@@ -703,6 +811,14 @@ export async function POST(req: Request) {
             evaluation: payload.evaluation || {},
           },
         });
+        await createAppNotification(
+          'info',
+          'RFQ',
+          'New Quotation/Bid Received',
+          `${result.supplierName} submitted a quotation of $${result.totalAmount.toLocaleString()} for RFQ #${result.rfqId}.`,
+          result.rfqId,
+          'RFQ'
+        );
         break;
       }
       case 'UPDATE_QUOTATION': {
@@ -745,6 +861,14 @@ export async function POST(req: Request) {
             status: 'Evaluated',
           },
         });
+        await createAppNotification(
+          'alert',
+          'RFQ',
+          'RFQ Evaluation Completed',
+          `Evaluation completed for ${result.supplierName}'s quote on RFQ #${rfq.id} (Score: ${totalScore}/100).`,
+          rfq.id,
+          'RFQ'
+        );
         break;
       }
       case 'ADD_NEGOTIATION_MESSAGE': {
@@ -772,6 +896,16 @@ export async function POST(req: Request) {
             lineItems: payload.lineItems || [],
           },
         });
+        if (result.status === 'Submitted') {
+          await createAppNotification(
+            'alert',
+            'GRN',
+            'GRN Pending Approval',
+            `GRN #${result.id} against PO #${result.poId} submitted for approval.`,
+            result.id,
+            'GRN'
+          );
+        }
         break;
       }
       case 'UPDATE_GRN': {
@@ -794,6 +928,14 @@ export async function POST(req: Request) {
           where: { id: payload.id },
           data: { status: 'Submitted' },
         });
+        await createAppNotification(
+          'alert',
+          'GRN',
+          'GRN Pending Approval',
+          `GRN #${result.id} against PO #${result.poId} submitted for approval.`,
+          result.id,
+          'GRN'
+        );
         break;
       }
       case 'APPROVE_GRN': {
@@ -872,6 +1014,19 @@ export async function POST(req: Request) {
           },
         });
         await runThreeWayMatch(grn.poId);
+
+        const rejectedItems = lineItems.filter((line: any) => (line.rejectedQty || 0) > 0);
+        if (rejectedItems.length > 0) {
+          const totalRejected = rejectedItems.reduce((acc: number, line: any) => acc + (line.rejectedQty || 0), 0);
+          await createAppNotification(
+            'alert',
+            'GRN',
+            'Quality Rejection (QA Fail)',
+            `Quality Alert: ${totalRejected} units rejected on GRN #${grn.id} for PO #${grn.poId}.`,
+            grn.id,
+            'GRN'
+          );
+        }
         break;
       }
       case 'REJECT_GRN': {
@@ -1070,6 +1225,18 @@ export async function POST(req: Request) {
           },
         });
         await runThreeWayMatch(result.poId, result.id);
+
+        const approvedGRN = await db.gRN.findFirst({ where: { poId: payload.poId, status: 'Approved' } });
+        if (!approvedGRN) {
+          await createAppNotification(
+            'warning',
+            'Invoice',
+            'Invoice Without GRN',
+            `Invoice #${result.id} received for PO #${payload.poId}, but no approved GRN is recorded.`,
+            result.id,
+            'Invoice'
+          );
+        }
         break;
       }
       case 'DISPUTE_GRN': {
@@ -1082,6 +1249,15 @@ export async function POST(req: Request) {
             supportingDocs: payload.supportingDocs || [],
           },
         });
+        const supplier = await db.supplier.findUnique({ where: { id: payload.supplierId } });
+        await createAppNotification(
+          'alert',
+          'GRN',
+          'GRN Dispute by Supplier',
+          `${supplier?.name || 'Supplier'} disputed rejection on GRN #${payload.grnId}: ${payload.reason || 'Incorrect rejected qty'}.`,
+          payload.grnId,
+          'GRN'
+        );
         break;
       }
       case 'UPLOAD_COMPLIANCE_DOC': {
@@ -1118,6 +1294,16 @@ export async function POST(req: Request) {
           },
         });
         await logAudit('Invoice', payload.invoiceId, 'Payment', `Early payment requested with ${payload.discountPct}% discount.`);
+
+        const invoice = await db.invoice.findUnique({ where: { id: payload.invoiceId } });
+        await createAppNotification(
+          'info',
+          'Invoice',
+          'Early Payment Discount',
+          `${invoice?.supplierName || 'Supplier'} requested early payment on Invoice #${payload.invoiceId} with ${payload.discountPct}% discount.`,
+          payload.invoiceId,
+          'Invoice'
+        );
         break;
       }
       case 'ADD_PRODUCT': {
@@ -1220,7 +1406,7 @@ export async function POST(req: Request) {
       }
     }
 
-    return NextResponse.json({ success: true, result });
+    return NextResponse.json({ success: true, result, newNotifications });
   } catch (error: any) {
     console.error('Mutation error:', error);
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });

@@ -123,6 +123,32 @@ async function seedDatabase(dbFilePath: string) {
     });
     console.log(`- Seeded test supplier`);
 
+    // Seed default Notification Rules
+    const initialNotificationRules = [
+      { id: 'nr-1', eventType: 'po_approval', enabled: true, channels: ['in-app', 'email'] },
+      { id: 'nr-2', eventType: 'po_alert', enabled: true, channels: ['in-app'] },
+      { id: 'nr-3', eventType: 'grn_alert', enabled: true, channels: ['in-app', 'email'] },
+      { id: 'nr-4', eventType: 'invoice_alert', enabled: true, channels: ['in-app', 'email'] },
+      { id: 'nr-5', eventType: 'inventory_alert', enabled: true, channels: ['in-app'] },
+      { id: 'nr-6', eventType: 'budget_alert', enabled: true, channels: ['in-app'] },
+      { id: 'nr-7', eventType: 'contract_alert', enabled: true, channels: ['in-app', 'email'] },
+      { id: 'nr-8', eventType: 'supplier_alert', enabled: true, channels: ['in-app', 'email'] },
+      { id: 'nr-9', eventType: 'rfq_alert', enabled: true, channels: ['in-app'] },
+      { id: 'nr-10', eventType: 'payment_alert', enabled: true, channels: ['in-app', 'email'] },
+      { id: 'nr-11', eventType: 'asset_alert', enabled: true, channels: ['in-app'] },
+    ];
+    for (const rule of initialNotificationRules) {
+      await prisma.notificationRule.create({
+        data: {
+          id: rule.id,
+          eventType: rule.eventType,
+          enabled: rule.enabled,
+          channels: rule.channels,
+        }
+      });
+    }
+    console.log('- Seeded default notification rules');
+
     // 4. Seed Config/Static Data (FX rates and Asset Categories)
     const initialFXRates = [
       { id: 'fx-usd', currency: 'USD', rate: 3.67 },

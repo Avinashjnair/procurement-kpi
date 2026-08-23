@@ -452,6 +452,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
       });
       if (res.ok) {
         const data = await res.json();
+        if (data.newNotifications && data.newNotifications.length > 0) {
+          setState(p => {
+            const existingIds = new Set(p.notifications.map(n => n.id));
+            const fresh = data.newNotifications.filter((n: any) => !existingIds.has(n.id));
+            return {
+              ...p,
+              notifications: [...fresh, ...p.notifications]
+            };
+          });
+        }
         return data.result;
       }
       throw new Error(await res.text());
