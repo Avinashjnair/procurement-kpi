@@ -52,7 +52,7 @@ fi
 
 echo "=== 5. Installing Dependencies ==="
 cd "$APP_DIR"
-npm install
+npm install --no-audit --no-fund --prefer-offline
 
 echo "=== 6. Generating database client engines ==="
 npx prisma generate
