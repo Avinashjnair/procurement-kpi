@@ -45,9 +45,8 @@ jobs:
             # 1. Select destination folder based on environment choice
             TARGET_DIR="/var/www/procurebuddy-${{ github.event.inputs.target_env }}"
             
-            # 2. Extract files
-            sudo mkdir -p $TARGET_DIR
-            sudo chown -R ${{ secrets.VM_USERNAME }}:${{ secrets.VM_USERNAME }} $TARGET_DIR
+            # 2. Extract files (directory ownership pre-granted on VM)
+            mkdir -p $TARGET_DIR
             unzip -o /home/${{ secrets.VM_USERNAME }}/deploy.zip -d $TARGET_DIR
             
             # 3. Clean up Windows carriage returns
