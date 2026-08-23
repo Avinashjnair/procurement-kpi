@@ -25,6 +25,8 @@ import InvoicesPage from '@/components/InvoicesPage';
 import NotificationsPage from '@/components/NotificationsPage';
 import SupplierPortalPage from '@/components/SupplierPortalPage';
 import MobileGRNEntry from '@/components/MobileGRNEntry';
+import ReportsPage from '@/components/ReportsPage';
+import AuditLogsPage from '@/components/AuditLogsPage';
 import GlobalHeader from '@/components/GlobalHeader';
 import SearchResultsPage from '@/components/SearchResultsPage';
 
@@ -62,9 +64,11 @@ function AppContent() {
       case 'assets':          return <AssetsPage />;
       case 'finance':         return <FinancePage />;
       case 'reports':         return <ExecutiveReportsPage />;
+      case 'export-reports':  return <ReportsPage />;
       case 'budgets':         return <BudgetsPage />;
       case 'contracts':       return <ContractsPage />;
       case 'analytics':       return <AnalyticsPage />;
+      case 'audit-logs':      return <AuditLogsPage />;
       default:                return <DashboardPage />;
     }
   };

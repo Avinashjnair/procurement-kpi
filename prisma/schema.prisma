@@ -4,6 +4,7 @@
 generator client {
   provider        = "prisma-client-js"
   previewFeatures = ["driverAdapters"]
+  binaryTargets   = ["native", "debian-openssl-3.0.x", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
@@ -108,9 +109,14 @@ model PurchaseOrder {
   contractId          String?  @default("")
   blanketPoId         String?  @default("")
   acknowledgedAt      String?  @default("")
+  acknowledgedBy      String?  @default("")
+  acknowledgementStatus String? @default("") // AcknowledgementStatus
+  acknowledgedDeliveryDate String? @default("")
+  acknowledgementNotes String? @default("")
   trackingNumber      String?  @default("")
   carrier             String?  @default("")
   shippedAt           String?  @default("")
+  shipmentEta         String?  @default("")
   amendmentRequest    Json?    // POAmendmentRequest
   createdAt           DateTime @default(now())
   updatedAt           DateTime @updatedAt
@@ -157,6 +163,8 @@ model Quotation {
   notes            String?
   feedback         String?
   negotiationCount Int      @default(0)
+  quotationFileName String? @default("")
+  quotationFileSize String? @default("")
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 }
@@ -208,6 +216,7 @@ model BlanketPO {
   category        String?  @default("")
   department      String?  @default("")
   project         String?  @default("")
+  description     String?  @default("")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }
@@ -288,6 +297,7 @@ model Invoice {
   id                  String   @id @default(cuid())
   invoiceNumber       String
   poId                String
+  grnId               String?  @default("")
   supplierId          String
   supplierName        String
   date                String
@@ -332,6 +342,8 @@ model Contract {
   renewalWindowDays Int      @default(30)
   linkedPoIds       Json     // string[]
   docId             String?  @default("")
+  linkedBlanketPoId String?  @default("")
+  description       String?  @default("")
   createdAt         DateTime @default(now())
   updatedAt         DateTime @updatedAt
 }

@@ -41,7 +41,8 @@ yarn-error.log*
 next-env.d.ts
 
 # SQLite databases & journals
-/databases/
+/databases/*
+!/databases/company_default.db
 *.db
 *.db-journal
 *.db-shm
@@ -55,3 +56,6 @@ CLAUDE.md
 feature_tier_breakdown.docx
 procurebuddy-stg.zip
 procurebuddy-prod.zip
+
+# Unrelated local Obsidian vault nested in this working directory (not part of the app)
+/Procurement Fix V1/

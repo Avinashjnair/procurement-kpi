@@ -101,3 +101,25 @@ html.light-mode .alert-banner.danger  { background: #fef2f2; border-color: #f43f
 
 html.light-mode .kanban-column .bg-glass { background: #f8fafd; }
 html.light-mode .notification-panel      { background: var(--bg-secondary); border-color: var(--border-color); }
+
+/* Smart Contrast Overrides for Hardcoded Light Text in Light Mode */
+html.light-mode [style*="#f1f5f9"],
+html.light-mode [style*="rgb(241, 245, 249)"],
+html.light-mode [style*="rgb(241,245,249)"] {
+  color: var(--text-primary) !important;
+}
+
+html.light-mode strong[style*="#f1f5f9"],
+html.light-mode strong[style*="rgb(241, 245, 249)"],
+html.light-mode strong[style*="rgb(241,245,249)"] {
+  color: var(--text-primary) !important;
+}
+
+html.light-mode .data-table tbody td {
+  color: var(--text-primary);
+}
+
+html.light-mode .data-table tbody td button,
+html.light-mode .data-table tbody td div {
+  color: var(--text-primary);
+}

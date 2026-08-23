@@ -2,8 +2,10 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '@/context/AppContext';
 import { can } from '@/types';
-import type { GRN, GRNStatus, GRNLineItem } from '@/types';
-import { ArrowLeft, Plus, Search, Check, X, Lock, Truck, PackageCheck, AlertTriangle } from 'lucide-react';
+import type { GRN, GRNStatus, GRNLineItem, DocumentCategory, AppDocument } from '@/types';
+import { ArrowLeft, Plus, Search, Check, X, Lock, Truck, PackageCheck, AlertTriangle, Paperclip } from 'lucide-react';
+import { formatFileSize } from '@/utils/formatFileSize';
+import DocumentAttachmentsEditor, { AttachmentDraft, newAttachmentId } from './DocumentAttachmentsEditor';
 
 const STATUS_META: Record<GRNStatus, { color: string; bg: string; label: string }> = {
   Draft:     { color: '#94a3b8', bg: 'rgba(148,163,184,0.1)', label: 'Draft' },
@@ -13,15 +15,91 @@ const STATUS_META: Record<GRNStatus, { color: string; bg: string; label: string 
   Partial:   { color: '#f59e0b', bg: 'rgba(245,158,11,0.1)',  label: 'Partial' },
 };
 
+// Commercial & shipping document categories relevant to a goods receipt
+const RECEIPT_DOC_CATEGORIES: DocumentCategory[] = ['Delivery Note', 'Packing List', 'BL/AWB', 'MTC', 'COO', 'Invoice', 'Internal Inspection Report'];
+
+// A general "covers the whole delivery" sentinel — receipt-level documents (e.g. a Bill of Lading)
+// aren't tied to a single catalogue item the way per-item documents are.
+const WHOLE_SHIPMENT_ITEM_ID = 'ALL';
+
 // ── GRN Detail ──
 function GRNDetail({ grnId }: { grnId: string }) {
-  const { grns, purchaseOrders, currentUser, submitGRN, approveGRN, rejectGRN, setSelectedGRNId } = useApp();
+  const { grns, purchaseOrders, documents, currentUser, submitGRN, approveGRN, rejectGRN, setSelectedGRNId, updateGRN, deleteGRN, auditLogs } = useApp();
   const [rejectReason, setRejectReason] = useState('');
   const [showReject, setShowReject] = useState(false);
+
+  // Editing state
+  const [isEditing, setIsEditing] = useState(false);
+  const [editDN, setEditDN] = useState('');
+  const [editVehicle, setEditVehicle] = useState('');
+  const [editNotes, setEditNotes] = useState('');
+
   const grn = grns.find(g => g.id === grnId);
   if (!grn) return null;
+  const linkedDocs = documents.filter(d => d.poId === grn.poId);
   const po = purchaseOrders.find(p => p.id === grn.poId);
   const s = STATUS_META[grn.status];
+
+  const startEditing = () => {
+    setEditDN(grn.deliveryNoteNumber || '');
+    setEditVehicle(grn.vehicleNumber || '');
+    setEditNotes(grn.notes || '');
+    setIsEditing(true);
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await updateGRN(grn.id, {
+      deliveryNoteNumber: editDN,
+      vehicleNumber: editVehicle,
+      notes: editNotes
+    });
+    setIsEditing(false);
+  };
+
+  const handleDeleteGRN = async () => {
+    if (window.confirm(`Are you sure you want to permanently delete Goods Receipt Note ${grn.id}? This action cannot be undone.`)) {
+      await deleteGRN(grn.id);
+      setSelectedGRNId(null);
+    }
+  };
+
+  const grnLogs = (auditLogs || []).filter(log => log.entityType === 'GRN' && log.entityId === grn.id);
+
+  if (isEditing) {
+    return (
+      <div>
+        <button className="detail-back" onClick={() => setIsEditing(false)}>
+          <ArrowLeft size={16} /> Cancel Editing
+        </button>
+
+        <div className="page-header">
+          <h2>Edit Goods Receipt Note: {grn.id}</h2>
+        </div>
+
+        <form onSubmit={handleSaveEdit} className="card stack-md" style={{ padding: 24, maxWidth: 600 }}>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Delivery Note Number</label>
+              <input type="text" className="form-input" value={editDN} onChange={e => setEditDN(e.target.value)} />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Vehicle / AWB Number</label>
+              <input type="text" className="form-input" value={editVehicle} onChange={e => setEditVehicle(e.target.value)} />
+            </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Notes / Instructions</label>
+            <textarea className="form-input" rows={3} value={editNotes} onChange={e => setEditNotes(e.target.value)} />
+          </div>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 12 }}>
+            <button type="button" className="btn btn-secondary" onClick={() => setIsEditing(false)}>Cancel</button>
+            <button type="submit" className="btn btn-primary">Save Changes</button>
+          </div>
+        </form>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -39,6 +117,9 @@ function GRNDetail({ grnId }: { grnId: string }) {
           <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>Against {grn.poId} · {grn.supplierName} · Created {grn.dateCreated}</p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button className="btn btn-secondary btn-sm" onClick={startEditing}>
+            Edit GRN
+          </button>
           {grn.status === 'Draft' && can(currentUser, 'create_grn') && (
             <button className="btn btn-primary btn-sm" onClick={() => submitGRN(grn.id)}>
               <Truck size={13} /> Submit for Approval
@@ -54,6 +135,9 @@ function GRNDetail({ grnId }: { grnId: string }) {
               </button>
             </>
           )}
+          <button className="btn btn-ghost btn-sm" style={{ color: 'var(--accent-rose)', marginLeft: 'auto' }} onClick={handleDeleteGRN}>
+            Delete GRN
+          </button>
         </div>
       </div>
 
@@ -108,11 +192,13 @@ function GRNDetail({ grnId }: { grnId: string }) {
                   <td style={{ fontWeight: 600, color: '#f1f5f9' }}>{line.itemName}</td>
                   <td>{line.orderedQty}</td>
                   <td>{line.receivedQty}</td>
-                  <td style={{ color: '#10b981', fontWeight: 600 }}>{line.acceptedQty}</td>
-                  <td style={{ color: line.rejectedQty > 0 ? '#f43f5e' : 'var(--text-muted)', fontWeight: line.rejectedQty > 0 ? 700 : 400 }}>{line.rejectedQty}</td>
+                  <td style={{ color: 'var(--accent-emerald)', fontWeight: 600 }}>{line.acceptedQty}</td>
+                  <td style={{ color: line.rejectedQty > 0 ? 'var(--accent-rose)' : 'inherit', fontWeight: 600 }}>{line.rejectedQty}</td>
                   <td className="font-mono">${line.unitPrice.toFixed(2)}</td>
-                  <td className="font-mono">${(line.acceptedQty * line.unitPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                  <td style={{ fontSize: 12, color: '#f43f5e' }}>{line.rejectionReason || '—'}</td>
+                  <td className="font-mono" style={{ fontWeight: 600, color: '#f1f5f9' }}>
+                    ${(line.acceptedQty * line.unitPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                  </td>
+                  <td style={{ color: 'var(--text-muted)', fontSize: 12 }}>{line.rejectionReason || '—'}</td>
                 </tr>
               ))}
             </tbody>
@@ -135,21 +221,42 @@ function GRNDetail({ grnId }: { grnId: string }) {
         )}
         {grn.notes && <p style={{ marginTop: 12, fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{grn.notes}</p>}
       </div>
+
+      {/* Attached commercial & shipping documents (linked to the PO this receipt is against) */}
+      <div className="card">
+        <div className="card-header"><div className="card-title">Attached Documents</div></div>
+        {linkedDocs.length === 0 ? (
+          <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>No documents attached for this PO yet.</p>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {linkedDocs.map(doc => (
+              <div key={doc.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', borderRadius: 8, background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border-color)' }}>
+                <Paperclip size={14} style={{ color: 'var(--accent-indigo)', flexShrink: 0 }} />
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: '#f1f5f9' }}>{doc.name}</div>
+                  <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{doc.category} · {doc.fileSize} · {doc.uploadDate}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
 // ── New GRN Modal ──
 function NewGRNModal({ onClose }: { onClose: () => void }) {
-  const { grns, purchaseOrders, addGRN, currentUser } = useApp();
+  const { grns, purchaseOrders, addGRN, addDocument, currentUser } = useApp();
   const [poId, setPoId] = useState('');
   const [dn, setDN] = useState('');
   const [vehicle, setVehicle] = useState('');
   const [notes, setNotes] = useState('');
   const [lines, setLines] = useState<Partial<GRNLineItem>[]>([]);
+  const [attachments, setAttachments] = useState<AttachmentDraft[]>([]);
 
   const eligiblePOs = purchaseOrders.filter(po =>
-    ['Approved', 'Shipped'].includes(po.deliveryStatus)
+    ['approved', 'shipped', 'pending', 'delivered'].includes((po.deliveryStatus || '').toLowerCase())
   );
 
   const selectedPO = purchaseOrders.find(p => p.id === poId);
@@ -199,6 +306,23 @@ function NewGRNModal({ onClose }: { onClose: () => void }) {
       notes: notes || undefined, lineItems: validLines,
       totalAccepted: totalAcc, totalRejected: totalRej, stockUpdated: false,
     });
+
+    const today = new Date().toISOString().split('T')[0];
+    attachments.filter(a => a.file).forEach(a => {
+      const file = a.file as File;
+      const ext = file.name.split('.').pop()?.toUpperCase() || 'FILE';
+      addDocument({
+        id: `DOC-${newAttachmentId()}`,
+        name: file.name,
+        category: a.category,
+        poId,
+        itemId: WHOLE_SHIPMENT_ITEM_ID,
+        uploadDate: today,
+        fileSize: formatFileSize(file.size),
+        fileType: ext,
+      } as AppDocument);
+    });
+
     onClose();
   };
 
@@ -271,6 +395,13 @@ function NewGRNModal({ onClose }: { onClose: () => void }) {
             <label className="form-label">Notes</label>
             <textarea className="form-input" rows={2} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Any observations during receipt inspection…" />
           </div>
+
+          <DocumentAttachmentsEditor
+            attachments={attachments}
+            categories={RECEIPT_DOC_CATEGORIES}
+            onChange={setAttachments}
+            label="Commercial & Shipping Documents"
+          />
 
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16 }}>
             <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>

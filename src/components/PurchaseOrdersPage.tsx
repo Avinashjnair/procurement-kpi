@@ -4,7 +4,7 @@ import { useApp } from '@/context/AppContext';
 import {
   Search, ChevronDown, ArrowLeft, Copy, XCircle,
   DollarSign, Download, Printer, Wrench,
-  FileText, FileSpreadsheet, Check
+  FileText, FileSpreadsheet, Check, CheckCircle2, Clock, AlertTriangle
 } from 'lucide-react';
 import type { POStatus } from '@/types';
 import { exportCsv } from '@/utils/exportCsv';
@@ -134,11 +134,19 @@ function PaymentModal({ poId, totalAmount, amountPaid, onClose }: {
 
 // ── PO Detail page ──
 function PODetail({ poId }: { poId: string }) {
-  const { purchaseOrders, items, suppliers, setSelectedPOId, updatePOStatus, duplicatePO, processApprovalStep, currentUser, companyProfile } = useApp();
+  const { purchaseOrders, items, suppliers, setSelectedPOId, updatePOStatus, duplicatePO, processApprovalStep, currentUser, companyProfile, updatePO, deletePO } = useApp();
   const [cancelModal, setCancelModal] = useState(false);
   const [paymentModal, setPaymentModal] = useState(false);
   const [exportLoading, setExportLoading] = useState<string | null>(null);
   const [approvalComment, setApprovalComment] = useState('');
+
+  // Editing state
+  const [isEditing, setIsEditing] = useState(false);
+  const [editPaymentTerms, setEditPaymentTerms] = useState('');
+  const [editIncoterms, setEditIncoterms] = useState('');
+  const [editDueDate, setEditDueDate] = useState('');
+  const [editEta, setEditEta] = useState('');
+  const [editRemarks, setEditRemarks] = useState('');
 
   const po = purchaseOrders.find(p => p.id === poId);
   const supplier = suppliers.find(s => s.id === po?.supplierId);
@@ -180,6 +188,79 @@ function PODetail({ poId }: { poId: string }) {
     updatePOStatus(po.id, 'Pending');
   };
 
+  const startEditing = () => {
+    setEditPaymentTerms(po.paymentTerms);
+    setEditIncoterms(po.incoterms);
+    setEditDueDate(po.dueDate);
+    setEditEta(po.eta);
+    setEditRemarks(po.remarks || '');
+    setIsEditing(true);
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await updatePO(po.id, {
+      paymentTerms: editPaymentTerms,
+      incoterms: editIncoterms,
+      dueDate: editDueDate,
+      eta: editEta,
+      remarks: editRemarks,
+    });
+    setIsEditing(false);
+  };
+
+  const handleDeletePO = async () => {
+    if (window.confirm(`Are you sure you want to permanently delete Purchase Order ${po.id}? This action cannot be undone.`)) {
+      await deletePO(po.id);
+      setSelectedPOId(null);
+    }
+  };
+
+  if (isEditing) {
+    return (
+      <div>
+        <button className="detail-back" onClick={() => setIsEditing(false)}>
+          <ArrowLeft size={16} /> Cancel Editing
+        </button>
+
+        <div className="page-header">
+          <h2>Edit Purchase Order: {po.id}</h2>
+        </div>
+
+        <form onSubmit={handleSaveEdit} className="card stack-md" style={{ padding: 24, maxWidth: 600 }}>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Payment Terms</label>
+              <input type="text" className="form-input" value={editPaymentTerms} onChange={e => setEditPaymentTerms(e.target.value)} required />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Incoterms</label>
+              <input type="text" className="form-input" value={editIncoterms} onChange={e => setEditIncoterms(e.target.value)} required />
+            </div>
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Due Date</label>
+              <input type="date" className="form-input" value={editDueDate} onChange={e => setEditDueDate(e.target.value)} required />
+            </div>
+            <div className="form-group">
+              <label className="form-label">ETA / Completion Date</label>
+              <input type="date" className="form-input" value={editEta} onChange={e => setEditEta(e.target.value)} required />
+            </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Remarks / Instructions</label>
+            <textarea className="form-input" rows={3} value={editRemarks} onChange={e => setEditRemarks(e.target.value)} />
+          </div>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 12 }}>
+            <button type="button" className="btn btn-secondary" onClick={() => setIsEditing(false)}>Cancel</button>
+            <button type="submit" className="btn btn-primary">Save Changes</button>
+          </div>
+        </form>
+      </div>
+    );
+  }
+
   return (
     <div>
       {cancelModal  && <CancelModal  poId={po.id} onClose={() => setCancelModal(false)} />}
@@ -196,6 +277,21 @@ function PODetail({ poId }: { poId: string }) {
             <h2 style={{ fontSize: 24, fontWeight: 700, color: '#f1f5f9' }}>{po.id}</h2>
             <span className={`badge ${po.deliveryStatus.toLowerCase()}`}><span className="badge-dot" />{po.deliveryStatus}</span>
             <span className={`badge ${po.paymentStatus.toLowerCase()}`}>{po.paymentStatus}</span>
+            {po.deliveryStatus !== 'Draft' && po.deliveryStatus !== 'Cancelled' && (
+              po.acknowledgedAt ? (
+                <span style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600,
+                  background: po.acknowledgementStatus === 'Acknowledged with Exceptions' ? 'rgba(245,158,11,0.12)' : 'rgba(16,185,129,0.12)',
+                  color: po.acknowledgementStatus === 'Acknowledged with Exceptions' ? '#f59e0b' : '#34d399',
+                }}>
+                  <CheckCircle2 size={11} /> {po.acknowledgementStatus === 'Acknowledged with Exceptions' ? 'Acknowledged w/ Exceptions' : 'Acknowledged'}
+                </span>
+              ) : (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '3px 10px', borderRadius: 20, fontSize: 12, fontWeight: 600, background: 'rgba(245,158,11,0.1)', color: '#fbbf24' }}>
+                  <Clock size={11} /> Awaiting Acknowledgement
+                </span>
+              )
+            )}
             {po.items.some(i => i.isService) && (
               <span style={{ display:'inline-flex',alignItems:'center',gap:4,padding:'3px 10px',borderRadius:20,fontSize:12,fontWeight:600,background:'rgba(139,92,246,0.12)',color:'#a78bfa' }}>
                 <Wrench size={11} /> Service PO
@@ -208,6 +304,9 @@ function PODetail({ poId }: { poId: string }) {
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <button className="btn btn-secondary btn-sm" onClick={startEditing}>
+            Edit PO
+          </button>
           {isDraft && (
             <button className="btn btn-primary btn-sm" onClick={handleSubmitForApproval}>
               Submit for Approval
@@ -235,6 +334,9 @@ function PODetail({ poId }: { poId: string }) {
               <XCircle size={13} /> Cancel
             </button>
           )}
+          <button className="btn btn-ghost btn-sm" style={{ color: 'var(--accent-rose)', marginLeft: 'auto' }} onClick={handleDeletePO}>
+            Delete PO
+          </button>
         </div>
       </div>
 
@@ -319,6 +421,54 @@ function PODetail({ poId }: { poId: string }) {
         </div>
       </div>
 
+      {/* Supplier Acknowledgement */}
+      {po.deliveryStatus !== 'Draft' && (
+        <div className="card" style={{ marginBottom: 20 }}>
+          <div className="card-header"><div className="card-title">Supplier Acknowledgement</div></div>
+          {po.acknowledgedAt ? (
+            <div style={{
+              display: 'flex', flexWrap: 'wrap', gap: 20, padding: 14, borderRadius: 10,
+              background: po.acknowledgementStatus === 'Acknowledged with Exceptions' ? 'rgba(245,158,11,0.06)' : 'rgba(16,185,129,0.06)',
+              border: `1px solid ${po.acknowledgementStatus === 'Acknowledged with Exceptions' ? 'rgba(245,158,11,0.2)' : 'rgba(16,185,129,0.2)'}`,
+            }}>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.7px', marginBottom: 3 }}>Status</div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: po.acknowledgementStatus === 'Acknowledged with Exceptions' ? '#f59e0b' : '#34d399' }}>
+                  {po.acknowledgementStatus === 'Acknowledged with Exceptions' ? 'Acknowledged with Exceptions' : 'Acknowledged'}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.7px', marginBottom: 3 }}>Acknowledged By</div>
+                <div style={{ fontSize: 14, color: '#f1f5f9', fontWeight: 500 }}>{po.acknowledgedBy || '—'}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.7px', marginBottom: 3 }}>Acknowledged On</div>
+                <div style={{ fontSize: 14, color: '#f1f5f9', fontWeight: 500 }}>{new Date(po.acknowledgedAt).toLocaleString()}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.7px', marginBottom: 3 }}>Confirmed Delivery Date</div>
+                <div style={{ fontSize: 14, fontWeight: 500, color: po.acknowledgedDeliveryDate && po.acknowledgedDeliveryDate !== po.eta ? '#f59e0b' : '#f1f5f9' }}>
+                  {po.acknowledgedDeliveryDate || '—'}
+                  {po.acknowledgedDeliveryDate && po.acknowledgedDeliveryDate !== po.eta && (
+                    <span style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}> (requested {po.eta})</span>
+                  )}
+                </div>
+              </div>
+              {po.acknowledgementNotes && (
+                <div style={{ flexBasis: '100%' }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.7px', marginBottom: 3 }}>Supplier Comments</div>
+                  <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{po.acknowledgementNotes}</div>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div style={{ padding: 14, borderRadius: 10, background: 'rgba(245,158,11,0.06)', border: '1px solid rgba(245,158,11,0.2)', fontSize: 13, color: '#fbbf24' }}>
+              Awaiting acknowledgement from {po.supplierName}.
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Details grid */}
       <div className="card" style={{ marginBottom: 20 }}>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 16 }}>
@@ -333,6 +483,9 @@ function PODetail({ poId }: { poId: string }) {
             ['Outstanding',      `$${(po.totalAmount - po.amountPaid).toLocaleString()}`],
             ...(po.projectReference ? [['Project Ref.', po.projectReference] as [string, string]] : []),
             ...(po.approvalAuthority ? [['Approved By', po.approvalAuthority] as [string, string]] : []),
+            ...(po.carrier ? [['Carrier', po.carrier] as [string, string]] : []),
+            ...(po.trackingNumber ? [['Tracking #', po.trackingNumber] as [string, string]] : []),
+            ...(po.shipmentEta ? [['Shipment ETA', po.shipmentEta] as [string, string]] : []),
           ].map(([label, value]) => (
             <div key={label}>
               <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.7px', marginBottom: 3 }}>{label}</div>
@@ -372,6 +525,11 @@ function PODetail({ poId }: { poId: string }) {
                       {item.isService && <Wrench size={12} style={{ color: '#a78bfa' }} />}
                       <span style={{ fontWeight: 600, color: '#f1f5f9' }}>{item.itemName}</span>
                     </div>
+                    {item.description && (
+                      <div style={{ fontSize: 11, color: 'var(--text-secondary)', paddingLeft: 18, whiteSpace: 'pre-line' }}>
+                        {item.description}
+                      </div>
+                    )}
                     {item.isService && item.serviceDetails && (
                       <div style={{ fontSize: 11, color: 'var(--text-muted)', paddingLeft: 18 }}>
                         {item.serviceDetails.billingType} · {item.serviceDetails.duration}
@@ -516,6 +674,7 @@ export default function PurchaseOrdersPage() {
                   <th onClick={() => handleSort('totalAmount')}>Amount <SortIcon field="totalAmount" /></th>
                   <th>Payment</th>
                   <th>Status</th>
+                  <th>Ack.</th>
                   <th onClick={() => handleSort('dueDate')}>Due <SortIcon field="dueDate" /></th>
                   <th>ETA</th>
                   <th>Incoterms</th>
@@ -540,6 +699,17 @@ export default function PurchaseOrdersPage() {
                         onStatusChange={s => updatePOStatus(po.id, s)}
                         onCancel={() => setCancelModal(po.id)}
                       />
+                    </td>
+                    <td onClick={e => e.stopPropagation()} title={po.acknowledgedAt ? `${po.acknowledgementStatus || 'Acknowledged'} by ${po.acknowledgedBy || '—'} on ${new Date(po.acknowledgedAt).toLocaleDateString()}` : undefined}>
+                      {po.deliveryStatus === 'Draft' ? (
+                        <span style={{ opacity: 0.3 }}>—</span>
+                      ) : po.acknowledgedAt ? (
+                        po.acknowledgementStatus === 'Acknowledged with Exceptions'
+                          ? <AlertTriangle size={15} style={{ color: '#f59e0b' }} />
+                          : <CheckCircle2 size={15} style={{ color: '#34d399' }} />
+                      ) : (
+                        <Clock size={15} style={{ color: 'var(--text-muted)' }} />
+                      )}
                     </td>
                     <td>{po.dueDate}</td>
                     <td>{po.eta}</td>

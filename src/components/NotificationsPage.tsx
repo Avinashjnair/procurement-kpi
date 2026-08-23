@@ -1,19 +1,19 @@
 'use client';
 import React, { useState } from 'react';
 import { useApp } from '@/context/AppContext';
-import { 
-  Bell, Settings, CheckCircle2, AlertCircle, Info, 
-  Clock, Trash2, Filter, Search, BellRing, Mail, 
+import {
+  Bell, Settings, CheckCircle2, AlertCircle, Info,
+  Clock, Trash2, Filter, Search, BellRing, Mail,
   Smartphone, ShieldCheck, ShoppingCart, CreditCard,
-  FileBadge, HardDrive
+  FileBadge, HardDrive, UserPlus
 } from 'lucide-react';
 
 export default function NotificationsPage() {
-  const { 
-    notifications, markNotificationRead, markAllNotificationsRead, 
-    notificationRules, toggleNotificationRule 
+  const {
+    notifications, markNotificationRead, markAllNotificationsRead,
+    notificationRules, toggleNotificationRule, setActivePage, setSelectedSupplierId
   } = useApp();
-  
+
   const [activeTab, setActiveTab] = useState<'feed' | 'settings'>('feed');
   const [filter, setFilter] = useState<'all' | 'unread'>('all');
 
@@ -28,7 +28,16 @@ export default function NotificationsPage() {
       case 'Payment': return <CreditCard size={18} />;
       case 'Document': return <FileBadge size={18} />;
       case 'GRN': return <HardDrive size={18} />;
+      case 'Supplier': return <UserPlus size={18} />;
       default: return <Bell size={18} />;
+    }
+  };
+
+  const handleNotifClick = (n: (typeof notifications)[number]) => {
+    markNotificationRead(n.id);
+    if (n.entityType === 'Supplier' && n.entityId) {
+      setSelectedSupplierId(n.entityId);
+      setActivePage('suppliers');
     }
   };
 
@@ -92,7 +101,8 @@ export default function NotificationsPage() {
               <div 
                 key={n.id} 
                 className={`notif-item ${n.read ? 'read' : 'unread'}`}
-                onClick={() => markNotificationRead(n.id)}
+                onClick={() => handleNotifClick(n)}
+                style={{ cursor: n.entityType === 'Supplier' ? 'pointer' : undefined }}
               >
                 <div 
                   className="notif-icon-wrapper" 

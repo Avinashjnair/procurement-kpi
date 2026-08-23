@@ -5,7 +5,7 @@ import type {
   Asset, MaintenanceRecord, AssetStatus, PaymentRecord, PaymentRecordStatus,
   BudgetEnvelope, Contract, Invoice, AuditLogEntry, MatchStatus, ApprovalStep, BlanketPO,
   AppNotification, NotificationRule, NegotiationMessage, POAmendmentRequest,
-  ComplianceDocument, GRNDispute, POMessage, ProductLibraryItem, Supplier, SupplierKPIs, Item, PricePoint, POStatus, PaymentStatus, PurchaseOrder, AppDocument, CompanyProfile
+  ComplianceDocument, GRNDispute, POMessage, ProductLibraryItem, Supplier, SupplierKPIs, Item, PricePoint, POStatus, PaymentStatus, PurchaseOrder, AppDocument, CompanyProfile, AcknowledgePODetails, UpdateShipmentDetails
 } from '@/types';
 import { calcEvalScore } from '@/types';
 
@@ -103,6 +103,11 @@ interface AppContextType extends AppState {
   submitGRN: (id: string) => Promise<void>;
   approveGRN: (id: string) => Promise<void>;
   rejectGRN: (id: string, reason: string) => Promise<void>;
+  updateGRN: (id: string, updates: Partial<GRN>) => Promise<void>;
+  deleteGRN: (id: string) => Promise<void>;
+  deleteItem: (id: string) => Promise<void>;
+  updatePO: (id: string, updates: Partial<PurchaseOrder>) => Promise<void>;
+  deletePO: (id: string) => Promise<void>;
   adjustStock: (stockItemId: string, delta: number, reason: string) => Promise<void>;
   addAsset: (asset: Asset) => Promise<void>;
   updateAssetStatus: (id: string, status: AssetStatus) => Promise<void>;
@@ -122,7 +127,7 @@ interface AppContextType extends AppState {
   updateInvoice: (id: string, updates: Partial<Invoice>) => Promise<void>;
   logAudit: (log: Omit<AuditLogEntry, 'id' | 'timestamp' | 'actorId' | 'actorName'>) => Promise<void>;
   processApprovalStep: (poId: string, stepIndex: number, status: 'Approved' | 'Rejected', comments?: string) => Promise<void>;
-  performMatch: (poId: string) => MatchStatus;
+  performMatch: (poId: string, invoiceId?: string) => MatchStatus;
   addBlanket: (b: BlanketPO) => Promise<void>;
   updateBlanket: (id: string, updates: Partial<BlanketPO>) => Promise<void>;
   addNotification: (n: Omit<AppNotification, 'id' | 'timestamp' | 'read'>) => Promise<void>;
@@ -133,8 +138,8 @@ interface AppContextType extends AppState {
   setSupplierPortal: (val: boolean) => void;
   addNegotiationMessage: (msg: Omit<NegotiationMessage, 'id' | 'timestamp'>) => Promise<void>;
   updateQuotationFeedback: (id: string, feedback: string) => Promise<void>;
-  acknowledgePO: (poId: string) => Promise<void>;
-  updateShipment: (poId: string, tracking: string, carrier: string) => Promise<void>;
+  acknowledgePO: (poId: string, details?: AcknowledgePODetails) => Promise<void>;
+  updateShipment: (poId: string, details: UpdateShipmentDetails) => Promise<void>;
   requestAmendment: (poId: string, request: Omit<POAmendmentRequest, 'id' | 'timestamp' | 'status'>) => Promise<void>;
   updateDeliveredQty: (poId: string, itemId: string, qty: number) => Promise<void>;
   submitInvoice: (data: Omit<Invoice, 'id' | 'matchStatus' | 'status'>) => Promise<void>;
@@ -143,6 +148,8 @@ interface AppContextType extends AppState {
   poMessages: POMessage[];
   sendPOMessage: (msg: Omit<POMessage, 'id' | 'timestamp'>) => Promise<void>;
   updateSupplierProfile: (id: string, updates: Partial<Supplier>) => Promise<void>;
+  approveSupplier: (id: string, password: string) => Promise<void>;
+  rejectSupplier: (id: string, reason: string) => Promise<void>;
   requestEarlyPayment: (invoiceId: string, discountPct: number) => Promise<void>;
   addSupplierContact: (supplierId: string, contact: { name: string; role: string; email: string }) => Promise<void>;
   supplierLogin: (supplierId: string, passwordHash: string) => Promise<{ success: boolean; error?: string }>;
@@ -265,7 +272,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // ── Session Initialization ───────────────────────────────────
   useEffect(() => {
     const savedToken = localStorage.getItem('procurebuddy_token');
-    const savedTenant = localStorage.getItem('procurebuddy_tenant_id') || 'steelmax';
+    const savedTenant = localStorage.getItem('procurebuddy_tenant_id') || 'veltrix';
 
     if (savedToken) {
       setAuthToken(savedToken);
@@ -313,7 +320,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
   // Auth logins
   const login = useCallback(async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      const resolvedTenant = 'veltrix';
+      let resolvedTenant = 'veltrix';
+      const emailLower = email.toLowerCase();
+      if (emailLower.includes('essential')) {
+        resolvedTenant = 'veltrix_essential';
+      } else if (emailLower.includes('professional')) {
+        resolvedTenant = 'veltrix_professional';
+      } else if (emailLower.includes('enterprise')) {
+        resolvedTenant = 'veltrix_enterprise';
+      }
       
       const res = await fetch('/api/auth/login', {
         method: 'POST',
@@ -350,7 +365,15 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const supplierLogin = useCallback(async (supplierId: string, passwordHash: string): Promise<{ success: boolean; error?: string }> => {
     try {
-      const resolvedTenant = 'veltrix';
+      let resolvedTenant = 'veltrix';
+      const supplierIdUpper = supplierId.toUpperCase();
+      if (supplierIdUpper.includes('ESSENTIAL')) {
+        resolvedTenant = 'veltrix_essential';
+      } else if (supplierIdUpper.includes('PROFESSIONAL')) {
+        resolvedTenant = 'veltrix_professional';
+      } else if (supplierIdUpper.includes('ENTERPRISE')) {
+        resolvedTenant = 'veltrix_enterprise';
+      }
 
       const res = await fetch('/api/auth/supplier-login', {
         method: 'POST',
@@ -459,6 +482,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState(p => ({ ...p, items: p.items.map(i => i.id === id ? result : i) }));
   }, [runMutation]);
 
+  const deleteItem = useCallback(async (id: string) => {
+    await runMutation('DELETE_ITEM', { id });
+    setState(p => ({ ...p, items: p.items.filter(i => i.id !== id) }));
+  }, [runMutation]);
+
   const addItemPriceHistory = useCallback(async (itemId: string, point: PricePoint) => {
     const result = await runMutation('ADD_ITEM_PRICE_HISTORY', { itemId, point });
     setState(p => ({ ...p, items: p.items.map(i => i.id === itemId ? result : i) }));
@@ -497,6 +525,17 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const updateSupplierProfile = useCallback(async (id: string, updates: Partial<Supplier>) => {
     const result = await runMutation('UPDATE_SUPPLIER_PROFILE', { id, updates });
+    setState(p => ({ ...p, suppliers: p.suppliers.map(s => s.id === id ? result : s) }));
+  }, [runMutation]);
+
+  // ── Vendor Registration Approval ──────────────────────────
+  const approveSupplier = useCallback(async (id: string, password: string) => {
+    const result = await runMutation('APPROVE_SUPPLIER', { id, password });
+    setState(p => ({ ...p, suppliers: p.suppliers.map(s => s.id === id ? result : s) }));
+  }, [runMutation]);
+
+  const rejectSupplier = useCallback(async (id: string, reason: string) => {
+    const result = await runMutation('REJECT_SUPPLIER', { id, reason });
     setState(p => ({ ...p, suppliers: p.suppliers.map(s => s.id === id ? result : s) }));
   }, [runMutation]);
 
@@ -555,13 +594,23 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState(p => ({ ...p, purchaseOrders: [result, ...p.purchaseOrders] }));
   }, [runMutation]);
 
-  const acknowledgePO = useCallback(async (poId: string) => {
-    const result = await runMutation('ACKNOWLEDGE_PO', { poId });
+  const updatePO = useCallback(async (id: string, updates: Partial<PurchaseOrder>) => {
+    const result = await runMutation('UPDATE_PO', { id, updates });
+    setState(p => ({ ...p, purchaseOrders: p.purchaseOrders.map(po => po.id === id ? result : po) }));
+  }, [runMutation]);
+
+  const deletePO = useCallback(async (id: string) => {
+    await runMutation('DELETE_PO', { id });
+    setState(p => ({ ...p, purchaseOrders: p.purchaseOrders.filter(po => po.id !== id) }));
+  }, [runMutation]);
+
+  const acknowledgePO = useCallback(async (poId: string, details?: AcknowledgePODetails) => {
+    const result = await runMutation('ACKNOWLEDGE_PO', { poId, ...details });
     setState(p => ({ ...p, purchaseOrders: p.purchaseOrders.map(po => po.id === poId ? result : po) }));
   }, [runMutation]);
 
-  const updateShipment = useCallback(async (poId: string, tracking: string, carrier: string) => {
-    const result = await runMutation('UPDATE_SHIPMENT', { poId, tracking, carrier });
+  const updateShipment = useCallback(async (poId: string, details: UpdateShipmentDetails) => {
+    const result = await runMutation('UPDATE_SHIPMENT', { poId, ...details });
     setState(p => ({ ...p, purchaseOrders: p.purchaseOrders.map(po => po.id === poId ? result : po) }));
   }, [runMutation]);
 
@@ -678,6 +727,16 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const rejectGRN = useCallback(async (id: string, reason: string) => {
     const result = await runMutation('REJECT_GRN', { id, reason });
     setState(p => ({ ...p, grns: p.grns.map(g => g.id === id ? result : g) }));
+  }, [runMutation]);
+
+  const updateGRN = useCallback(async (id: string, updates: Partial<GRN>) => {
+    const result = await runMutation('UPDATE_GRN', { id, updates });
+    setState(p => ({ ...p, grns: p.grns.map(g => g.id === id ? result : g) }));
+  }, [runMutation]);
+
+  const deleteGRN = useCallback(async (id: string) => {
+    await runMutation('DELETE_GRN', { id });
+    setState(p => ({ ...p, grns: p.grns.filter(g => g.id !== id) }));
   }, [runMutation]);
 
   // ── Stock Adjustments ─────────────────────────────────────
@@ -820,19 +879,22 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, [runMutation]);
 
   // ── 3-Way Match Algorithm trigger ────────────────────────
-  const performMatch = useCallback((poId: string): MatchStatus => {
+  // invoiceId (optional) scopes the recalculation to one specific invoice on the PO — omit it to
+  // recheck every invoice on the PO (e.g. after a GRN approval that could affect several of them).
+  const performMatch = useCallback((poId: string, invoiceId?: string): MatchStatus => {
     // Perform match is triggered instantly via client and updated.
     // Use pendingMatches cache to prevent duplicate requests during re-renders.
-    if (pendingMatches.current[poId]) {
+    const cacheKey = invoiceId ? `${poId}:${invoiceId}` : poId;
+    if (pendingMatches.current[cacheKey]) {
       return 'Pending';
     }
-    pendingMatches.current[poId] = true;
-    runMutation('PERFORM_MATCH', { poId })
+    pendingMatches.current[cacheKey] = true;
+    runMutation('PERFORM_MATCH', { poId, invoiceId })
       .then(() => {
         initData(authToken || '', tenantId);
       })
       .finally(() => {
-        delete pendingMatches.current[poId];
+        delete pendingMatches.current[cacheKey];
       });
     return 'Pending';
   }, [runMutation, initData, authToken, tenantId]);
@@ -867,14 +929,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setActivePage, setSelectedItemId, setSelectedSupplierId, setSelectedPOId,
       setSelectedRFQId, setSelectedGRNId, setFabOpen, setModalOpen, toggleDarkMode,
       login, logout,
-      addItem, updateItem, archiveItem, unarchiveItem, addItemPriceHistory,
+      addItem, updateItem, archiveItem, unarchiveItem, addItemPriceHistory, deleteItem,
       addSupplier, updateSupplier, updateSupplierKPIs, togglePreferredSupplier, addSupplierNote,
-      addPurchaseOrder, updatePOStatus, updatePOPayment, approvePO, rejectPO, cancelPO, duplicatePO,
+      addPurchaseOrder, updatePOStatus, updatePOPayment, approvePO, rejectPO, cancelPO, duplicatePO, updatePO, deletePO,
       recordPayment, approvePaymentRecord,
       addDocument, uploadNewDocVersion,
       addRFQ, updateRFQ, sendRFQ, closeRFQ, awardRFQ, publishRFQ,
       addQuotation, updateQuotation, submitEvaluation,
-      addGRN, submitGRN, approveGRN, rejectGRN,
+      addGRN, submitGRN, approveGRN, rejectGRN, updateGRN, deleteGRN,
       adjustStock,
       addAsset, updateAssetStatus, addAssetCategory, logMaintenance, calculateCurrentAssetValue,
       getSupplierById, getItemById, getPOById, getRFQById, getStockByItemId,
@@ -886,7 +948,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       setSupplierPortal, addNegotiationMessage, updateQuotationFeedback,
       acknowledgePO, updateShipment, requestAmendment, updateDeliveredQty,
       submitInvoice, disputeGRN, uploadComplianceDoc,
-      sendPOMessage, updateSupplierProfile, requestEarlyPayment, addSupplierContact,
+      sendPOMessage, updateSupplierProfile, approveSupplier, rejectSupplier, requestEarlyPayment, addSupplierContact,
       supplierLogin, supplierLogout, addProduct, setGlobalSearchQuery, setMobileSidebarOpen
     }}>
       {children}

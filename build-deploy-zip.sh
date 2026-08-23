@@ -4,14 +4,6 @@
 ENV=${1:-stg}
 ZIP_NAME="procurebuddy-$ENV.zip"
 
-echo "=== 1. Starting Production Build ==="
-npm run build
-
-if [ $? -ne 0 ]; then
-  echo "Build failed! Aborting."
-  exit 1
-fi
-
 echo "=== 2. Creating Deployment Archive ==="
 # Remove existing zip if it exists
 if [ -f "$ZIP_NAME" ]; then
@@ -19,13 +11,8 @@ if [ -f "$ZIP_NAME" ]; then
   echo "Removed existing $ZIP_NAME"
 fi
 
-# Clean development cache folders from .next to keep the zip archive clean
-rm -rf .next/cache
-rm -rf .next/dev
-echo "Cleaned dev and cache folders from .next"
-
 # Zip folders and files (excluding node_modules, .git, etc.)
-zip -r "$ZIP_NAME" .next databases prisma public package.json package-lock.json server.js
+zip -r "$ZIP_NAME" src databases prisma public package.json package-lock.json server.js scripts docs next.config.ts tsconfig.json postcss.config.mjs eslint.config.mjs
 
 if [ $? -eq 0 ]; then
   echo "=== 3. Done! ==="
