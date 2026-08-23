@@ -53,6 +53,7 @@ fi
 echo "=== 5. Installing Dependencies ==="
 cd "$APP_DIR"
 npm install --no-audit --no-fund --prefer-offline
+npm rebuild better-sqlite3
 
 echo "=== 6. Generating database client engines ==="
 npx prisma generate
