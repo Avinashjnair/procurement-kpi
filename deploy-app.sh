@@ -52,8 +52,7 @@ fi
 
 # Dependencies and native modules are pre-compiled in CI. Skipping install steps.
 
-echo "=== 6. Generating database client engines ==="
-npx prisma generate
+# Prisma Client is pre-generated in CI. Skipping generation on the VM.
 
 echo "=== 6.3. Running Database Schema Migrations ==="
 node scripts/migrate.js
