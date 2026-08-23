@@ -50,10 +50,7 @@ if [ -d "/tmp/databases_backup" ]; then
     rm -rf /tmp/databases_backup
 fi
 
-echo "=== 5. Installing Dependencies ==="
-cd "$APP_DIR"
-npm install --no-audit --no-fund --prefer-offline
-npm rebuild better-sqlite3
+# Dependencies and native modules are pre-compiled in CI. Skipping install steps.
 
 echo "=== 6. Generating database client engines ==="
 npx prisma generate
