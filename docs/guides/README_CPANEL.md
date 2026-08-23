@@ -59,6 +59,10 @@ This automatically runs the Next.js production compiler and generates a deployme
    ```bash
    npx prisma generate
    ```
+5. Run the automated database schema migration script:
+   ```bash
+   node scripts/migrate.js
+   ```
 
 ### Step 5: Start the Application
 1. In cPanel's **Application Manager**, verify that the application is enabled.

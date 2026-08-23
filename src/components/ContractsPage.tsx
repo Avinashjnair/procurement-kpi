@@ -4,13 +4,15 @@ import { ShieldCheck, Plus, Search, Calendar, FileText, Bell, ExternalLink, X, C
 import { Contract } from '@/types';
 
 function ContractFormModal({ onClose }: { onClose: () => void }) {
-  const { addContract, suppliers } = useApp();
+  const { addContract, suppliers, blanketPOs } = useApp();
   const [title, setTitle] = useState('');
   const [supplierId, setSupplierId] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [totalValue, setTotalValue] = useState('');
   const [currency, setCurrency] = useState('USD');
+  const [linkedBlanketPoId, setLinkedBlanketPoId] = useState('');
+  const [description, setDescription] = useState('');
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,7 +31,9 @@ function ContractFormModal({ onClose }: { onClose: () => void }) {
       currency,
       status: 'Active',
       renewalWindowDays: 60,
-      linkedPoIds: []
+      linkedPoIds: [],
+      linkedBlanketPoId: linkedBlanketPoId || undefined,
+      description: description.trim() || undefined,
     });
     onClose();
   };
@@ -53,6 +57,17 @@ function ContractFormModal({ onClose }: { onClose: () => void }) {
               {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
           </div>
+          {supplierId && (
+            <div className="form-group">
+              <label className="form-label">Link to Blanket PO (Optional)</label>
+              <select className="form-select" value={linkedBlanketPoId} onChange={e => setLinkedBlanketPoId(e.target.value)}>
+                <option value="">None (Standalone Contract)</option>
+                {blanketPOs.filter(b => b.supplierId === supplierId).map(b => (
+                  <option key={b.id} value={b.id}>{b.id} — Ceiling: {b.totalCeiling.toLocaleString()} {b.currency}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">Start Date *</label>
@@ -80,6 +95,10 @@ function ContractFormModal({ onClose }: { onClose: () => void }) {
               </select>
             </div>
           </div>
+          <div className="form-group">
+            <label className="form-label">Detailed Contract Terms / Description</label>
+            <textarea className="form-input" rows={3} value={description} onChange={e => setDescription(e.target.value)} placeholder="Enter details of the contract agreement..." />
+          </div>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 24 }}>
             <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
             <button type="submit" className="btn btn-primary"><Check size={16} /> Register Contract</button>
@@ -89,9 +108,8 @@ function ContractFormModal({ onClose }: { onClose: () => void }) {
     </div>
   );
 }
-
 export default function ContractsPage() {
-  const { contracts, setActivePage, setSelectedSupplierId, setSelectedPOId } = useApp();
+  const { contracts, setActivePage, setSelectedSupplierId, setSelectedPOId, setSelectedBlanketId } = useApp();
   const [searchTerm, setSearchTerm] = useState('');
   const [showModal, setShowModal] = useState(false);
 
@@ -102,9 +120,9 @@ export default function ContractsPage() {
   );
 
   return (
-    <div className="page-container">
+    <div className="page-content animate-in">
       {showModal && <ContractFormModal onClose={() => setShowModal(false)} />}
-
+      
       <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <div>
           <h2>Contract Management</h2>
@@ -158,6 +176,14 @@ export default function ContractsPage() {
                     {contract.supplierName} <ExternalLink size={10} style={{ display: 'inline', marginLeft: 2 }} />
                   </span>
                 </div>
+                {contract.linkedBlanketPoId && (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                    <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Blanket PO Reference</span>
+                    <span style={{ fontSize: 12, color: 'var(--accent-indigo)', fontWeight: 600, cursor: 'pointer' }} onClick={() => { setSelectedBlanketId(contract.linkedBlanketPoId || null); setActivePage('blanket-pos'); }}>
+                      {contract.linkedBlanketPoId} <ExternalLink size={10} style={{ display: 'inline', marginLeft: 2 }} />
+                    </span>
+                  </div>
+                )}
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>Value</span>
                   <span style={{ fontSize: 13, color: '#10b981', fontWeight: 700 }}>${contract.totalValue.toLocaleString()} {contract.currency}</span>
@@ -178,6 +204,13 @@ export default function ContractsPage() {
                   </div>
                 </div>
               </div>
+
+              {contract.description && (
+                <div style={{ marginBottom: 16, padding: '10px 12px', background: 'rgba(255,255,255,0.02)', borderRadius: 8, borderLeft: '3px solid var(--accent-indigo)' }}>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 4 }}>Detailed Contract Terms</div>
+                  <div style={{ fontSize: 12, color: 'var(--text-secondary)', whiteSpace: 'pre-wrap', lineHeight: 1.4 }}>{contract.description}</div>
+                </div>
+              )}
 
               <div style={{ fontSize: 11, color: 'var(--text-muted)', marginBottom: 8 }}>Linked Orders ({contract.linkedPoIds.length})</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>

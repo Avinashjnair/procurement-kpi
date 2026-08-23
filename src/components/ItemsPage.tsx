@@ -10,14 +10,52 @@ import { exportCsv } from '@/utils/exportCsv';
 const SUPPLIER_COLORS = ['#6366f1','#06b6d4','#10b981','#f59e0b','#f43f5e','#a78bfa'];
 
 function ItemDetail({ itemId }: { itemId: string }) {
-  const { items, suppliers, setSelectedItemId, archiveItem, unarchiveItem, addItemPriceHistory } = useApp();
+  const { items, suppliers, setSelectedItemId, archiveItem, unarchiveItem, addItemPriceHistory, deleteItem, updateItem, auditLogs } = useApp();
   const item = items.find(i => i.id === itemId);
   const [showAddPrice, setShowAddPrice] = useState(false);
   const [newDate,     setNewDate]     = useState(new Date().toISOString().slice(0,7));
   const [newPrice,    setNewPrice]    = useState('');
   const [newSupplier, setNewSupplier] = useState('');
 
+  // Editing state
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState('');
+  const [editCategory, setEditCategory] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editUnit, setEditUnit] = useState('');
+  const [editPrice, setEditPrice] = useState('');
+
   if (!item) return <p>Item not found.</p>;
+
+  const startEditing = () => {
+    setEditName(item.name);
+    setEditCategory(item.category);
+    setEditDescription(item.description);
+    setEditUnit(item.unit);
+    setEditPrice(String(item.currentPrice));
+    setIsEditing(true);
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editName || !editPrice) return;
+    await updateItem(item.id, {
+      name: editName,
+      category: editCategory as any,
+      description: editDescription,
+      unit: editUnit,
+      currentPrice: parseFloat(editPrice)
+    });
+    setIsEditing(false);
+  };
+
+  const handleDelete = async () => {
+    if (window.confirm(`Are you sure you want to permanently delete this item: ${item.name}? This action cannot be undone.`)) {
+      await deleteItem(item.id);
+      setSelectedItemId(null);
+    }
+  };
+
   const isService = item.category === 'Services';
   const linkedSuppliers = suppliers.filter(s => item.linkedSupplierIds.includes(s.id));
 
@@ -43,6 +81,52 @@ function ItemDetail({ itemId }: { itemId: string }) {
     Date: p.date, Price: p.price, Supplier: suppliers.find(s => s.id === p.supplierId)?.name || p.supplierId,
   })));
 
+  // Filter audit logs for this specific item
+  const itemLogs = (auditLogs || []).filter(log => log.entityType === 'Item' && log.entityId === item.id);
+
+  if (isEditing) {
+    return (
+      <div>
+        <button className="detail-back" onClick={() => setIsEditing(false)}>
+          <ArrowLeft size={16} /> Cancel Editing
+        </button>
+
+        <div className="page-header">
+          <h2>Edit Item / Service: {item.id}</h2>
+        </div>
+
+        <form onSubmit={handleSaveEdit} className="card stack-md" style={{ padding: 24, maxWidth: 600 }}>
+          <div className="form-group">
+            <label className="form-label">Item / Service Name *</label>
+            <input type="text" className="form-input" value={editName} onChange={e => setEditName(e.target.value)} required />
+          </div>
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Category</label>
+              <input type="text" className="form-input" value={editCategory} onChange={e => setEditCategory(e.target.value)} required />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Unit</label>
+              <input type="text" className="form-input" value={editUnit} onChange={e => setEditUnit(e.target.value)} required />
+            </div>
+          </div>
+          <div className="form-group">
+            <label className="form-label">Description</label>
+            <textarea className="form-input" rows={3} value={editDescription} onChange={e => setEditDescription(e.target.value)} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Current Price / Rate ($) *</label>
+            <input type="number" step="0.01" className="form-input" value={editPrice} onChange={e => setEditPrice(e.target.value)} required />
+          </div>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 12 }}>
+            <button type="button" className="btn btn-secondary" onClick={() => setIsEditing(false)}>Cancel</button>
+            <button type="submit" className="btn btn-primary">Save Changes</button>
+          </div>
+        </form>
+      </div>
+    );
+  }
+
   return (
     <div>
       <button className="detail-back" onClick={() => setSelectedItemId(null)}>
@@ -55,11 +139,12 @@ function ItemDetail({ itemId }: { itemId: string }) {
           {isService && <span style={{ display:'inline-flex',alignItems:'center',gap:4,padding:'3px 10px',borderRadius:20,fontSize:12,fontWeight:600,background:'rgba(139,92,246,0.12)',color:'#a78bfa' }}><Wrench size={11} /> Service</span>}
           {item.archived && <span style={{ display:'inline-flex',alignItems:'center',gap:4,padding:'3px 10px',borderRadius:20,fontSize:12,fontWeight:600,background:'rgba(100,116,139,0.12)',color:'#94a3b8' }}><Archive size={11} /> Archived</span>}
         </div>
-        <p>{item.category} · {item.id} · Current {isService ? 'Rate' : 'Price'}: ${item.currentPrice.toFixed(2)}/{item.unit}</p>
+        <p style={{ color: 'var(--text-muted)' }}>{item.category} · {item.id} · Current {isService ? 'Rate' : 'Price'}: ${item.currentPrice.toFixed(2)}/{item.unit}</p>
       </div>
 
       {/* Action bar */}
       <div style={{ display:'flex',gap:8,marginBottom:20,flexWrap:'wrap' }}>
+        <button className="btn btn-secondary btn-sm" onClick={startEditing}>Edit Item</button>
         <button className="btn btn-secondary btn-sm" onClick={() => setShowAddPrice(s => !s)}>
           <Plus size={13} /> {showAddPrice ? 'Cancel' : 'Log New Price'}
         </button>
@@ -68,6 +153,7 @@ function ItemDetail({ itemId }: { itemId: string }) {
           ? <button className="btn btn-secondary btn-sm" onClick={() => unarchiveItem(item.id)}><ArchiveRestore size={13} /> Restore Item</button>
           : <button className="btn btn-ghost btn-sm" style={{ color:'var(--text-muted)' }} onClick={() => archiveItem(item.id)}><Archive size={13} /> Archive Item</button>
         }
+        <button className="btn btn-ghost btn-sm" style={{ color:'var(--accent-rose)', marginLeft: 'auto' }} onClick={handleDelete}>Delete Item</button>
       </div>
 
       {/* Add price form */}
@@ -144,7 +230,7 @@ function ItemDetail({ itemId }: { itemId: string }) {
         </div>
       </div>
 
-      <div className="charts-grid-equal">
+      <div className="charts-grid-equal" style={{ marginBottom: 24 }}>
         {/* Price / Rate history */}
         <div className="card">
           <div className="card-header">
@@ -212,6 +298,32 @@ function ItemDetail({ itemId }: { itemId: string }) {
               </tbody>
             </table>
           </div>
+        </div>
+      </div>
+
+      {/* Audit Trail & Edit History */}
+      <div className="card" style={{ marginTop: 24 }}>
+        <div className="card-header">
+          <div className="card-title">Audit Trail &amp; Edit History</div>
+        </div>
+        <div style={{ padding: 16 }}>
+          {itemLogs.length === 0 ? (
+            <p style={{ color: 'var(--text-muted)', fontSize: 13, textAlign: 'center', margin: '10px 0' }}>No edit history found for this item.</p>
+          ) : (
+            <div className="stack-sm">
+              {itemLogs.map((log, index) => (
+                <div key={log.id || index} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: index < itemLogs.length - 1 ? '1px dashed var(--border-color)' : 'none', fontSize: 13 }}>
+                  <div>
+                    <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{log.action}</span> by <span style={{ color: 'var(--text-secondary)' }}>{log.actorName}</span>
+                    {log.description && <span style={{ color: 'var(--text-muted)', marginLeft: 8 }}>— {log.description}</span>}
+                  </div>
+                  <div style={{ color: 'var(--text-muted)', fontSize: 11 }}>
+                    {new Date(log.timestamp).toLocaleString()}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>

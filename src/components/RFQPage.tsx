@@ -3,7 +3,7 @@ import React, { useState, useMemo } from 'react';
 import { useApp } from '@/context/AppContext';
 import { can } from '@/types';
 import type { RFQ, RFQLineItem, RFQStatus, TenderType } from '@/types';
-import { Search, Plus, Send, ArrowLeft, Eye, X, CheckCircle2, Award, Lock } from 'lucide-react';
+import { Search, Plus, Send, ArrowLeft, Eye, X, CheckCircle2, Award, Lock, Paperclip, Mail } from 'lucide-react';
 
 const STATUS_META: Record<RFQStatus, { color: string; bg: string }> = {
   Draft:     { color: '#94a3b8', bg: 'rgba(148,163,184,0.1)' },
@@ -92,7 +92,7 @@ function ComparisonMatrix({ rfqs, quotations, selection, onClose }: { rfqs: any[
 
 // ── RFQ Detail / View ──
 function RFQDetail({ rfqId }: { rfqId: string }) {
-  const { rfqs, quotations, suppliers, items, currentUser, sendRFQ, closeRFQ, awardRFQ, publishRFQ, setSelectedRFQId, setActivePage, negotiationMessages, addNegotiationMessage } = useApp();
+  const { rfqs, quotations, suppliers, items, currentUser, sendRFQ, closeRFQ, awardRFQ, publishRFQ, setSelectedRFQId, setActivePage, negotiationMessages, addNegotiationMessage, setModalOpen } = useApp();
   const [activeTab, setActiveTab] = useState<'overview' | 'inbox' | 'matrix' | 'nego'>('overview');
   const [selectedQuoteId, setSelectedQuoteId] = useState<string | null>(null);
   const [matrixSelection, setMatrixSelection] = useState<string[]>([]);
@@ -146,7 +146,7 @@ function RFQDetail({ rfqId }: { rfqId: string }) {
               <Send size={13} /> Send Invitations
             </button>
           )}
-          {rfq.status === 'Sent' && <button className="btn btn-secondary btn-sm" onClick={() => closeRFQ(rfq.id)}>Close RFQ</button>}
+          {(rfq.status === 'Sent' || rfq.status === 'Published') && <button className="btn btn-secondary btn-sm" onClick={() => closeRFQ(rfq.id)}>Close RFQ</button>}
         </div>
       </div>
 
@@ -189,6 +189,14 @@ function RFQDetail({ rfqId }: { rfqId: string }) {
 
       {activeTab === 'inbox' && (
         <div className="card">
+          <div className="card-header">
+            <div className="card-title">Bid Inbox</div>
+            {can(currentUser, 'create_rfq') && (
+              <button className="btn btn-secondary btn-sm" style={{ marginLeft: 'auto' }} onClick={() => setModalOpen('newQuotation')}>
+                <Mail size={13} /> Add Quotation Manually
+              </button>
+            )}
+          </div>
           <div className="data-table-wrapper">
             <table className="data-table">
               <thead><tr><th>Select</th><th>Supplier</th><th>Amount</th><th>Score</th><th>Status</th><th>Actions</th></tr></thead>
@@ -196,7 +204,10 @@ function RFQDetail({ rfqId }: { rfqId: string }) {
                 {rfqQuotations.map(q => (
                   <tr key={q.id}>
                     <td><input type="checkbox" checked={matrixSelection.includes(q.id)} onChange={() => setMatrixSelection(p => p.includes(q.id) ? p.filter(x => x !== q.id) : [...p, q.id])} /></td>
-                    <td style={{ fontWeight: 600 }}>{q.supplierName}</td>
+                    <td style={{ fontWeight: 600 }}>
+                      {q.supplierName}
+                      {q.quotationFileName && <Paperclip size={11} style={{ marginLeft: 6, color: 'var(--text-muted)', verticalAlign: 'middle' }} />}
+                    </td>
                     <td className="font-mono" style={{ fontWeight: 600 }}>${q.totalAmount.toLocaleString()}</td>
                     <td>
                       <div style={{ width: 80, height: 8, background: 'rgba(255,255,255,0.05)', borderRadius: 4, overflow: 'hidden', marginTop: 4 }}>
@@ -298,7 +309,7 @@ const WEIGHT_LABELS: Record<string, string> = {
 
 // ── New RFQ Modal ──
 function NewRFQModal({ onClose }: { onClose: () => void }) {
-  const { addRFQ, rfqs, items, suppliers, currentUser } = useApp();
+  const { addRFQ, rfqs, items, suppliers, currentUser, setModalOpen } = useApp();
   const [title, setTitle] = useState('');
   const [tenderType, setTenderType] = useState<TenderType>('selective');
   const [bidDeadline, setBidDeadline] = useState('');
@@ -317,25 +328,31 @@ function NewRFQModal({ onClose }: { onClose: () => void }) {
 
   const toggleSup = (id: string) => setSelectedSuppliers(p => p.includes(id) ? p.filter(s => s !== id) : [...p, id]);
 
-  const updateLine = (i: number, field: keyof RFQLineItem, val: string | number) =>
-    setLineItems(prev => prev.map((l, idx) => idx === i ? { ...l, [field]: val } : l));
+  const updateLine = (idx: number, key: string, val: any) => {
+    setLineItems(prev => prev.map((l, i) => i === idx ? { ...l, [key]: val } : l));
+  };
 
-  const removeLine = (i: number) => setLineItems(prev => prev.filter((_, idx) => idx !== i));
+  const removeLine = (idx: number) => {
+    setLineItems(prev => prev.filter((_, i) => i !== idx));
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title || !bidDeadline) return;
-    if (tenderType === 'selective' && selectedSuppliers.length === 0) return;
-    
-    const validLines = lineItems.filter(l => l.itemId && l.quantity) as RFQLineItem[];
-    if (!validLines.length) return;
+    const validLines = lineItems.filter(l => l.itemId && l.quantity);
+    if (!title || validLines.length === 0 || (!bidDeadline)) return;
 
-    // Normalize weights to sum to 1.0
-    const sum = Object.values(weights).reduce((a, b) => a + b, 0);
-    const normalizedWeights: Record<string, number> = {};
-    Object.keys(weights).forEach(k => normalizedWeights[k] = weights[k] / sum);
+    // Total weights sum
+    const totalW = Object.values(weights).reduce((a, b) => a + b, 0);
+    const normalizedWeights = Object.keys(weights).reduce((acc, k) => {
+      acc[k] = totalW > 0 ? (weights[k] / totalW) : (1 / Object.keys(weights).length);
+      return acc;
+    }, {} as Record<string, number>);
 
-    const newId = `RFQ-${String(rfqs.length + 1).padStart(3, '0')}`;
+    const maxId = rfqs.reduce((max, r) => {
+      const num = parseInt(r.id.replace('RFQ-', ''));
+      return !isNaN(num) && num > max ? num : max;
+    }, 0);
+    const newId = `RFQ-${String(maxId + 1).padStart(3, '0')}`;
     addRFQ({
       id: newId, title, status: 'Draft',
       createdBy: currentUser?.id || 'USR-001', createdByName: currentUser?.name || 'Unknown',
@@ -344,7 +361,7 @@ function NewRFQModal({ onClose }: { onClose: () => void }) {
       bidDeadline, 
       clarificationDeadline: clarificationDeadline || bidDeadline,
       projectReference: projRef || undefined, notes: notes || undefined,
-      lineItems: validLines.map((l, i) => ({ ...l, id: `RLI-${newId}-${i}`, category: items.find(item => item.id === l.itemId)?.category || '' })),
+      lineItems: validLines.map((l, i) => ({ ...l, id: `RLI-${newId}-${i}`, category: items.find(item => item.id === l.itemId)?.category || '' })) as any,
       invitedSupplierIds: tenderType === 'open' ? [] : selectedSuppliers,
       tenderType,
       evaluationWeights: normalizedWeights
@@ -412,28 +429,46 @@ function NewRFQModal({ onClose }: { onClose: () => void }) {
           <div>
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent-indigo)', textTransform: 'uppercase', letterSpacing: '0.8px', margin: '12px 0 10px' }}>Scope of Supply</div>
             {lineItems.map((line, i) => (
-              <div key={i} style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8, marginBottom: 8, alignItems: 'flex-end' }}>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <select className="form-select" value={line.itemId || ''} onChange={e => {
-                    const item = items.find(it => it.id === e.target.value);
-                    updateLine(i, 'itemId', e.target.value);
-                    updateLine(i, 'itemName', item?.name || '');
-                    updateLine(i, 'unit', item?.unit || '');
-                    updateLine(i, 'description', item?.description || '');
-                  }}>
-                    <option value="">Select item…</option>
-                    {items.filter(it => !it.archived).map(it => <option key={it.id} value={it.id}>{it.name}</option>)}
-                  </select>
+              <div key={i} style={{ marginBottom: 12, paddingBottom: 12, borderBottom: '1px dashed var(--border-color)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8, marginBottom: 6, alignItems: 'flex-end' }}>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <select className="form-select" value={line.itemId || ''} onChange={e => {
+                      if (e.target.value === 'CREATE_NEW_ITEM') {
+                        setModalOpen('newItem');
+                        e.target.value = '';
+                        return;
+                      }
+                      const item = items.find(it => it.id === e.target.value);
+                      updateLine(i, 'itemId', e.target.value);
+                      updateLine(i, 'itemName', item?.name || '');
+                      updateLine(i, 'unit', item?.unit || '');
+                      updateLine(i, 'description', item?.description || '');
+                    }}>
+                      <option value="">Select item…</option>
+                      {items.filter(it => !it.archived).map(it => <option key={it.id} value={it.id}>{it.name}</option>)}
+                      <option value="CREATE_NEW_ITEM" style={{ color: 'var(--accent-indigo)', fontWeight: 'bold' }}>+ Quick Add New Item...</option>
+                    </select>
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <input type="number" className="form-input" placeholder="Qty" value={line.quantity || ''} onChange={e => updateLine(i, 'quantity', parseInt(e.target.value))} min="1" />
+                  </div>
+                  <div className="form-group" style={{ marginBottom: 0 }}>
+                    <input type="text" className="form-input" value={line.unit || ''} onChange={e => updateLine(i, 'unit', e.target.value)} placeholder="Unit" />
+                  </div>
+                  <button type="button" className="btn btn-ghost btn-sm" onClick={() => removeLine(i)} style={{ color: 'var(--accent-rose)', marginBottom: 0 }}>
+                    <X size={14} />
+                  </button>
                 </div>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <input type="number" className="form-input" placeholder="Qty" value={line.quantity || ''} onChange={e => updateLine(i, 'quantity', parseInt(e.target.value))} min="1" />
+                <div style={{ display: 'flex', paddingLeft: 2 }}>
+                  <input
+                    type="text"
+                    className="form-input"
+                    placeholder="Enter item description or custom specifications for the RFQ..."
+                    value={line.description || ''}
+                    onChange={e => updateLine(i, 'description', e.target.value)}
+                    style={{ fontSize: 12, padding: '6px 12px' }}
+                  />
                 </div>
-                <div className="form-group" style={{ marginBottom: 0 }}>
-                  <input type="text" className="form-input" value={line.unit || ''} onChange={e => updateLine(i, 'unit', e.target.value)} placeholder="Unit" />
-                </div>
-                <button type="button" className="btn btn-ghost btn-sm" onClick={() => removeLine(i)} style={{ color: 'var(--accent-rose)', marginBottom: 0 }}>
-                  <X size={14} />
-                </button>
               </div>
             ))}
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => setLineItems(p => [...p, {}])}>
@@ -507,7 +542,7 @@ export default function RFQPage() {
       </div>
 
       {/* Quick Access Bubbles - Premium Design */}
-      <div className="grid grid-4" style={{ gap: 16, marginBottom: 24 }}>
+      <div className="grid-4" style={{ marginBottom: 24 }}>
         {[
           { label: 'Active RFQs', value: stats.sent, icon: <Send size={20} />, color: 'var(--accent-indigo)', bg: 'rgba(99,102,241,0.08)' },
           { label: 'Bids Received', value: quotations.length, icon: <ArrowLeft size={20} />, color: 'var(--accent-slate)', bg: 'rgba(177,202,215,0.08)' },

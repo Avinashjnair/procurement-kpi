@@ -209,6 +209,37 @@ async function main() {
   console.log(`Cloning default template to veltrix database: ${veltrixPath}`);
   fs.copyFileSync(defaultPath, veltrixPath);
 
+  // 3. Clone for veltrix_essential, veltrix_professional, veltrix_enterprise
+  const Database = require('better-sqlite3');
+
+  const tiers = ['essential', 'professional', 'enterprise'];
+  for (const tier of tiers) {
+    const tierDbPath = path.join(dbDir, `company_veltrix_${tier}.db`);
+    console.log(`Cloning default template to veltrix_${tier} database: ${tierDbPath}`);
+    fs.copyFileSync(defaultPath, tierDbPath);
+
+    // Update the subscription tier inside the company profile
+    const db = new Database(tierDbPath);
+    db.prepare("UPDATE CompanyProfile SET name = ?, subscriptionTier = ? WHERE id = 'company-profile-1'")
+      .run(`Veltrix ${tier.toUpperCase()}`, tier);
+    
+    // Update the seed users' emails to include the tier domain
+    db.prepare("UPDATE User SET email = ? WHERE id = 'USR-001'")
+      .run(`admin@veltrix-${tier}.in`);
+    db.prepare("UPDATE User SET email = ? WHERE id = 'USR-002'")
+      .run(`requester@veltrix-${tier}.in`);
+    db.prepare("UPDATE User SET email = ? WHERE id = 'USR-003'")
+      .run(`buyer@veltrix-${tier}.in`);
+    db.prepare("UPDATE User SET email = ? WHERE id = 'USR-004'")
+      .run(`finance@veltrix-${tier}.in`);
+
+    // Update the supplier credentials
+    db.prepare("UPDATE Supplier SET id = ? WHERE id = 'SUP-001'")
+      .run(`SUP-${tier.toUpperCase()}-001`);
+    
+    db.close();
+  }
+
   console.log('Seeding completed successfully!');
 }
 

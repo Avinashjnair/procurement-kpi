@@ -11,7 +11,6 @@ import {
 
 const navItems: { id: string; label: string; icon: any; permission: string; section: string; tier?: string }[] = [
   { id: 'dashboard',       label: 'Operational Dashboard', icon: LayoutDashboard, permission: 'view_dashboard',        section: 'Core' },
-  { id: 'portal',          label: 'Supplier Self-Service', icon: Building2,       permission: 'view_dashboard',        section: 'Core',        tier: 'enterprise' },
   { id: 'items',           label: 'Materials & Services',  icon: Boxes,           permission: 'view_items',            section: 'Procurement' },
   { id: 'suppliers',       label: 'Suppliers',           icon: Users,           permission: 'view_suppliers',        section: 'Catalogue' },
   { id: 'rfq',             label: 'RFQ / PR',            icon: Send,            permission: 'view_rfqs',             section: 'Sourcing',    tier: 'professional' },
@@ -19,6 +18,7 @@ const navItems: { id: string; label: string; icon: any; permission: string; sect
   { id: 'purchase-orders', label: 'Purchase Orders',     icon: FileText,        permission: 'view_pos',              section: 'Procurement' },
   { id: 'invoices',        label: 'Invoices',            icon: FolderOpen,      permission: 'view_pos',              section: 'Procurement' },
   { id: 'grn',             label: 'Goods Receipt',       icon: PackageCheck,    permission: 'view_grn',              section: 'Procurement' },
+  { id: 'quick-grn',       label: 'Quick Mobile GRN',    icon: PackageCheck,    permission: 'view_grn',              section: 'Procurement', tier: 'essential' },
   { id: 'inventory',       label: 'Inventory',           icon: Boxes,           permission: 'view_inventory',        section: 'Procurement', tier: 'professional' },
   { id: 'blanket-pos',     label: 'Blanket POs',         icon: FileText,        permission: 'view_pos',              section: 'Procurement', tier: 'enterprise' },
   { id: 'assets',          label: 'Fixed Assets',        icon: Landmark,        permission: 'view_assets',           section: 'Procurement', tier: 'enterprise' },
@@ -27,8 +27,10 @@ const navItems: { id: string; label: string; icon: any; permission: string; sect
   { id: 'finance',         label: 'Finance & Payments',  icon: Banknote,        permission: 'view_payments',         section: 'Finance',     tier: 'professional' },
   { id: 'analytics',       label: 'Spend Analytics',     icon: BarChart,        permission: 'view_dashboard',        section: 'Finance',     tier: 'professional' },
   { id: 'reports',         label: 'Executive KPI Reports', icon: BarChart3,       permission: 'view_finance_reports',  section: 'Finance',     tier: 'professional' },
+  { id: 'export-reports',  label: 'Power BI / Excel Hub',  icon: FileText,        permission: 'view_finance_reports',  section: 'Finance',     tier: 'professional' },
   { id: 'notifications',   label: 'Alerts & rules',      icon: Bell,            permission: 'view_dashboard',        section: 'Records',     tier: 'enterprise' },
   { id: 'documents',       label: 'Documents',           icon: FolderOpen,      permission: 'view_documents',        section: 'Records' },
+  { id: 'audit-logs',      label: 'System Audit Trail',  icon: ShieldCheck,     permission: 'view_dashboard',        section: 'Records',     tier: 'enterprise' },
 ];
 
 const ROLE_COLORS: Record<string, string> = {
@@ -47,7 +49,7 @@ export default function Sidebar() {
   const {
     activePage, setActivePage, setModalOpen, darkMode, toggleDarkMode,
     currentUser, logout, notifications, markNotificationRead, markAllNotificationsRead,
-    isSupplierPortal, setSupplierPortal,
+    isSupplierPortal, setSupplierPortal, setSelectedSupplierId,
     isMobileSidebarOpen, setMobileSidebarOpen,
     companyProfile
   } = useApp();
@@ -96,7 +98,12 @@ export default function Sidebar() {
         <div className="sidebar-header">
           <div className="sidebar-logo">
             <div className="sidebar-logo-icon" style={{ background: 'var(--gradient-primary)' }}>📊</div>
-            <div><h1>ProcureBuddy</h1><span>Stealth OS</span></div>
+            <div>
+              <h1>ProcureBuddy</h1>
+              <span style={{ display: 'block', fontSize: 10, fontWeight: 700, letterSpacing: 0.5, color: 'var(--accent-indigo)', textTransform: 'uppercase' }}>
+                {currentTier} Tier
+              </span>
+            </div>
           </div>
         </div>
 
@@ -162,7 +169,17 @@ export default function Sidebar() {
                   <div className="notif-section">
                     <div className="notif-section-title danger">Action Required</div>
                     {unreadNotifications.map(n => (
-                      <div key={n.id} className="notif-row" onClick={() => { markNotificationRead(n.id); setActivePage('notifications'); setNotifOpen(false); setMobileSidebarOpen(false); }}>
+                      <div key={n.id} className="notif-row" onClick={() => {
+                        markNotificationRead(n.id);
+                        if (n.entityType === 'Supplier' && n.entityId) {
+                          setSelectedSupplierId(n.entityId);
+                          setActivePage('suppliers');
+                        } else {
+                          setActivePage('notifications');
+                        }
+                        setNotifOpen(false);
+                        setMobileSidebarOpen(false);
+                      }}>
                         <div className="notif-details">
                           <div className="notif-title">{n.title}</div>
                           <div className="notif-meta">{n.source} • {new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
