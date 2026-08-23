@@ -60,8 +60,7 @@ npx prisma generate
 echo "=== 6.3. Running Database Schema Migrations ==="
 node scripts/migrate.js
 
-echo "=== 6.5. Running Next Build (Native compilation) ==="
-NODE_OPTIONS="--max-old-space-size=512" npm run build
+# Next Build is pre-compiled in CI and copied over inside the archive. Skipping native build.
 
 echo "=== 7. Starting/Restarting Application via PM2 ==="
 pm2 describe "$PROCESS_NAME" > /dev/null 2>&1
