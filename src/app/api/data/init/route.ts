@@ -37,7 +37,6 @@ export async function GET(req: Request) {
                   title,
                   message: `PO #${po.id} is overdue. Promised ETA was ${po.eta}.`,
                   timestamp: new Date().toISOString(),
-                  read: false,
                   entityId: po.id,
                   entityType: 'PO'
                 }
@@ -64,9 +63,10 @@ export async function GET(req: Request) {
                 title,
                 message: `CRITICAL: ${item.itemName} (SKU: ${item.itemId}) is OUT OF STOCK.`,
                 timestamp: new Date().toISOString(),
-                read: false,
                 entityId: item.itemId,
-                entityType: 'Item'
+                entityType: 'Item',
+                actionType: 'REORDER_STOCK',
+                actionPayload: { itemId: item.itemId }
               }
             });
           }
@@ -81,9 +81,10 @@ export async function GET(req: Request) {
                 title,
                 message: `Low Stock Warning: ${item.itemName} stock (${item.currentStock}) has fallen below reorder level (${item.reorderPoint}).`,
                 timestamp: new Date().toISOString(),
-                read: false,
                 entityId: item.itemId,
-                entityType: 'Item'
+                entityType: 'Item',
+                actionType: 'REORDER_STOCK',
+                actionPayload: { itemId: item.itemId }
               }
             });
           }
@@ -109,7 +110,6 @@ export async function GET(req: Request) {
                 title,
                 message: `Budget Exceeded: Envelope '${bgt.name}' is at ${utilPct}% utilization.`,
                 timestamp: new Date().toISOString(),
-                read: false,
                 entityId: bgt.id,
                 entityType: 'Budget'
               }
@@ -127,7 +127,6 @@ export async function GET(req: Request) {
                 title,
                 message: `Budget Alert: Envelope '${bgt.name}' has reached ${utilPct}% of allocated funds.`,
                 timestamp: new Date().toISOString(),
-                read: false,
                 entityId: bgt.id,
                 entityType: 'Budget'
               }
@@ -155,8 +154,7 @@ export async function GET(req: Request) {
                     title,
                     message: `Contract '${con.title}' with ${con.supplierName || 'Supplier'} expires in ${diffDays} days (${con.endDate}).`,
                     timestamp: new Date().toISOString(),
-                    read: false,
-                    entityId: con.id,
+                      entityId: con.id,
                     entityType: 'Contract'
                   }
                 });
@@ -185,8 +183,7 @@ export async function GET(req: Request) {
                     title,
                     message: `Blanket PO #${bl.id} (${bl.supplierName || 'Supplier'}) has consumed ${utilPct}% of its $${bl.totalCeiling.toLocaleString()} ceiling.`,
                     timestamp: new Date().toISOString(),
-                    read: false,
-                    entityId: bl.id,
+                      entityId: bl.id,
                     entityType: 'BlanketPO'
                   }
                 });
@@ -221,8 +218,7 @@ export async function GET(req: Request) {
                     title,
                     message: msg,
                     timestamp: new Date().toISOString(),
-                    read: false,
-                    entityId: doc.id,
+                      entityId: doc.id,
                     entityType: 'ComplianceDoc'
                   }
                 });
@@ -248,7 +244,6 @@ export async function GET(req: Request) {
                   title,
                   message: `Scheduled maintenance due for asset '${ast.name}' (${ast.location || 'Main Site'}).`,
                   timestamp: new Date().toISOString(),
-                  read: false,
                   entityId: ast.id,
                   entityType: 'Asset'
                 }
@@ -326,6 +321,44 @@ export async function GET(req: Request) {
     // Convert FX rates array to Record<string, number>
     const fxRates = dbFxRates.reduce((acc, curr) => ({ ...acc, [curr.currency]: curr.rate }), {});
 
+    // Fetch user isolated states and initialize missing ones
+    const userNotifs = await db.userNotification.findMany({
+      where: { userId: session.userId }
+    });
+    const userNotifMap = new Map(userNotifs.map((un: any) => [un.notificationId, un]));
+    const missingNotifs = notifications.filter((n: any) => !userNotifMap.has(n.id));
+    if (missingNotifs.length > 0) {
+      const newStates = [];
+      for (const notif of missingNotifs) {
+        const userNotifState = await db.userNotification.create({
+          data: {
+            id: `${notif.id}_${session.userId}`,
+            userId: session.userId,
+            notificationId: notif.id,
+            isRead: false,
+            actionState: 'PENDING',
+            actionResult: ''
+          }
+        });
+        newStates.push(userNotifState);
+      }
+      userNotifs.push(...newStates);
+    }
+
+    const mappedNotifications = notifications.map((notif: any) => {
+      const userState = userNotifs.find((un: any) => un.notificationId === notif.id) || {
+        isRead: false,
+        actionState: 'PENDING',
+        actionResult: ''
+      };
+      return {
+        ...notif,
+        read: userState.isRead,
+        actionState: userState.actionState,
+        actionResult: userState.actionResult
+      };
+    });
+
     return NextResponse.json({
       users: users.map(u => ({
         id: u.id,
@@ -350,7 +383,7 @@ export async function GET(req: Request) {
       contracts,
       invoices,
       blanketPOs,
-      notifications,
+      notifications: mappedNotifications,
       auditLogs,
       complianceDocs,
       disputes,

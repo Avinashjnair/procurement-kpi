@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { getTenantDb } from '@/lib/dbManager';
 import { getAuthSession } from '@/lib/auth';
+import { runThreeWayMatch as runThreeWayMatchEngine } from '@/lib/matchingEngine';
 
 export async function POST(req: Request) {
   try {
@@ -55,7 +56,9 @@ export async function POST(req: Request) {
       title: string,
       message: string,
       entityId: string,
-      entityType: string
+      entityType: string,
+      actionType: string = "",
+      actionPayload: any = null
     ) => {
       try {
         let eventType = `${source.toLowerCase()}_alert`;
@@ -78,12 +81,31 @@ export async function POST(req: Request) {
             title,
             message,
             timestamp: new Date().toISOString(),
-            read: false,
             entityId,
             entityType,
+            actionType,
+            actionPayload: actionPayload ? (typeof actionPayload === 'string' ? JSON.parse(actionPayload) : actionPayload) : null
           },
         });
-        newNotifications.push(notif);
+
+        // Seed user notification immediately
+        const userNotif = await db.userNotification.create({
+          data: {
+            id: `${notif.id}_${session.userId}`,
+            userId: session.userId,
+            notificationId: notif.id,
+            isRead: false,
+            actionState: 'PENDING',
+            actionResult: ''
+          }
+        });
+
+        newNotifications.push({
+          ...notif,
+          read: userNotif.isRead,
+          actionState: userNotif.actionState,
+          actionResult: userNotif.actionResult
+        });
       } catch (err) {
         console.error('Failed to create notification:', err);
       }
@@ -152,52 +174,20 @@ export async function POST(req: Request) {
     // available accepted quantities can change the match outcome for any invoice already recorded
     // against this PO. The PO's own matchStatus is always recomputed as an aggregate of all its invoices.
     const runThreeWayMatch = async (poId: string, invoiceId?: string) => {
-      try {
-        const po = await db.purchaseOrder.findUnique({ where: { id: poId } });
-        if (!po) return 'Missing PO';
-
-        const invoicesToMatch = invoiceId
-          ? await db.invoice.findMany({ where: { id: invoiceId } })
-          : await db.invoice.findMany({ where: { poId } });
-
-        if (invoicesToMatch.length === 0) {
-          const grn = await db.gRN.findFirst({ where: { poId, status: 'Approved' } });
-          const matchStatus = grn ? 'Pending' : 'Missing GRN';
-          await db.purchaseOrder.update({ where: { id: poId }, data: { matchStatus } });
-          return matchStatus;
-        }
-
-        let lastStatus = 'Pending';
-        for (const invoice of invoicesToMatch) {
-          lastStatus = await matchInvoiceToGRN(po, invoice);
-          await db.invoice.update({
-            where: { id: invoice.id },
-            data: { matchStatus: lastStatus, status: lastStatus === 'Full Match' ? 'Matched' : 'Variance' },
-          });
-
-          if (lastStatus === 'Variance') {
-            await createAppNotification(
-              'alert',
-              'Invoice',
-              '3-Way Match Variance',
-              `3-Way Match Failed: Price/Quantity variance on Invoice #${invoice.id} for PO #${poId}.`,
-              invoice.id,
-              'Invoice'
-            );
-          }
-        }
-
-        // Recompute the PO-level aggregate from every invoice on the PO (not just the one(s) just
-        // rechecked), so the PO's overall status always reflects everything billed against it.
-        const allInvoices = await db.invoice.findMany({ where: { poId } });
-        const poMatchStatus = aggregatePoMatchStatus(allInvoices.map((i: any) => i.matchStatus));
-        await db.purchaseOrder.update({ where: { id: poId }, data: { matchStatus: poMatchStatus } });
-
-        return invoiceId ? lastStatus : poMatchStatus;
-      } catch (err) {
-        console.error('3-Way Match calculation failed:', err);
-        return 'Pending';
+      const matchResult = await runThreeWayMatchEngine(db, poId, invoiceId);
+      
+      // Send notifications for any newly failed matches
+      if (invoiceId && matchResult === 'Variance') {
+        await createAppNotification(
+          'alert',
+          'Invoice',
+          '3-Way Match Variance',
+          `3-Way Match Failed: Price/Quantity variance on Invoice #${invoiceId} for PO #${poId}.`,
+          invoiceId,
+          'Invoice'
+        );
       }
+      return matchResult;
     };
 
     switch (action) {
@@ -418,7 +408,9 @@ export async function POST(req: Request) {
           'PO Approval Required',
           `PO #${payload.id} ($${payload.totalAmount.toLocaleString()}) from ${payload.supplierName || 'Supplier'} submitted for approval by ${session.name}.`,
           payload.id,
-          'PO'
+          'PO',
+          'APPROVE_PO',
+          { poId: payload.id }
         );
         break;
       }
@@ -998,11 +990,45 @@ export async function POST(req: Request) {
           }
         }
 
-        // Close PO delivery status to Delivered
-        await db.purchaseOrder.update({
-          where: { id: grn.poId },
-          data: { deliveryStatus: 'Delivered' },
-        });
+        // Update PO line-item ledger and status dynamically
+        const po = await db.purchaseOrder.findUnique({ where: { id: grn.poId } });
+        if (po) {
+          const poItems = Array.isArray(po.items) ? JSON.parse(JSON.stringify(po.items)) : [];
+          
+          // Match GRN accepted quantities and update PO item deliveredQty
+          for (const line of lineItems as any[]) {
+            const matchIndex = poItems.findIndex((item: any) => item.itemId === line.itemId);
+            if (matchIndex !== -1) {
+              const currentDelQty = poItems[matchIndex].deliveredQty || 0;
+              poItems[matchIndex].deliveredQty = currentDelQty + line.acceptedQty;
+            }
+          }
+
+          // Calculate overall PO delivery status
+          let totalOrdered = 0;
+          let totalDelivered = 0;
+          for (const item of poItems as any[]) {
+            totalOrdered += item.quantity || 0;
+            totalDelivered += item.deliveredQty || 0;
+          }
+
+          let newDeliveryStatus = po.deliveryStatus;
+          if (totalDelivered === 0) {
+            newDeliveryStatus = 'Approved';
+          } else if (totalDelivered < totalOrdered) {
+            newDeliveryStatus = 'Partially Delivered';
+          } else {
+            newDeliveryStatus = 'Delivered';
+          }
+
+          await db.purchaseOrder.update({
+            where: { id: grn.poId },
+            data: {
+              items: poItems,
+              deliveryStatus: newDeliveryStatus,
+            },
+          });
+        }
 
         result = await db.gRN.update({
           where: { id: payload.id },
@@ -1180,27 +1206,84 @@ export async function POST(req: Request) {
 
       // ── Notifications ────────────────────────────────────────
       case 'ADD_NOTIFICATION': {
-        result = await db.appNotification.create({
+        const notif = await db.appNotification.create({
           data: {
-            ...payload,
+            type: payload.type,
+            source: payload.source,
+            title: payload.title,
+            message: payload.message,
             timestamp: new Date().toISOString(),
-            read: false,
+            actionType: payload.actionType || "",
+            actionPayload: payload.actionPayload || null,
+            entityId: payload.entityId || "",
+            entityType: payload.entityType || ""
           },
         });
+        const userNotif = await db.userNotification.create({
+          data: {
+            id: `${notif.id}_${session.userId}`,
+            userId: session.userId,
+            notificationId: notif.id,
+            isRead: false,
+            actionState: 'PENDING',
+            actionResult: ''
+          }
+        });
+        result = {
+          ...notif,
+          read: userNotif.isRead,
+          actionState: userNotif.actionState,
+          actionResult: userNotif.actionResult
+        };
         break;
       }
       case 'MARK_NOTIFICATION_READ': {
-        result = await db.appNotification.update({
-          where: { id: payload.id },
-          data: { read: true },
+        const userNotif = await db.userNotification.upsert({
+          where: {
+            userId_notificationId: {
+              userId: session.userId,
+              notificationId: payload.id
+            }
+          },
+          update: { isRead: true, readAt: new Date() },
+          create: {
+            id: `${payload.id}_${session.userId}`,
+            userId: session.userId,
+            notificationId: payload.id,
+            isRead: true,
+            readAt: new Date()
+          }
         });
+        const notif = await db.appNotification.findUnique({ where: { id: payload.id } });
+        result = {
+          ...notif,
+          read: userNotif.isRead,
+          actionState: userNotif.actionState,
+          actionResult: userNotif.actionResult
+        };
         break;
       }
       case 'MARK_ALL_NOTIFICATIONS_READ': {
-        result = await db.appNotification.updateMany({
-          where: { read: false },
-          data: { read: true },
-        });
+        const allNotifs = await db.appNotification.findMany();
+        for (const notif of allNotifs) {
+          await db.userNotification.upsert({
+            where: {
+              userId_notificationId: {
+                userId: session.userId,
+                notificationId: notif.id
+              }
+            },
+            update: { isRead: true, readAt: new Date() },
+            create: {
+              id: `${notif.id}_${session.userId}`,
+              userId: session.userId,
+              notificationId: notif.id,
+              isRead: true,
+              readAt: new Date()
+            }
+          });
+        }
+        result = { success: true };
         break;
       }
       case 'TOGGLE_NOTIFICATION_RULE': {

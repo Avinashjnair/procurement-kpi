@@ -515,38 +515,59 @@ function PODetail({ poId }: { poId: string }) {
         <div className="card-header"><div className="card-title">Line Items</div></div>
         <div className="data-table-wrapper">
           <table className="data-table">
-            <thead><tr><th>#</th><th>Item</th><th>Qty</th><th>Unit Price</th><th>Total</th></tr></thead>
+            <thead><tr><th>#</th><th>Item</th><th>Ordered Qty</th><th>Delivered Qty</th><th>Remaining Qty</th><th>Fulfillment</th><th>Unit Price</th><th>Total</th></tr></thead>
             <tbody>
-              {po.items.map((item, i) => (
-                <tr key={i}>
-                  <td style={{ color: 'var(--text-muted)' }}>{i + 1}</td>
-                  <td>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                      {item.isService && <Wrench size={12} style={{ color: '#a78bfa' }} />}
-                      <span style={{ fontWeight: 600, color: '#f1f5f9' }}>{item.itemName}</span>
-                    </div>
-                    {item.description && (
-                      <div style={{ fontSize: 11, color: 'var(--text-secondary)', paddingLeft: 18, whiteSpace: 'pre-line' }}>
-                        {item.description}
+              {po.items.map((item, i) => {
+                const delQty = item.deliveredQty || 0;
+                const remQty = Math.max(0, item.quantity - delQty);
+                const pct = Math.round((delQty / item.quantity) * 100);
+                return (
+                  <tr key={i}>
+                    <td style={{ color: 'var(--text-muted)' }}>{i + 1}</td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {item.isService && <Wrench size={12} style={{ color: '#a78bfa' }} />}
+                        <span style={{ fontWeight: 600, color: '#f1f5f9' }}>{item.itemName}</span>
                       </div>
-                    )}
-                    {item.isService && item.serviceDetails && (
-                      <div style={{ fontSize: 11, color: 'var(--text-muted)', paddingLeft: 18 }}>
-                        {item.serviceDetails.billingType} · {item.serviceDetails.duration}
+                      {item.description && (
+                        <div style={{ fontSize: 11, color: 'var(--text-secondary)', paddingLeft: 18, whiteSpace: 'pre-line' }}>
+                          {item.description}
+                        </div>
+                      )}
+                      {item.isService && item.serviceDetails && (
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', paddingLeft: 18 }}>
+                          {item.serviceDetails.billingType} · {item.serviceDetails.duration}
+                        </div>
+                      )}
+                    </td>
+                    <td>{item.quantity.toLocaleString()}</td>
+                    <td>{delQty.toLocaleString()}</td>
+                    <td style={{ color: remQty > 0 ? 'var(--text-secondary)' : '#10b981' }}>{remQty.toLocaleString()}</td>
+                    <td>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <div style={{ width: 60, height: 6, borderRadius: 3, background: 'rgba(255,255,255,0.05)', overflow: 'hidden', display: 'inline-block' }}>
+                          <div style={{
+                            width: `${Math.min(100, pct)}%`,
+                            height: '100%',
+                            background: delQty >= item.quantity ? '#10b981' : '#f59e0b'
+                          }} />
+                        </div>
+                        <span style={{ fontSize: 10, color: 'var(--text-secondary)' }}>
+                          {pct}%
+                        </span>
                       </div>
-                    )}
-                  </td>
-                  <td>{item.quantity.toLocaleString()}</td>
-                  <td className="font-mono">${item.unitPrice.toFixed(2)}</td>
-                  <td className="font-mono" style={{ fontWeight: 600, color: '#f1f5f9' }}>
-                    ${(item.quantity * item.unitPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="font-mono">${item.unitPrice.toFixed(2)}</td>
+                    <td className="font-mono" style={{ fontWeight: 600, color: '#f1f5f9' }}>
+                      ${(item.quantity * item.unitPrice).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
             <tfoot>
               <tr>
-                <td colSpan={4} style={{ textAlign: 'right', fontWeight: 700, fontSize: 12, color: '#f1f5f9', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Grand Total</td>
+                <td colSpan={7} style={{ textAlign: 'right', fontWeight: 700, fontSize: 12, color: '#f1f5f9', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Grand Total</td>
                 <td className="font-mono" style={{ fontWeight: 800, fontSize: 15, color: 'var(--accent-indigo)' }}>${po.totalAmount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
               </tr>
             </tfoot>

@@ -417,17 +417,32 @@ model ComplianceDocument {
 
 // ── Utilities ────────────────────────────────────────────────
 
+model UserNotification {
+  id              String   @id @default(cuid())
+  userId          String   // The specific user this notification belongs to
+  notificationId  String   // Links to AppNotification
+  isRead          Boolean  @default(false)
+  readAt          DateTime?
+  actionState     String   @default("PENDING") // PENDING, COMPLETED, FAILED
+  actionResult    String?  @default("") // E.g., "Approved by Manager"
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([userId, notificationId])
+}
+
 model AppNotification {
-  id         String   @id @default(cuid())
-  type       String   // NotificationType
-  source     String   // NotificationSource
-  title      String
-  message    String
-  timestamp  String
-  read       Boolean  @default(false)
-  entityId   String
-  entityType String
-  createdAt  DateTime @default(now())
+  id            String   @id @default(cuid())
+  type          String   // NotificationType
+  source        String   // NotificationSource
+  title         String
+  message       String
+  timestamp     String
+  actionType    String?  @default("") // e.g., 'APPROVE_PO', 'REVIEW_VARIANCE'
+  actionPayload Json?                // { poId: '123', requiredRole: 'manager' }
+  entityId      String
+  entityType    String
+  createdAt     DateTime @default(now())
 }
 
 model NotificationRule {
