@@ -7,6 +7,7 @@ import {
   Smartphone, ShieldCheck, ShoppingCart, CreditCard,
   FileBadge, HardDrive, UserPlus
 } from 'lucide-react';
+import { ActionRegistry } from '@/components/Notifications/ActionRegistry';
 
 export default function NotificationsPage() {
   const {
@@ -118,8 +119,18 @@ export default function NotificationsPage() {
                     </span>
                   </div>
                   <p className="notif-message">{n.message}</p>
+                  <ActionRegistry
+                    notificationId={n.id}
+                    actionType={n.actionType}
+                    actionPayload={n.actionPayload}
+                    actionState={n.actionState || 'PENDING'}
+                    actionResult={n.actionResult}
+                    onActionCompleted={() => {
+                      window.location.reload();
+                    }}
+                  />
                 </div>
-                {!n.read && <div className="unread-dot" />}
+                {!n.read && <div className="unread-dot" style={{ top: '24px', transform: 'none' }} />}
               </div>
             )) : (
               <div className="empty-state">

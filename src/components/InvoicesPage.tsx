@@ -291,6 +291,40 @@ function InvoiceDetailModal({ invoice, onClose }: { invoice: Invoice; onClose: (
           </table>
         </div>
 
+        {invoice.matchStatus === 'Variance' && invoice.matchReport && (() => {
+          try {
+            const reports = JSON.parse(invoice.matchReport);
+            if (Array.isArray(reports) && reports.length > 0) {
+              return (
+                <div style={{ marginBottom: 18, padding: 14, borderRadius: 8, background: 'rgba(244,63,94,0.06)', border: '1px solid rgba(244,63,94,0.15)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, color: '#f43f5e', fontSize: 13, marginBottom: 8 }}>
+                    <AlertTriangle size={15} />
+                    <span>3-Way Match Variance Details</span>
+                  </div>
+                  <ul style={{ paddingLeft: 18, margin: 0, fontSize: 12, color: '#fda4af', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {reports.map((report: any, idx: number) => (
+                      <li key={idx}>
+                        <strong>[{report.type} Variance]</strong> {report.message}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            }
+          } catch (e) {
+            return (
+              <div style={{ marginBottom: 18, padding: 14, borderRadius: 8, background: 'rgba(244,63,94,0.06)', border: '1px solid rgba(244,63,94,0.15)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontWeight: 700, color: '#f43f5e', fontSize: 13, marginBottom: 8 }}>
+                  <AlertTriangle size={15} />
+                  <span>3-Way Match Variance Details</span>
+                </div>
+                <div style={{ fontSize: 12, color: '#fda4af' }}>{invoice.matchReport}</div>
+              </div>
+            );
+          }
+          return null;
+        })()}
+
         <div>
           <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.7px', marginBottom: 10 }}>Attached Documents</div>
           {linkedDocs.length === 0 ? (

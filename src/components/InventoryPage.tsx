@@ -28,14 +28,19 @@ function StockBar({ current, reorder, max }: { current: number; reorder: number;
 
 // Adjust stock modal (manager only)
 function AdjustModal({ stockItemId, itemName, current, onClose }: { stockItemId: string; itemName: string; current: number; onClose: () => void }) {
-  const { adjustStock } = useApp();
-  const [type, setType] = useState<'add' | 'remove'>('add');
+  const { adjustStock, consumeStock } = useApp();
+  const [type, setType] = useState<'add' | 'remove' | 'issue'>('add');
   const [qty, setQty]   = useState('');
   const [reason, setReason] = useState('');
 
   const handle = () => {
-    const delta = type === 'add' ? parseInt(qty) : -parseInt(qty);
-    adjustStock(stockItemId, delta, reason);
+    const q = parseInt(qty);
+    if (type === 'issue') {
+      consumeStock(stockItemId, q, reason);
+    } else {
+      const delta = type === 'add' ? q : -q;
+      adjustStock(stockItemId, delta, reason);
+    }
     onClose();
   };
 
@@ -50,11 +55,11 @@ function AdjustModal({ stockItemId, itemName, current, onClose }: { stockItemId:
           Current stock: <span style={{ color: 'var(--accent-indigo)' }}>{current}</span>
         </div>
         <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-          {(['add','remove'] as const).map(t => (
+          {(['add', 'remove', 'issue'] as const).map(t => (
             <button key={t} type="button" onClick={() => setType(t)}
-              style={{ flex: 1, padding: '9px', borderRadius: 10, border: `1px solid ${type === t ? (t === 'add' ? 'rgba(16,185,129,0.4)' : 'rgba(244,63,94,0.4)') : 'var(--border-color)'}`, background: type === t ? (t === 'add' ? 'rgba(16,185,129,0.08)' : 'rgba(244,63,94,0.08)') : 'var(--bg-card)', color: type === t ? (t === 'add' ? '#10b981' : '#f43f5e') : 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-              {t === 'add' ? <ArrowUpCircle size={15} /> : <ArrowDownCircle size={15} />}
-              {t === 'add' ? 'Add Stock' : 'Remove Stock'}
+              style={{ flex: 1, padding: '9px', borderRadius: 10, border: `1px solid ${type === t ? (t === 'add' ? 'rgba(16,185,129,0.4)' : t === 'remove' ? 'rgba(244,63,94,0.4)' : 'rgba(239,68,68,0.4)') : 'var(--border-color)'}`, background: type === t ? (t === 'add' ? 'rgba(16,185,129,0.08)' : t === 'remove' ? 'rgba(244,63,94,0.08)' : 'rgba(239,68,68,0.08)') : 'var(--bg-card)', color: type === t ? (t === 'add' ? '#10b981' : t === 'remove' ? '#f43f5e' : '#ef4444') : 'var(--text-secondary)', cursor: 'pointer', fontFamily: 'inherit', fontSize: 12, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4 }}>
+              {t === 'add' ? <ArrowUpCircle size={14} /> : t === 'remove' ? <ArrowDownCircle size={14} /> : <TrendingDown size={14} />}
+              {t === 'add' ? 'Add' : t === 'remove' ? 'Adjust Down' : 'Consume (Issue)'}
             </button>
           ))}
         </div>
@@ -66,7 +71,7 @@ function AdjustModal({ stockItemId, itemName, current, onClose }: { stockItemId:
         </div>
         <div className="form-group">
           <label className="form-label">Reason *</label>
-          <input type="text" className="form-input" value={reason} onChange={e => setReason(e.target.value)} placeholder="e.g., Physical count correction, damaged goods, etc." />
+          <input type="text" className="form-input" value={reason} onChange={e => setReason(e.target.value)} placeholder="e.g., Job order production issue, count correction, etc." />
         </div>
         {qty && reason && (
           <div style={{ padding: '10px 14px', borderRadius: 10, background: 'rgba(99,102,241,0.05)', fontSize: 13, color: 'var(--text-secondary)', marginBottom: 14 }}>

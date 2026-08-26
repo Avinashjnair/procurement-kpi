@@ -276,6 +276,7 @@ export interface POItem {
   isAsset?: boolean;
   serviceDetails?: ServicePOLineDetails;
   deliveredQty: number; // For partial delivery tracking
+  billedQty?: number;   // For split invoicing tracking
 }
 
 export interface PurchaseOrder {
@@ -674,6 +675,7 @@ export interface Invoice {
   notes?: string;
   expectedPaymentDate?: string;
   invoiceFileName?: string;
+  matchReport?: string;         // Stringified detailed matching variance report
 }
 
 export interface ComplianceDocument {
@@ -784,6 +786,10 @@ export interface AppNotification {
   read: boolean;
   entityId: string;
   entityType: string;
+  actionType?: string | null;
+  actionPayload?: any;
+  actionState?: string;
+  actionResult?: string | null;
 }
 
 export interface NotificationRule {

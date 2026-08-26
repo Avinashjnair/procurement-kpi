@@ -8,6 +8,7 @@ import {
   Send, BarChart2, PackageCheck, Boxes, LogOut, ShieldCheck, Landmark, Wrench,
   Banknote, BarChart, BarChart3, Building2,
 } from 'lucide-react';
+import { ActionRegistry } from '@/components/Notifications/ActionRegistry';
 
 const navItems: { id: string; label: string; icon: any; permission: string; section: string; tier?: string }[] = [
   { id: 'dashboard',       label: 'Operational Dashboard', icon: LayoutDashboard, permission: 'view_dashboard',        section: 'Core' },
@@ -183,6 +184,16 @@ export default function Sidebar() {
                         <div className="notif-details">
                           <div className="notif-title">{n.title}</div>
                           <div className="notif-meta">{n.source} • {new Date(n.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                          <ActionRegistry
+                            notificationId={n.id}
+                            actionType={n.actionType}
+                            actionPayload={n.actionPayload}
+                            actionState={n.actionState || 'PENDING'}
+                            actionResult={n.actionResult}
+                            onActionCompleted={() => {
+                              window.location.reload();
+                            }}
+                          />
                         </div>
                       </div>
                     ))}

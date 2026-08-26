@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import { getTenantDb } from '@/lib/dbManager';
 import { getAuthSession } from '@/lib/auth';
+import { runThreeWayMatch as runThreeWayMatchEngine } from '@/lib/matchingEngine';
 
 export async function POST(req: Request) {
   try {
@@ -47,6 +48,68 @@ export async function POST(req: Request) {
     }
 
     let result: any = null;
+    const newNotifications: any[] = [];
+
+    const createAppNotification = async (
+      type: 'info' | 'warning' | 'alert' | 'success',
+      source: string,
+      title: string,
+      message: string,
+      entityId: string,
+      entityType: string,
+      actionType: string = "",
+      actionPayload: any = null
+    ) => {
+      try {
+        let eventType = `${source.toLowerCase()}_alert`;
+        if (source === 'PO' && type === 'alert') eventType = 'po_approval';
+        if (source === 'GRN' && type === 'alert') eventType = 'grn_alert';
+        if (source === 'Invoice' && type === 'alert') eventType = 'invoice_alert';
+        if (source === 'Supplier' && type === 'alert') eventType = 'supplier_alert';
+        if (source === 'RFQ' && type === 'alert') eventType = 'rfq_alert';
+        if (source === 'Payment' && type === 'alert') eventType = 'payment_alert';
+
+        const rule = await db.notificationRule.findFirst({
+          where: { eventType }
+        });
+        if (rule && !rule.enabled) return;
+
+        const notif = await db.appNotification.create({
+          data: {
+            type,
+            source,
+            title,
+            message,
+            timestamp: new Date().toISOString(),
+            entityId,
+            entityType,
+            actionType,
+            actionPayload: actionPayload ? (typeof actionPayload === 'string' ? JSON.parse(actionPayload) : actionPayload) : null
+          },
+        });
+
+        // Seed user notification immediately
+        const userNotif = await db.userNotification.create({
+          data: {
+            id: `${notif.id}_${session.userId}`,
+            userId: session.userId,
+            notificationId: notif.id,
+            isRead: false,
+            actionState: 'PENDING',
+            actionResult: ''
+          }
+        });
+
+        newNotifications.push({
+          ...notif,
+          read: userNotif.isRead,
+          actionState: userNotif.actionState,
+          actionResult: userNotif.actionResult
+        });
+      } catch (err) {
+        console.error('Failed to create notification:', err);
+      }
+    };
 
     // Helper to log audit trail
     const logAudit = async (entityType: string, entityId: string, auditAction: string, description: string) => {
@@ -111,41 +174,20 @@ export async function POST(req: Request) {
     // available accepted quantities can change the match outcome for any invoice already recorded
     // against this PO. The PO's own matchStatus is always recomputed as an aggregate of all its invoices.
     const runThreeWayMatch = async (poId: string, invoiceId?: string) => {
-      try {
-        const po = await db.purchaseOrder.findUnique({ where: { id: poId } });
-        if (!po) return 'Missing PO';
-
-        const invoicesToMatch = invoiceId
-          ? await db.invoice.findMany({ where: { id: invoiceId } })
-          : await db.invoice.findMany({ where: { poId } });
-
-        if (invoicesToMatch.length === 0) {
-          const grn = await db.gRN.findFirst({ where: { poId, status: 'Approved' } });
-          const matchStatus = grn ? 'Pending' : 'Missing GRN';
-          await db.purchaseOrder.update({ where: { id: poId }, data: { matchStatus } });
-          return matchStatus;
-        }
-
-        let lastStatus = 'Pending';
-        for (const invoice of invoicesToMatch) {
-          lastStatus = await matchInvoiceToGRN(po, invoice);
-          await db.invoice.update({
-            where: { id: invoice.id },
-            data: { matchStatus: lastStatus, status: lastStatus === 'Full Match' ? 'Matched' : 'Variance' },
-          });
-        }
-
-        // Recompute the PO-level aggregate from every invoice on the PO (not just the one(s) just
-        // rechecked), so the PO's overall status always reflects everything billed against it.
-        const allInvoices = await db.invoice.findMany({ where: { poId } });
-        const poMatchStatus = aggregatePoMatchStatus(allInvoices.map((i: any) => i.matchStatus));
-        await db.purchaseOrder.update({ where: { id: poId }, data: { matchStatus: poMatchStatus } });
-
-        return invoiceId ? lastStatus : poMatchStatus;
-      } catch (err) {
-        console.error('3-Way Match calculation failed:', err);
-        return 'Pending';
+      const matchResult = await runThreeWayMatchEngine(db, poId, invoiceId);
+      
+      // Send notifications for any newly failed matches
+      if (invoiceId && matchResult === 'Variance') {
+        await createAppNotification(
+          'alert',
+          'Invoice',
+          '3-Way Match Variance',
+          `3-Way Match Failed: Price/Quantity variance on Invoice #${invoiceId} for PO #${poId}.`,
+          invoiceId,
+          'Invoice'
+        );
       }
+      return matchResult;
     };
 
     switch (action) {
@@ -224,6 +266,16 @@ export async function POST(req: Request) {
           },
         });
         await logAudit('Supplier', payload.id, 'Create', `Registered supplier: ${payload.name}`);
+        if (payload.status === 'Pending' || result.status === 'Pending') {
+          await createAppNotification(
+            'alert',
+            'Supplier',
+            'Vendor Registration Pending',
+            `New Vendor Onboarding: '${result.name}' submitted onboarding request.`,
+            result.id,
+            'Supplier'
+          );
+        }
         break;
       }
       case 'UPDATE_SUPPLIER': {
@@ -350,6 +402,16 @@ export async function POST(req: Request) {
         }
 
         await logAudit('PO', payload.id, 'Create', `Created${payload.blanketPoId ? ' Release' : ''} PO: ${payload.id}`);
+        await createAppNotification(
+          'alert',
+          'PO',
+          'PO Approval Required',
+          `PO #${payload.id} ($${payload.totalAmount.toLocaleString()}) from ${payload.supplierName || 'Supplier'} submitted for approval by ${session.name}.`,
+          payload.id,
+          'PO',
+          'APPROVE_PO',
+          { poId: payload.id }
+        );
         break;
       }
       case 'UPDATE_PO': {
@@ -477,6 +539,17 @@ export async function POST(req: Request) {
           'StatusChange',
           `Supplier acknowledged PO (${ackStatus})${payload.acknowledgedBy ? ' by ' + payload.acknowledgedBy : ''}${payload.notes ? ' — ' + payload.notes : ''}`
         );
+
+        if (ackStatus === 'Acknowledged with Exceptions') {
+          await createAppNotification(
+            'warning',
+            'PO',
+            'PO Ack with Exceptions',
+            `${result.supplierName} acknowledged PO #${payload.poId} with exceptions: ${payload.notes || 'Date/Scope changes'}.`,
+            payload.poId,
+            'PO'
+          );
+        }
         break;
       }
       case 'UPDATE_SHIPMENT': {
@@ -496,6 +569,14 @@ export async function POST(req: Request) {
           'StatusChange',
           `Shipment confirmed by supplier — carrier: ${payload.carrier || '—'}, tracking: ${payload.trackingNumber || '—'}${payload.estimatedDelivery ? `, ETA: ${payload.estimatedDelivery}` : ''}`
         );
+        await createAppNotification(
+          'info',
+          'PO',
+          'PO Shipment Dispatched',
+          `${result.supplierName} dispatched shipment for PO #${payload.poId} via ${payload.carrier || 'Carrier'} (Tracking: ${payload.trackingNumber || '—'}).`,
+          payload.poId,
+          'PO'
+        );
         break;
       }
       case 'REQUEST_AMENDMENT': {
@@ -509,6 +590,14 @@ export async function POST(req: Request) {
           where: { id: payload.poId },
           data: { amendmentRequest: amendment },
         });
+        await createAppNotification(
+          'alert',
+          'PO',
+          'PO Amendment Requested',
+          `${result.supplierName} requested amendment on PO #${payload.poId}: ${payload.request.reason || 'Qty/Date change'}.`,
+          payload.poId,
+          'PO'
+        );
         break;
       }
       case 'UPDATE_DELIVERED_QTY': {
@@ -561,6 +650,17 @@ export async function POST(req: Request) {
             where: { id: payload.record.poId },
             data: { paymentRecords: newRecords },
           });
+        }
+
+        if (payload.record.status === 'Pending Approval' || payload.record.status === 'Pending') {
+          await createAppNotification(
+            'alert',
+            'Payment',
+            'Payment Approval Required',
+            `Payment of $${payload.record.amount.toLocaleString()} for PO #${payload.record.poId} recorded by ${session.name} requires approval.`,
+            payload.record.poId,
+            'Payment'
+          );
         }
         break;
       }
@@ -703,6 +803,14 @@ export async function POST(req: Request) {
             evaluation: payload.evaluation || {},
           },
         });
+        await createAppNotification(
+          'info',
+          'RFQ',
+          'New Quotation/Bid Received',
+          `${result.supplierName} submitted a quotation of $${result.totalAmount.toLocaleString()} for RFQ #${result.rfqId}.`,
+          result.rfqId,
+          'RFQ'
+        );
         break;
       }
       case 'UPDATE_QUOTATION': {
@@ -745,6 +853,14 @@ export async function POST(req: Request) {
             status: 'Evaluated',
           },
         });
+        await createAppNotification(
+          'alert',
+          'RFQ',
+          'RFQ Evaluation Completed',
+          `Evaluation completed for ${result.supplierName}'s quote on RFQ #${rfq.id} (Score: ${totalScore}/100).`,
+          rfq.id,
+          'RFQ'
+        );
         break;
       }
       case 'ADD_NEGOTIATION_MESSAGE': {
@@ -772,6 +888,16 @@ export async function POST(req: Request) {
             lineItems: payload.lineItems || [],
           },
         });
+        if (result.status === 'Submitted') {
+          await createAppNotification(
+            'alert',
+            'GRN',
+            'GRN Pending Approval',
+            `GRN #${result.id} against PO #${result.poId} submitted for approval.`,
+            result.id,
+            'GRN'
+          );
+        }
         break;
       }
       case 'UPDATE_GRN': {
@@ -794,6 +920,14 @@ export async function POST(req: Request) {
           where: { id: payload.id },
           data: { status: 'Submitted' },
         });
+        await createAppNotification(
+          'alert',
+          'GRN',
+          'GRN Pending Approval',
+          `GRN #${result.id} against PO #${result.poId} submitted for approval.`,
+          result.id,
+          'GRN'
+        );
         break;
       }
       case 'APPROVE_GRN': {
@@ -856,11 +990,45 @@ export async function POST(req: Request) {
           }
         }
 
-        // Close PO delivery status to Delivered
-        await db.purchaseOrder.update({
-          where: { id: grn.poId },
-          data: { deliveryStatus: 'Delivered' },
-        });
+        // Update PO line-item ledger and status dynamically
+        const po = await db.purchaseOrder.findUnique({ where: { id: grn.poId } });
+        if (po) {
+          const poItems = Array.isArray(po.items) ? JSON.parse(JSON.stringify(po.items)) : [];
+          
+          // Match GRN accepted quantities and update PO item deliveredQty
+          for (const line of lineItems as any[]) {
+            const matchIndex = poItems.findIndex((item: any) => item.itemId === line.itemId);
+            if (matchIndex !== -1) {
+              const currentDelQty = poItems[matchIndex].deliveredQty || 0;
+              poItems[matchIndex].deliveredQty = currentDelQty + line.acceptedQty;
+            }
+          }
+
+          // Calculate overall PO delivery status
+          let totalOrdered = 0;
+          let totalDelivered = 0;
+          for (const item of poItems as any[]) {
+            totalOrdered += item.quantity || 0;
+            totalDelivered += item.deliveredQty || 0;
+          }
+
+          let newDeliveryStatus = po.deliveryStatus;
+          if (totalDelivered === 0) {
+            newDeliveryStatus = 'Approved';
+          } else if (totalDelivered < totalOrdered) {
+            newDeliveryStatus = 'Partially Delivered';
+          } else {
+            newDeliveryStatus = 'Delivered';
+          }
+
+          await db.purchaseOrder.update({
+            where: { id: grn.poId },
+            data: {
+              items: poItems,
+              deliveryStatus: newDeliveryStatus,
+            },
+          });
+        }
 
         result = await db.gRN.update({
           where: { id: payload.id },
@@ -872,6 +1040,19 @@ export async function POST(req: Request) {
           },
         });
         await runThreeWayMatch(grn.poId);
+
+        const rejectedItems = lineItems.filter((line: any) => (line.rejectedQty || 0) > 0);
+        if (rejectedItems.length > 0) {
+          const totalRejected = rejectedItems.reduce((acc: number, line: any) => acc + (line.rejectedQty || 0), 0);
+          await createAppNotification(
+            'alert',
+            'GRN',
+            'Quality Rejection (QA Fail)',
+            `Quality Alert: ${totalRejected} units rejected on GRN #${grn.id} for PO #${grn.poId}.`,
+            grn.id,
+            'GRN'
+          );
+        }
         break;
       }
       case 'REJECT_GRN': {
@@ -893,6 +1074,7 @@ export async function POST(req: Request) {
         if (!stock) throw new Error('Stock item not found');
         const today = new Date().toISOString().split('T')[0];
         const newBalance = Math.max(0, stock.currentStock + payload.delta);
+        const mType = payload.movementType || 'Adjustment';
 
         await db.stockItem.update({
           where: { id: payload.stockItemId },
@@ -907,9 +1089,9 @@ export async function POST(req: Request) {
             stockItemId: payload.stockItemId,
             itemId: stock.itemId,
             itemName: stock.itemName,
-            movementType: 'Adjustment',
+            movementType: mType,
             quantity: payload.delta,
-            referenceId: `ADJ-${Date.now()}`,
+            referenceId: payload.referenceId || `${mType === 'Issue' ? 'ISS' : 'ADJ'}-${Date.now()}`,
             date: today,
             performedBy: session.userId,
             balanceAfter: newBalance,
@@ -1025,27 +1207,84 @@ export async function POST(req: Request) {
 
       // ── Notifications ────────────────────────────────────────
       case 'ADD_NOTIFICATION': {
-        result = await db.appNotification.create({
+        const notif = await db.appNotification.create({
           data: {
-            ...payload,
+            type: payload.type,
+            source: payload.source,
+            title: payload.title,
+            message: payload.message,
             timestamp: new Date().toISOString(),
-            read: false,
+            actionType: payload.actionType || "",
+            actionPayload: payload.actionPayload || null,
+            entityId: payload.entityId || "",
+            entityType: payload.entityType || ""
           },
         });
+        const userNotif = await db.userNotification.create({
+          data: {
+            id: `${notif.id}_${session.userId}`,
+            userId: session.userId,
+            notificationId: notif.id,
+            isRead: false,
+            actionState: 'PENDING',
+            actionResult: ''
+          }
+        });
+        result = {
+          ...notif,
+          read: userNotif.isRead,
+          actionState: userNotif.actionState,
+          actionResult: userNotif.actionResult
+        };
         break;
       }
       case 'MARK_NOTIFICATION_READ': {
-        result = await db.appNotification.update({
-          where: { id: payload.id },
-          data: { read: true },
+        const userNotif = await db.userNotification.upsert({
+          where: {
+            userId_notificationId: {
+              userId: session.userId,
+              notificationId: payload.id
+            }
+          },
+          update: { isRead: true, readAt: new Date() },
+          create: {
+            id: `${payload.id}_${session.userId}`,
+            userId: session.userId,
+            notificationId: payload.id,
+            isRead: true,
+            readAt: new Date()
+          }
         });
+        const notif = await db.appNotification.findUnique({ where: { id: payload.id } });
+        result = {
+          ...notif,
+          read: userNotif.isRead,
+          actionState: userNotif.actionState,
+          actionResult: userNotif.actionResult
+        };
         break;
       }
       case 'MARK_ALL_NOTIFICATIONS_READ': {
-        result = await db.appNotification.updateMany({
-          where: { read: false },
-          data: { read: true },
-        });
+        const allNotifs = await db.appNotification.findMany();
+        for (const notif of allNotifs) {
+          await db.userNotification.upsert({
+            where: {
+              userId_notificationId: {
+                userId: session.userId,
+                notificationId: notif.id
+              }
+            },
+            update: { isRead: true, readAt: new Date() },
+            create: {
+              id: `${notif.id}_${session.userId}`,
+              userId: session.userId,
+              notificationId: notif.id,
+              isRead: true,
+              readAt: new Date()
+            }
+          });
+        }
+        result = { success: true };
         break;
       }
       case 'TOGGLE_NOTIFICATION_RULE': {
@@ -1070,6 +1309,18 @@ export async function POST(req: Request) {
           },
         });
         await runThreeWayMatch(result.poId, result.id);
+
+        const approvedGRN = await db.gRN.findFirst({ where: { poId: payload.poId, status: 'Approved' } });
+        if (!approvedGRN) {
+          await createAppNotification(
+            'warning',
+            'Invoice',
+            'Invoice Without GRN',
+            `Invoice #${result.id} received for PO #${payload.poId}, but no approved GRN is recorded.`,
+            result.id,
+            'Invoice'
+          );
+        }
         break;
       }
       case 'DISPUTE_GRN': {
@@ -1082,6 +1333,15 @@ export async function POST(req: Request) {
             supportingDocs: payload.supportingDocs || [],
           },
         });
+        const supplier = await db.supplier.findUnique({ where: { id: payload.supplierId } });
+        await createAppNotification(
+          'alert',
+          'GRN',
+          'GRN Dispute by Supplier',
+          `${supplier?.name || 'Supplier'} disputed rejection on GRN #${payload.grnId}: ${payload.reason || 'Incorrect rejected qty'}.`,
+          payload.grnId,
+          'GRN'
+        );
         break;
       }
       case 'UPLOAD_COMPLIANCE_DOC': {
@@ -1118,6 +1378,16 @@ export async function POST(req: Request) {
           },
         });
         await logAudit('Invoice', payload.invoiceId, 'Payment', `Early payment requested with ${payload.discountPct}% discount.`);
+
+        const invoice = await db.invoice.findUnique({ where: { id: payload.invoiceId } });
+        await createAppNotification(
+          'info',
+          'Invoice',
+          'Early Payment Discount',
+          `${invoice?.supplierName || 'Supplier'} requested early payment on Invoice #${payload.invoiceId} with ${payload.discountPct}% discount.`,
+          payload.invoiceId,
+          'Invoice'
+        );
         break;
       }
       case 'ADD_PRODUCT': {
@@ -1220,7 +1490,7 @@ export async function POST(req: Request) {
       }
     }
 
-    return NextResponse.json({ success: true, result });
+    return NextResponse.json({ success: true, result, newNotifications });
   } catch (error: any) {
     console.error('Mutation error:', error);
     return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });

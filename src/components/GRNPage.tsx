@@ -266,16 +266,19 @@ function NewGRNModal({ onClose }: { onClose: () => void }) {
     setPoId(id);
     const po = purchaseOrders.find(p => p.id === id);
     if (po) {
-      setLines(po.items.map((item, i) => ({
-        poLineIndex: i,
-        itemId: item.itemId,
-        itemName: item.itemName,
-        orderedQty: item.quantity,
-        receivedQty: item.quantity,
-        acceptedQty: item.quantity,
-        rejectedQty: 0,
-        unitPrice: item.unitPrice,
-      })));
+      setLines(po.items.map((item, i) => {
+        const remaining = Math.max(0, item.quantity - (item.deliveredQty || 0));
+        return {
+          poLineIndex: i,
+          itemId: item.itemId,
+          itemName: item.itemName,
+          orderedQty: item.quantity,
+          receivedQty: remaining,
+          acceptedQty: remaining,
+          rejectedQty: 0,
+          unitPrice: item.unitPrice,
+        };
+      }));
     }
   };
 

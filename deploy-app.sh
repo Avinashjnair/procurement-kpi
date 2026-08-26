@@ -50,22 +50,17 @@ if [ -d "/tmp/databases_backup" ]; then
     rm -rf /tmp/databases_backup
 fi
 
-echo "=== 5. Installing Dependencies ==="
-cd "$APP_DIR"
-npm install --no-audit --no-fund --prefer-offline
+# Dependencies and native modules are pre-compiled in CI. Skipping install steps.
 
-echo "=== 6. Generating database client engines ==="
-npx prisma generate
+# Prisma Client is pre-generated in CI. Skipping generation on the VM.
 
 echo "=== 6.3. Running Database Schema Migrations ==="
 node scripts/migrate.js
 
-echo "=== 6.5. Running Next Build (Native compilation) ==="
-npm run build
+# Next Build is pre-compiled in CI and copied over inside the archive. Skipping native build.
 
 echo "=== 7. Starting/Restarting Application via PM2 ==="
-pm2 describe "$PROCESS_NAME" > /dev/null 2>&1
-if [ $? -eq 0 ]; then
+if pm2 describe "$PROCESS_NAME" > /dev/null 2>&1; then
     echo "Restarting active PM2 process..."
     PORT=$PORT pm2 restart "$PROCESS_NAME" --update-env
 else

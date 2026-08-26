@@ -119,6 +119,59 @@ files.forEach(file => {
       }
     });
 
+    // Migrate AppNotification Action Columns
+    const appNotifCols = [
+      { name: 'actionType', type: 'TEXT DEFAULT ""' },
+      { name: 'actionPayload', type: 'TEXT DEFAULT NULL' } // In SQLite, JSONB is stored as TEXT/JSON
+    ];
+    appNotifCols.forEach(col => {
+      try {
+        db.prepare(`ALTER TABLE AppNotification ADD COLUMN ${col.name} ${col.type}`).run();
+        console.log(`  - Added ${col.name} to AppNotification`);
+      } catch (e) {
+        if (e.message.includes('duplicate column name')) {
+          // Expected
+        } else {
+          console.error(`  - Error migrating AppNotification (${col.name}):`, e.message);
+        }
+      }
+    });
+
+    // Migrate UserNotification Table
+    try {
+      db.prepare(`
+        CREATE TABLE IF NOT EXISTS "UserNotification" (
+          "id" TEXT NOT NULL PRIMARY KEY,
+          "userId" TEXT NOT NULL,
+          "notificationId" TEXT NOT NULL,
+          "isRead" BOOLEAN NOT NULL DEFAULT 0,
+          "readAt" DATETIME,
+          "actionState" TEXT NOT NULL DEFAULT 'PENDING',
+          "actionResult" TEXT DEFAULT '',
+          "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+          "updatedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+        )
+      `).run();
+      db.prepare(`
+        CREATE UNIQUE INDEX IF NOT EXISTS "UserNotification_userId_notificationId_key" ON "UserNotification"("userId", "notificationId")
+      `).run();
+      console.log('  - Created UserNotification table and indexes');
+
+      // Seed UserNotification entries for existing notifications so they remain visible to existing users (default 'admin' and 'supplier')
+      const existingNotifs = db.prepare('SELECT id, read FROM AppNotification').all();
+      const insertUserNotif = db.prepare(`
+        INSERT OR IGNORE INTO UserNotification (id, userId, notificationId, isRead, createdAt, updatedAt)
+        VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))
+      `);
+      existingNotifs.forEach(notif => {
+        const isReadVal = notif.read ? 1 : 0;
+        // Seed for default user 'admin' (Veltrix Manager/Admin)
+        insertUserNotif.run(`${notif.id}_admin`, 'admin', notif.id, isReadVal);
+      });
+    } catch (e) {
+      console.error('  - Error creating UserNotification table:', e.message);
+    }
+
     db.close();
   } catch (err) {
     console.error('Failed to open/migrate database:', file, err.message);
