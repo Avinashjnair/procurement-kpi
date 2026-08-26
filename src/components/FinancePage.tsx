@@ -44,11 +44,13 @@ const AGING_META: Record<string, { label: string; color: string; bg: string }> =
 
 // ── Record Payment Modal ─────────────────────────────────────
 function RecordPaymentModal({ poId, onClose }: { poId: string; onClose: () => void }) {
-  const { purchaseOrders, recordPayment, currentUser } = useApp();
+  const { purchaseOrders, recordPayment, currentUser, invoices } = useApp();
   const po = purchaseOrders.find(p => p.id === poId);
   if (!po) return null;
 
-  const outstanding = po.totalAmount - po.amountPaid;
+  const poInvoices = invoices.filter(inv => inv.poId === poId && (inv.matchStatus === 'Full Match' || inv.status === 'Matched'));
+  const totalInvoicedAmount = poInvoices.reduce((sum, inv) => sum + inv.totalAmount, 0);
+  const outstanding = Math.max(0, totalInvoicedAmount - po.amountPaid);
   const [amount,     setAmount]     = useState(outstanding.toFixed(2));
   const [date,       setDate]       = useState(new Date().toISOString().split('T')[0]);
   const [method,     setMethod]     = useState<PaymentMethod>('Bank Transfer');
@@ -90,18 +92,22 @@ function RecordPaymentModal({ poId, onClose }: { poId: string; onClose: () => vo
         </div>
 
         {/* PO summary bar */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10, padding: '12px 14px', marginBottom: 20, borderRadius: 10, background: 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.12)' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, padding: '12px 14px', marginBottom: 20, borderRadius: 10, background: 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.12)' }}>
           <div>
-            <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>PO Total</div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: '#f1f5f9' }}>${po.totalAmount.toLocaleString()}</div>
+            <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>PO Total</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#f1f5f9' }}>${po.totalAmount.toLocaleString()}</div>
           </div>
           <div>
-            <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>Paid to Date</div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--accent-slate)' }}>${po.amountPaid.toLocaleString()}</div>
+            <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>Invoiced</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#a78bfa' }}>${totalInvoicedAmount.toLocaleString()}</div>
           </div>
           <div>
-            <div style={{ fontSize: 10, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>Outstanding</div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: outstanding > 0 ? '#f43f5e' : '#10b981' }}>${outstanding.toLocaleString()}</div>
+            <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>Paid</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent-slate)' }}>${po.amountPaid.toLocaleString()}</div>
+          </div>
+          <div>
+            <div style={{ fontSize: 9, fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.6px' }}>Outstanding</div>
+            <div style={{ fontSize: 13, fontWeight: 700, color: outstanding > 0 ? '#f43f5e' : '#10b981' }}>${outstanding.toLocaleString()}</div>
           </div>
         </div>
 
@@ -251,7 +257,7 @@ function PaymentHistory({ poId, onClose }: { poId: string; onClose: () => void }
 
 // ── Main Finance Page ─────────────────────────────────────────
 export default function FinancePage() {
-  const { purchaseOrders, currentUser } = useApp();
+  const { purchaseOrders, currentUser, invoices } = useApp();
   const [search,        setSearch]        = useState('');
   const [agingFilter,   setAgingFilter]   = useState('all');
   const [recordingPO,   setRecordingPO]   = useState<string | null>(null);
@@ -275,25 +281,32 @@ export default function FinancePage() {
     const buckets: Record<string, number> = { current: 0, '1-30': 0, '31-60': 0, '61-90': 0, '90+': 0 };
     financialPOs.forEach(po => {
       if (po.paymentStatus === 'Paid') return;
-      const outstanding = po.totalAmount - po.amountPaid;
+      const poInvoices = invoices.filter(inv => inv.poId === po.id && (inv.matchStatus === 'Full Match' || inv.status === 'Matched'));
+      const totalInvoicedAmount = poInvoices.reduce((sum, inv) => sum + inv.totalAmount, 0);
+      const outstanding = Math.max(0, totalInvoicedAmount - po.amountPaid);
       const bucket = getAgingBucket(po.dueDate, false);
       if (bucket !== 'paid') buckets[bucket] = (buckets[bucket] || 0) + outstanding;
     });
     return buckets;
-  }, [financialPOs]);
+  }, [financialPOs, invoices]);
 
   const totalOutstanding = Object.values(agingSummary).reduce((a, b) => a + b, 0);
   const totalPaid        = financialPOs.filter(p => p.paymentStatus === 'Paid').reduce((s, p) => s + p.amountPaid, 0);
   const pendingApprovals = financialPOs.reduce((count, po) => count + (po.paymentRecords?.filter(r => r.status === 'Pending Approval').length || 0), 0);
 
-  const handleExport = () => exportCsv('ap_aging_report', filtered.map(po => ({
-    'PO ID': po.id, Supplier: po.supplierName, 'PO Total': po.totalAmount,
-    'Amount Paid': po.amountPaid, 'Outstanding': po.totalAmount - po.amountPaid,
-    'Due Date': po.dueDate, 'Payment Status': po.paymentStatus,
-    'Delivery Status': po.deliveryStatus, 'Aging Bucket': AGING_META[getAgingBucket(po.dueDate, po.paymentStatus === 'Paid')]?.label,
-    'Payment Terms': po.paymentTerms, 'Project Ref': po.projectReference || '',
-    'Payment Records': (po.paymentRecords || []).length,
-  })));
+  const handleExport = () => exportCsv('ap_aging_report', filtered.map(po => {
+    const poInvoices = invoices.filter(inv => inv.poId === po.id && (inv.matchStatus === 'Full Match' || inv.status === 'Matched'));
+    const totalInvoicedAmount = poInvoices.reduce((sum, inv) => sum + inv.totalAmount, 0);
+    const outstanding = Math.max(0, totalInvoicedAmount - po.amountPaid);
+    return {
+      'PO ID': po.id, Supplier: po.supplierName, 'PO Total': po.totalAmount,
+      'Amount Paid': po.amountPaid, 'Outstanding': outstanding,
+      'Due Date': po.dueDate, 'Payment Status': po.paymentStatus,
+      'Delivery Status': po.deliveryStatus, 'Aging Bucket': AGING_META[getAgingBucket(po.dueDate, po.paymentStatus === 'Paid')]?.label,
+      'Payment Terms': po.paymentTerms, 'Project Ref': po.projectReference || '',
+      'Payment Records': (po.paymentRecords || []).length,
+    };
+  }));
 
   return (
     <div>
@@ -403,7 +416,9 @@ export default function FinancePage() {
             </thead>
             <tbody>
               {filtered.map(po => {
-                const outstanding = po.totalAmount - po.amountPaid;
+                const poInvoices = invoices.filter(inv => inv.poId === po.id && (inv.matchStatus === 'Full Match' || inv.status === 'Matched'));
+                const totalInvoicedAmount = poInvoices.reduce((sum, inv) => sum + inv.totalAmount, 0);
+                const outstanding = Math.max(0, totalInvoicedAmount - po.amountPaid);
                 const bucket = getAgingBucket(po.dueDate, po.paymentStatus === 'Paid');
                 const meta = AGING_META[bucket];
                 const receiptCount = (po.paymentRecords || []).filter(r => r.receiptFileName).length;
@@ -450,7 +465,8 @@ export default function FinancePage() {
                           </button>
                           {can(currentUser, 'record_payment') && po.paymentStatus !== 'Paid' && (
                             <button className="btn btn-primary btn-sm" title="Record payment"
-                              onClick={() => setRecordingPO(po.id)}>
+                              onClick={() => setRecordingPO(po.id)}
+                              disabled={outstanding <= 0}>
                               <DollarSign size={13} /> Pay
                             </button>
                           )}

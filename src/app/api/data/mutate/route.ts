@@ -1074,6 +1074,7 @@ export async function POST(req: Request) {
         if (!stock) throw new Error('Stock item not found');
         const today = new Date().toISOString().split('T')[0];
         const newBalance = Math.max(0, stock.currentStock + payload.delta);
+        const mType = payload.movementType || 'Adjustment';
 
         await db.stockItem.update({
           where: { id: payload.stockItemId },
@@ -1088,9 +1089,9 @@ export async function POST(req: Request) {
             stockItemId: payload.stockItemId,
             itemId: stock.itemId,
             itemName: stock.itemName,
-            movementType: 'Adjustment',
+            movementType: mType,
             quantity: payload.delta,
-            referenceId: `ADJ-${Date.now()}`,
+            referenceId: payload.referenceId || `${mType === 'Issue' ? 'ISS' : 'ADJ'}-${Date.now()}`,
             date: today,
             performedBy: session.userId,
             balanceAfter: newBalance,

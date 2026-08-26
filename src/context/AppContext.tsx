@@ -109,6 +109,7 @@ interface AppContextType extends AppState {
   updatePO: (id: string, updates: Partial<PurchaseOrder>) => Promise<void>;
   deletePO: (id: string) => Promise<void>;
   adjustStock: (stockItemId: string, delta: number, reason: string) => Promise<void>;
+  consumeStock: (stockItemId: string, qty: number, reason: string) => Promise<void>;
   addAsset: (asset: Asset) => Promise<void>;
   updateAssetStatus: (id: string, status: AssetStatus) => Promise<void>;
   addAssetCategory: (category: string) => Promise<void>;
@@ -749,10 +750,14 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setState(p => ({ ...p, grns: p.grns.filter(g => g.id !== id) }));
   }, [runMutation]);
 
-  // ── Stock Adjustments ─────────────────────────────────────
   const adjustStock = useCallback(async (stockItemId: string, delta: number, reason: string) => {
     await runMutation('ADJUST_STOCK', { stockItemId, delta, reason });
     // Reload init to fetch updated stock status & movements list
+    await initData(authToken || '', tenantId);
+  }, [runMutation, initData, authToken, tenantId]);
+
+  const consumeStock = useCallback(async (stockItemId: string, qty: number, reason: string) => {
+    await runMutation('ADJUST_STOCK', { stockItemId, delta: -qty, reason, movementType: 'Issue' });
     await initData(authToken || '', tenantId);
   }, [runMutation, initData, authToken, tenantId]);
 
@@ -947,7 +952,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
       addRFQ, updateRFQ, sendRFQ, closeRFQ, awardRFQ, publishRFQ,
       addQuotation, updateQuotation, submitEvaluation,
       addGRN, submitGRN, approveGRN, rejectGRN, updateGRN, deleteGRN,
-      adjustStock,
+      adjustStock, consumeStock,
       addAsset, updateAssetStatus, addAssetCategory, logMaintenance, calculateCurrentAssetValue,
       getSupplierById, getItemById, getPOById, getRFQById, getStockByItemId,
       setSelectedAssetId, setSelectedQuotationId,
